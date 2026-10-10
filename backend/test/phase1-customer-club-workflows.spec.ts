@@ -7,8 +7,6 @@ import { DiscountsService } from '../src/modules/discounts/discounts.service';
 import { DiscountEvaluationService } from '../src/modules/discounts/discount-evaluation.service';
 import { CreditService } from '../src/modules/customer/credit.service';
 
-import { Coupon } from '../src/entities/Coupon.entity';
-import { DiscountUsage } from '../src/entities/DiscountUsage.entity';
 import { CustomerDiscount } from '../src/entities/CustomerDiscount.entity';
 import { Customer } from '../src/entities/Customer.entity';
 import { CustomerCreditAccount } from '../src/entities/CustomerCreditAccount.entity';
@@ -18,15 +16,13 @@ import { ApprovalRequest } from '../src/entities/ApprovalRequest.entity';
 import { Product } from '../src/entities/Product.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 
-describe('Phase 1 Customer Club, Discounts & Coupons Workflows (Spec)', () => {
+describe('Phase 1 Customer Club & Discounts Workflows (Spec)', () => {
   let discountsService: DiscountsService;
   let evaluationService: DiscountEvaluationService;
   let creditService: CreditService;
 
   let customerDiscountRepo: any;
   let customerRepo: any;
-  let couponRepo: any;
-  let usageRepo: any;
   let settingRepo: any;
   let approvalRequestRepo: any;
   let creditAccountRepo: any;
@@ -50,13 +46,6 @@ describe('Phase 1 Customer Club, Discounts & Coupons Workflows (Spec)', () => {
       findOne: jest.fn().mockResolvedValue({ id: customerA, first_name: 'Alice', last_name: 'Smith' }),
     };
 
-    couponRepo = {
-      findOne: jest.fn().mockResolvedValue(null),
-      create: jest.fn().mockImplementation((dto) => dto),
-      save: jest.fn().mockImplementation((entity) => Promise.resolve({ id: 'coup-1', ...entity })),
-    };
-
-    usageRepo = { find: jest.fn().mockResolvedValue([]), count: jest.fn().mockResolvedValue(0) };
     settingRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null) };
     approvalRequestRepo = { findOne: jest.fn().mockResolvedValue(null) };
 
@@ -106,8 +95,6 @@ describe('Phase 1 Customer Club, Discounts & Coupons Workflows (Spec)', () => {
         { provide: getRepositoryToken(CustomerDiscount), useValue: customerDiscountRepo },
         { provide: getRepositoryToken(Customer), useValue: customerRepo },
         { provide: getRepositoryToken(Product), useValue: { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() } },
-        { provide: getRepositoryToken(Coupon), useValue: couponRepo },
-        { provide: getRepositoryToken(DiscountUsage), useValue: usageRepo },
         { provide: getRepositoryToken(TenantSetting), useValue: settingRepo },
         { provide: getRepositoryToken(ApprovalRequest), useValue: approvalRequestRepo },
         { provide: getRepositoryToken(CustomerCreditAccount), useValue: creditAccountRepo },
@@ -289,23 +276,6 @@ describe('Phase 1 Customer Club, Discounts & Coupons Workflows (Spec)', () => {
       const rejected = quote.consideredDiscounts.find((d) => d.status === 'REJECTED');
       expect(rejected).toBeDefined();
       expect(rejected?.rejectionReason).toContain('Exceeds maximum permitted policy limit');
-    });
-  });
-
-  describe('Workflow 4: One-Time Percentage Coupon Codes', () => {
-    it('creates a unique one-time percentage coupon code', async () => {
-      const coupon = await discountsService.createOneTimeCoupon(tenantId, {
-        code: 'ONE15',
-        percentage: '15.00',
-        minimum_subtotal: '50000.0000',
-      });
-
-      expect(coupon).toBeDefined();
-      expect(coupon.code).toBe('ONE15');
-      expect(coupon.max_uses).toBe(1);
-      // The terms live on the coupon; there is no campaign row behind it any more.
-      expect(coupon.percentage).toBe('15.0000');
-      expect(coupon.minimum_subtotal).toBe('50000.0000');
     });
   });
 });

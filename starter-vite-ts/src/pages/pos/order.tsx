@@ -135,11 +135,6 @@ const HELD_TYPE_KEYS: Record<string, string> = {
 /** The reasons a cashier gives for a discount; the label is `pos.discount.reason.<code>`. */
 const DISCOUNT_REASONS = ['CUSTOMER_SATISFACTION', 'STAFF_DISCOUNT', 'DAMAGED_ITEM', 'VIP_COURTESY'];
 
-/** Why the server turned a discount down, as the cashier reads it. */
-function formatRejectionReason(t: (key: string, fallback?: any) => string, reason?: string) {
-  return t(`pos.discount.rejected.${reason || 'OTHER'}`, t('pos.discount.rejected.OTHER'));
-}
-
 const CATALOG_LOAD_FAILED = 'Failed to load POS catalog data';
 
 export function PosOrderPage() {
@@ -260,10 +255,6 @@ export function PosOrderPage() {
   const [discardTarget, setDiscardTarget] = useState<OrderHeader | null>(null);
   const [discardReasonCodes, setDiscardReasonCodes] = useState<ReasonCode[]>([]);
   const [discardReasonCodeId, setDiscardReasonCodeId] = useState('');
-
-  // Coupon state
-  const [couponInput, setCouponInput] = useState('');
-  const [appliedCouponCode, setAppliedCouponCode] = useState('');
 
   // Manual Discount Modal state
   const [manualDiscountModalOpen, setManualDiscountModalOpen] = useState(false);
@@ -755,8 +746,6 @@ export function PosOrderPage() {
   const handleClearCart = useCallback(() => {
     setCart([]);
     setActiveDraftOrderId(null);
-    setCouponInput('');
-    setAppliedCouponCode('');
     setManualValue('');
     setAppliedManualDiscount(null);
     setManualApprovalRequestId(undefined);
@@ -847,7 +836,6 @@ export function PosOrderPage() {
         delivery_zone_id: orderType === 'DELIVERY' ? selectedDeliveryZoneId : undefined,
         // Null goes back to the zone's fee on a draft that had a typed one.
         delivery_fee: orderType === 'DELIVERY' ? typedDeliveryFee : undefined,
-        coupon_code: appliedCouponCode || undefined,
         notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
           product_id: ci.product.id,
@@ -909,8 +897,6 @@ export function PosOrderPage() {
       setSelectedDeliveryAddressId(fullOrder.customer_address_id || '');
       setSelectedDeliveryZoneId(fullOrder.delivery_zone_id || '');
       setManualDeliveryFee(fullOrder.delivery_fee_manual ? MoneyUtil.format(fullOrder.delivery_fee_manual, 0) : null);
-      setCouponInput(fullOrder.coupon_code || '');
-      setAppliedCouponCode(fullOrder.coupon_code || '');
       setOrderNotes(fullOrder.notes || '');
 
       // Reconstruct cart items
@@ -1116,10 +1102,6 @@ export function PosOrderPage() {
         },
       };
 
-      if (appliedCouponCode.trim()) {
-        payload.couponCode = appliedCouponCode.trim();
-      }
-
       if (appliedManualDiscount && MoneyUtil.greaterThan(appliedManualDiscount.value, '0')) {
         payload.manualDiscount = {
           calculation_type: appliedManualDiscount.calculation_type,
@@ -1142,83 +1124,32 @@ export function PosOrderPage() {
 
       // The order's own discount; item discounts show on their lines instead.
       const applied = quoteRes.consideredDiscounts?.find((d) => d.status === 'APPLIED' && d.source !== 'ITEM');
-      const rejected = quoteRes.consideredDiscounts?.find((d) => d.status === 'REJECTED');
 
       if (applied) {
-        // The server names a coupon "Coupon (CODE)".
-        const couponCode = /^Coupon \((.+)\)$/.exec(applied.name || '')?.[1];
-        const appliedName = couponCode ? t('pos.discount.couponName', { code: couponCode }) : applied.name;
-        const approvedBadge = appliedManualDiscount?.approvalRequestId ? ` (${t('pos.discount.managerApproved')})` : '';
-        const msg = `${t('pos.discount.applied', { name: appliedName })}${approvedBadge}: -${MoneyUtil.formatCurrency(discAmount)} ${currency}`;
         // The cashier's own discount shows as its rate; its name is the same on every order.
         setAppliedDiscountName(
           applied.source !== 'MANUAL'
-            ? appliedName
+            ? applied.name
             : appliedManualDiscount?.calculation_type === 'PERCENTAGE'
               ? `${Number(appliedManualDiscount.value)}%`
               : null
         );
         setError(null);
-        discountBeforeCoupon.current = null;
-        if (appliedCouponCode) {
-          toast.success(msg);
-        }
-      } else if (rejected) {
-        setAppliedDiscountName(null);
-        const reasonMsg = formatRejectionReason(t, rejected.rejectionReason);
-        if (appliedCouponCode) {
-          toast.error(reasonMsg);
-          // A code that is refused leaves the cart with the discount it had before it was typed.
-          const before = discountBeforeCoupon.current;
-          discountBeforeCoupon.current = null;
-          setAppliedCouponCode(before?.coupon || '');
-          if (before?.manual) setAppliedManualDiscount(before.manual);
-        }
       } else {
         setAppliedDiscountName(null);
       }
-    } catch (err: any) {
-      if (appliedCouponCode) {
-        showErrorToast(err, t('pos.discount.rejected.OTHER'));
-        setAppliedCouponCode('');
-      }
+    } catch {
+      // A quote that fails leaves the figures as they were; submitting prices the order again.
     }
-  }, [cart, selectedCustomerId, appliedCouponCode, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, priceOf, currency, t]);
+  }, [cart, selectedCustomerId, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, priceOf]);
 
   useEffect(() => {
     evaluateQuote();
   }, [evaluateQuote]);
 
-  const hasDiscount = Boolean(appliedCouponCode || appliedManualDiscount);
+  const hasDiscount = Boolean(appliedManualDiscount);
   // Also true for one the cashier didn't add: an item's own discount, or the customer's rate.
   const discountOn = hasDiscount || MoneyUtil.greaterThan(appliedDiscountAmount, '0');
-
-  // Coupon Actions
-  // The discount a new coupon replaces, put back if the server refuses the code.
-  const discountBeforeCoupon = React.useRef<{ coupon: string; manual: typeof appliedManualDiscount } | null>(null);
-
-  const handleApplyCoupon = () => {
-    const trimmed = couponInput.trim().toUpperCase();
-    if (!trimmed) {
-      toast.error(t('pos.discount.couponCode'));
-      return;
-    }
-    if (cart.length === 0) {
-      toast.error(t('pos.cartEmpty'));
-      return;
-    }
-    discountBeforeCoupon.current = { coupon: appliedCouponCode, manual: appliedManualDiscount };
-    setAppliedManualDiscount(null);
-    setAppliedCouponCode(trimmed);
-    setManualDiscountModalOpen(false);
-  };
-
-  const handleClearCoupon = () => {
-    setCouponInput('');
-    setAppliedCouponCode('');
-    setAppliedDiscountName(null);
-    setError(null);
-  };
 
   // Manual Discount Actions
   const handleApplyManualDiscount = () => {
@@ -1254,8 +1185,6 @@ export function PosOrderPage() {
       return;
     }
 
-    setCouponInput('');
-    setAppliedCouponCode('');
     setAppliedManualDiscount({
       calculation_type: manualCalcType,
       value: manualValue,
@@ -1286,8 +1215,6 @@ export function PosOrderPage() {
   const handleApprovalSuccess = (_pin: string, requestId?: string) => {
     if (requestId) {
       setManualApprovalRequestId(requestId);
-      setCouponInput('');
-      setAppliedCouponCode('');
       setAppliedManualDiscount({
         calculation_type: manualCalcType,
         value: manualValue,
@@ -1344,7 +1271,6 @@ export function PosOrderPage() {
         delivery_zone_id: orderType === 'DELIVERY' ? selectedDeliveryZoneId : undefined,
         // Null goes back to the zone's fee on a draft that had a typed one.
         delivery_fee: orderType === 'DELIVERY' ? typedDeliveryFee : undefined,
-        coupon_code: appliedCouponCode || undefined,
         notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
           product_id: ci.product.id,
@@ -1428,7 +1354,6 @@ export function PosOrderPage() {
     approvalRequired,
     orderType,
     selectedCustomerId,
-    appliedCouponCode,
     orderNotes,
     selectedDeliveryAddressId,
     selectedDeliveryZoneId,
@@ -1467,7 +1392,6 @@ export function PosOrderPage() {
         delivery_zone_id: orderType === 'DELIVERY' ? selectedDeliveryZoneId : undefined,
         // Null goes back to the zone's fee on a draft that had a typed one.
         delivery_fee: orderType === 'DELIVERY' ? typedDeliveryFee : undefined,
-        coupon_code: appliedCouponCode || undefined,
         notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
           product_id: ci.product.id,
@@ -1509,7 +1433,6 @@ export function PosOrderPage() {
     approvalRequired,
     orderType,
     selectedCustomerId,
-    appliedCouponCode,
     orderNotes,
     selectedDeliveryAddressId,
     selectedDeliveryZoneId,
@@ -2440,7 +2363,7 @@ export function PosOrderPage() {
                     )}
                   </>
                 )}
-                {/* The discount line is always there: it is also the way to a discount or a coupon.
+                {/* The discount line is always there: it is also the way to a discount.
                     With none applied it names the action; applied, it names the discount, so the
                     cashier sees which one is on without opening it. */}
                 <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1, minWidth: 0 }}>
@@ -2566,48 +2489,6 @@ export function PosOrderPage() {
             </Alert>
           )}
           <Stack spacing={2}>
-            {/* Coupon code: here rather than in the cart, where it held a row on every order. */}
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', pt: 1 }}>
-              <VersionTag feature="pos.coupon" />
-              <TextField
-                size="small"
-                placeholder={t('pos.discount.couponCode')}
-                value={couponInput}
-                onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-                // A new code replaces the last one rather than being typed onto its end.
-                onFocus={(e) => e.target.select()}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleApplyCoupon();
-                  }
-                }}
-                fullWidth
-                slotProps={{
-                  input: {
-                    endAdornment: (couponInput || appliedCouponCode) ? (
-                      <InputAdornment position="end">
-                        <IconButton size="small" onClick={handleClearCoupon} sx={{ p: 0.25 }}>
-                          <ClearIcon fontSize="small" />
-                        </IconButton>
-                      </InputAdornment>
-                    ) : null,
-                  },
-                }}
-              />
-              <Button
-                variant={appliedCouponCode && appliedCouponCode === couponInput.trim() ? 'contained' : 'outlined'}
-                color={appliedCouponCode && appliedCouponCode === couponInput.trim() ? 'success' : 'primary'}
-                onClick={handleApplyCoupon}
-                disabled={!couponInput.trim() || (appliedCouponCode === couponInput.trim())}
-                sx={{ fontWeight: 'bold', flexShrink: 0, whiteSpace: 'nowrap' }}
-              >
-                {appliedCouponCode && appliedCouponCode === couponInput.trim() ? t('pos.cartBar.couponApplied') : t('pos.cartBar.couponApply')}
-              </Button>
-            </Stack>
-
-            <Divider />
-
             {/* Calculation Type Toggle */}
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <ToggleButtonGroup

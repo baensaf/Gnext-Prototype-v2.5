@@ -78,9 +78,6 @@ export class OrderHeader {
   @Column({ type: 'uuid', nullable: true })
   discount_id: string;
 
-  @Column({ type: 'varchar', length: 32, nullable: true })
-  coupon_code: string;
-
   @Column({ type: 'varchar', length: 10, nullable: true })
   business_date: string;
 

@@ -102,10 +102,6 @@ export class OrderCreateDto {
   delivery_fee?: string | null;
 
   @IsOptional()
-  @IsString()
-  coupon_code?: string;
-
-  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => OrderItemCreateDto)
@@ -159,10 +155,6 @@ export class OrderUpdateDto {
   delivery_fee?: string | null;
 
   @IsOptional()
-  @IsString()
-  coupon_code?: string;
-
-  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => OrderItemCreateDto)
@@ -178,10 +170,6 @@ export class OrderUpdateDto {
 }
 
 export class OrderQuoteRequestDto {
-  @IsOptional()
-  @IsString()
-  couponCode?: string;
-
   @IsOptional()
   @ValidateNested()
   @Type(() => ManualDiscountDto)

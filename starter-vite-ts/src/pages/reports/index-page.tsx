@@ -53,7 +53,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   FINANCIAL: 'Sales & Performance',
   CATALOG: 'Menu & Product',
   PAYMENT: 'Payments',
-  PROMOTION: 'Discounts & Coupons',
+  PROMOTION: 'Discounts',
   CASH: 'Cash & Shifts',
   CREDIT: 'Customer Credit',
   DELIVERY: 'Delivery & Couriers',

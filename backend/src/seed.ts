@@ -306,13 +306,11 @@ export async function runSeed() {
   // 6. Idempotent Payment Methods
   const payMethods = [
     { tenant_id: tenant.id, code: 'CASH', name: 'Cash', kind: 'CASH', is_active: true },
-    // A card sale is paid back in cash or card-to-card: the terminal cannot refund it.
-    { tenant_id: tenant.id, code: 'CARD_POS', name: 'Bank Card POS', kind: 'CARD_POS', is_active: true, allows_alternative_refund: true },
+    { tenant_id: tenant.id, code: 'CARD_POS', name: 'Bank Card POS', kind: 'CARD_POS', is_active: true },
     { tenant_id: tenant.id, code: 'CREDIT_ACCOUNT', name: 'Customer Credit Account', kind: 'CUSTOMER_CREDIT', is_active: true },
     // The couriers carry company card readers, and the scope reports those separately from
-    // cash and from the counter terminal; online and bank transfer are the other two tenders
-    // a refund may go back through.
-    { tenant_id: tenant.id, code: 'MOBILE_POS', name: 'Courier Mobile POS', kind: 'MOBILE_POS', is_active: true, allows_alternative_refund: true },
+    // cash and from the counter terminal.
+    { tenant_id: tenant.id, code: 'MOBILE_POS', name: 'Courier Mobile POS', kind: 'MOBILE_POS', is_active: true },
     { tenant_id: tenant.id, code: 'ONLINE', name: 'Online Payment', kind: 'ONLINE', is_active: true },
     { tenant_id: tenant.id, code: 'BANK_TRANSFER', name: 'Bank Transfer', kind: 'BANK_TRANSFER', is_active: true },
   ];
@@ -614,24 +612,6 @@ export async function runSeed() {
       }
     }
     console.log(`Seeded Add-on Group: ${g.name}`);
-  }
-
-  // Coupons a cashier can key in at the till. Unlike the app's one-time codes these serve the
-  // demo's many sales, though a customer still redeems each only once. Amounts are in rial at
-  // the menu's prices, so a cap is large enough to matter on a burger.
-  const couponRepo = AppDataSource.getRepository('Coupon');
-  const productIdByCode = async (code: string) =>
-    ((await prodRepo.findOne({ where: { tenant_id: tenant.id, code } })) as any)?.id || null;
-  const coupons = [
-    { code: 'IB10', coupon_type: 'PERCENTAGE', percentage: '10.00', minimum_subtotal: MoneyUtil.format(5_000_000), maximum_discount_amount: MoneyUtil.format(2_000_000) },
-    { code: 'WELCOME15', coupon_type: 'PERCENTAGE', percentage: '15.00', minimum_subtotal: null, maximum_discount_amount: MoneyUtil.format(1_500_000) },
-    // Two Iran Burgers, and one portion of fries in the basket comes free.
-    { code: 'FRIES-FREE', coupon_type: 'FREE_ITEM', percentage: '0.00', buy_product_id: await productIdByCode('101001'), buy_quantity: 2, reward_product_id: await productIdByCode('104003'), reward_quantity: 1, minimum_subtotal: null, maximum_discount_amount: null },
-  ];
-  for (const c of coupons) {
-    if (await couponRepo.findOne({ where: { tenant_id: tenant.id, code: c.code } })) continue;
-    await couponRepo.save(couponRepo.create({ tenant_id: tenant.id, is_active: true, max_uses: 1000, uses_count: 0, ...c }));
-    console.log(`Seeded Coupon: ${c.code}`);
   }
 
   // 9. Idempotent chain sales history.

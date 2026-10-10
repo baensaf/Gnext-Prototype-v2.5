@@ -62,7 +62,6 @@ export interface OrderHeader {
   delivery_zone_id?: string;
   customer_name?: string;
   customer_mobile?: string;
-  coupon_code?: string;
   subtotal: string;
   subtotal_amount?: string;
   modifier_total?: string;

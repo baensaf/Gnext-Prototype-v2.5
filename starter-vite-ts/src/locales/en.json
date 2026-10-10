@@ -79,7 +79,6 @@
     "pricing": "Branch Prices",
     "priceGroups": "Price Groups",
     "bulkUpdate": "Bulk Price Update",
-    "coupons": "One-Time Coupons Studio",
     "reportsGroup": "Reports",
     "reports": "Reports & Analytics",
     "simulationGroup": "Simulation Center",
@@ -192,10 +191,8 @@
     "cartBar": {
       "draft": "Held order",
       "draftCancel": "Stop editing this held order",
-      "discount": "Discount / coupon (F6)",
+      "discount": "Discount (F6)",
       "payNow": "Checkout / pay now",
-      "couponApply": "Apply coupon",
-      "couponApplied": "Applied",
       "hold": "Hold",
       "holding": "Holding…",
       "heldToast": "Order #{{number}} held",
@@ -341,11 +338,7 @@
     "clearCart": "Clear",
     "cartEmptyHint": "The cart is empty. Tap a product to add it.",
     "discount": {
-      "title": "Discount & coupon",
-      "couponCode": "Coupon code",
-      "couponName": "Coupon {{code}}",
-      "applied": "{{name}} applied",
-      "managerApproved": "approved by a manager",
+      "title": "Discount",
       "percent": "% Percent",
       "fixed": "{{currency}} Amount",
       "presets": "Quick presets:",
@@ -360,17 +353,7 @@
       },
       "remove": "Remove discount",
       "apply": "Apply",
-      "applyWithPin": "Apply with manager PIN",
-      "rejected": {
-        "INVALID_OR_INACTIVE_COUPON": "The coupon code is invalid or inactive.",
-        "COUPON_NOT_YET_ACTIVE": "The coupon is not active yet.",
-        "COUPON_EXPIRED": "The coupon has expired.",
-        "COUPON_MAX_USES_REACHED": "The coupon has been used as many times as it allows.",
-        "COUPON_ALREADY_REDEEMED_BY_CUSTOMER": "This customer has already used the coupon.",
-        "COUPON_MINIMUM_NOT_MET": "The order is below the coupon's minimum amount.",
-        "NEVER_DISCOUNT": "The items in the cart are excluded from discounts.",
-        "OTHER": "The discount was not applied."
-      }
+      "applyWithPin": "Apply with manager PIN"
     },
     "held": {
       "discard": "Discard",
@@ -1297,13 +1280,7 @@
         "BANK_TRANSFER": "Bank transfer",
         "ONLINE": "Online"
       },
-      "amountsIn": "Amounts in {{currency}}",
-      "refundMethods": {
-        "CASH": "Cash from the drawer",
-        "BANK_TRANSFER": "Card-to-card",
-        "CUSTOMER_CREDIT": "To club credit",
-        "OTHER": "Other"
-      }
+      "amountsIn": "Amounts in {{currency}}"
     },
     "bar": {
       "shift": "Shift",
@@ -1458,15 +1435,11 @@
   },
   "refunds": {
     "title": "Refunds",
-    "subtitle": "Full and partial refunds of paid orders, released by a manager PIN.",
-    "originalTender": "Original Payment Method Refund",
-    "cashAlternative": "Alternative Cash Refund",
+    "subtitle": "A paid order goes back in full, released by a manager PIN.",
     "reason": "Reason",
-    "approveRefund": "Approve Refund",
     "new": "New refund",
     "order": "Order",
     "amount": "Amount",
-    "amountHelp": "Leave empty to refund the whole order.",
     "continue": "Continue",
     "pinNotice": "Money going back out needs a manager PIN. You will be asked for one before the refund is created.",
     "approvalDetails": "Refund against a paid order",
@@ -1477,15 +1450,10 @@
     "detailFailed": "Could not open the refund.",
     "col": {
       "code": "Refund no.",
-      "type": "Type",
       "status": "Status",
       "time": "Time"
     },
     "empty": "No refunds yet.",
-    "type": {
-      "FULL": "Full",
-      "PARTIAL": "Partial"
-    },
     "status": {
       "APPROVED": "Approved",
       "PENDING": "Pending",
@@ -1499,15 +1467,9 @@
     "notCompleted": "Order {{number}} is still open. Complete it in the orders list first: only a completed order can be refunded.",
     "paidCancellation": "Paid order cancelled",
     "payBack": {
-      "label": "Paid back by",
-      "cash": "Cash from the drawer",
-      "transfer": "Card-to-card",
-      "reference": "Transfer tracking number",
-      "credit": "To club credit",
-      "creditNeedsCustomer": "This order has no customer, so there is no club credit to pay back to."
+      "label": "Paid back by"
     },
-    "wholeOrder": "Whole order",
-    "refundable": "Left to refund: {{amount}}. Leave empty to refund all of it."
+    "refundable": "The whole order goes back: {{amount}}, each payment by the method it was paid with."
   },
   "customers": {
     "title": "Customer Directory",
@@ -2173,9 +2135,8 @@
     }
   },
   "discounts": {
-    "hubTitle": "Discounts & Coupons",
+    "hubTitle": "Discounts & Loyalty",
     "tabCustomerRates": "Customer-Specific Rates",
-    "tabCoupons": "One-Time Coupons Studio",
     "tabWallet": "Loyalty Wallet & Cashback"
   },
   "customerClub": {
@@ -2214,51 +2175,6 @@
     "failedToSave": "Failed to save customer discount",
     "failedToSaveBulk": "Failed to save bulk discounts",
     "failedToRevoke": "Failed to revoke discount"
-  },
-  "coupons": {
-    "title": "Coupons",
-    "subtitle": "Coupon codes with their own terms: single-use or a campaign code many customers can redeem.",
-    "createOneTime": "Create Coupon",
-    "testBenchTitle": "POS Coupon Validation Test Bench",
-    "testCodeLabel": "Coupon Code",
-    "simulatedSubtotal": "Simulated Subtotal ({{currency}})",
-    "validateButton": "Validate Code",
-    "couponValid": "Coupon VALID! Applied Discount: -{{amount}} {{currency}}",
-    "ruleLabel": "Rule:",
-    "noCoupons": "No coupons created yet.",
-    "code": "Coupon Code",
-    "redemptionStatus": "Redemption Status",
-    "validity": "Effective Window",
-    "status": "Status",
-    "redeemed": "Redeemed ({{uses}}/{{max}})",
-    "available": "Available ({{uses}}/{{max}})",
-    "noDateLimit": "No Date Limit",
-    "start": "Start",
-    "expires": "Expires",
-    "createModalTitle": "Create Coupon Code",
-    "codeLabel": "Unique Coupon Code",
-    "codePlaceholder": "e.g. WELCOME15",
-    "percentageLabel": "Discount Percentage (%)",
-    "minSubtotalLabel": "Minimum Purchase Subtotal ({{currency}})",
-    "maxCapLabel": "Maximum Discount Cap ({{currency}})",
-    "startDate": "Start Date",
-    "endDate": "End Date",
-    "oneTimeNotice": "Leave Uses at 1 for a single-use code. A campaign code counts every redemption against its limit.",
-    "failedToLoad": "Failed to load coupons",
-    "failedToCreate": "Failed to create one-time coupon",
-    "validationFailed": "Coupon validation failed",
-    "freeItemRule": "Buy {{buyQty}} × {{buy}}, get {{rewardQty}} × {{reward}} free",
-    "anyProduct": "any item",
-    "typePercentage": "Percentage off",
-    "typeFreeItem": "Free item",
-    "buyProduct": "Buy",
-    "rewardProduct": "Get free",
-    "quantity": "Qty",
-    "freeItemNotice": "The cashier rings up the free item as usual; the coupon takes its price off once the order has what the coupon asks to buy.",
-    "maxUsesLabel": "Uses allowed",
-    "actions": "Actions",
-    "deactivate": "Switch off",
-    "activate": "Switch on"
   },
   "authPolicy": {
     "title": "Cashier Manual Discount Authorizations",
@@ -2314,7 +2230,7 @@
         "FINANCIAL": "Sales & Performance",
         "CATALOG": "Menu & Product",
         "PAYMENT": "Payments",
-        "PROMOTION": "Discounts & Coupons",
+        "PROMOTION": "Discounts",
         "CASH": "Cash & Shifts",
         "CREDIT": "Customer Credit",
         "DELIVERY": "Delivery & Couriers",
@@ -2644,26 +2560,22 @@
       "updateError": "Failed to update settings"
     },
     "paymentsPage": {
-      "title": "Payment & Refund Methods",
-      "subtitle": "Configure tender instruments (Cash, EFT POS, Tara Pay, Credit), device requirements, and alternative refund permissions.",
+      "title": "Payment Methods",
+      "subtitle": "Configure tender instruments (Cash, EFT POS, Credit) and device requirements.",
       "addMethod": "Add Payment Method",
       "colCode": "Code",
       "colName": "Name",
       "colKind": "Kind",
       "colCurrency": "Currency",
       "colDevice": "Device / Reference",
-      "colRefund": "Refund Policy",
       "colStatus": "Status",
       "colActions": "Actions",
       "hardwarePos": "Hardware POS",
       "refRequired": "Ref Required",
-      "refundable": "Refundable",
-      "noRefund": "No Refund",
-      "altRefund": "Alt Refund Allowed",
       "noMethods": "No payment methods configured.",
       "newMethod": "New Payment Method",
       "editMethod": "Edit Payment Method",
-      "drawerSubtitle": "Configure instrument parameters, reconciliation flags, and alternative refund rules.",
+      "drawerSubtitle": "Configure instrument parameters and reconciliation flags.",
       "formCode": "Method Code",
       "formCodePlaceholder": "e.g. CARD_POS, CASH",
       "formName": "Display Name",
@@ -2672,8 +2584,6 @@
       "formCurrency": "Currency Code",
       "reqDevice": "Requires Hardware EFT POS Terminal",
       "reqRef": "Requires Transaction Reference / RRN",
-      "allowRefund": "Allows Direct Refund",
-      "allowAltRefund": "Allows Alternative Refund Method (e.g. Cash for Card)",
       "formActive": "Active & Available at POS",
       "createButton": "Create Method",
       "updateButton": "Update Method",
@@ -2912,8 +2822,8 @@
           "description": "The counter's card terminals and the couriers' mobile card readers, and how the branch agent reaches each one."
         },
         "payments": {
-          "title": "Payments & Refund Methods",
-          "description": "Payment and refund methods, and the bank accounts the card terminals settle into.",
+          "title": "Payment Methods",
+          "description": "Payment methods, and the bank accounts the card terminals settle into.",
           "badge": "Gateways Ready"
         },
         "printers": {
@@ -3726,7 +3636,7 @@
       "catalog": "Write the menu — products, categories, modifiers",
       "catalogNote": "A branch sees the catalogue and decides what it can serve today. It does not author it.",
       "pricing": "Set prices",
-      "discounts": "Run coupons and customer rates",
+      "discounts": "Run customer rates",
       "chainSettings": "Currencies, tender types, reason codes",
       "authority": "Set discount caps and approval thresholds",
       "users": "Hire, move and deactivate staff — and set their pin",

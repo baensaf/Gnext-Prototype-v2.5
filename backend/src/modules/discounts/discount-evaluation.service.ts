@@ -1,8 +1,6 @@
-import { Injectable, BadRequestException, ForbiddenException, ConflictException, Optional } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, EntityManager, In, IsNull } from 'typeorm';
-import { Coupon } from '../../entities/Coupon.entity';
-import { DiscountUsage } from '../../entities/DiscountUsage.entity';
+import { Repository, In } from 'typeorm';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { CustomerDiscount } from '../../entities/CustomerDiscount.entity';
@@ -16,12 +14,10 @@ import { ItemDiscountsService } from './item-discounts.service';
 export interface ConsideredDiscount {
   /**
    * Who granted it: an automatic item discount (one entry per discounted line, applied
-   * first), or the one order discount: the cashier, a coupon code, or the customer's own rate.
+   * first), or the one order discount: the cashier's, or the customer's own rate.
    */
-  source: 'ITEM' | 'MANUAL' | 'COUPON' | 'CUSTOMER';
+  source: 'ITEM' | 'MANUAL' | 'CUSTOMER';
   name: string;
-  couponId?: string;
-  couponCode?: string;
   itemDiscountId?: string;
   productId?: string;
   percent?: string;
@@ -65,10 +61,6 @@ export interface DiscountQuoteResult {
 @Injectable()
 export class DiscountEvaluationService {
   constructor(
-    @InjectRepository(Coupon)
-    private readonly couponRepo: Repository<Coupon>,
-    @InjectRepository(DiscountUsage)
-    private readonly usageRepo: Repository<DiscountUsage>,
     @InjectRepository(TenantSetting)
     private readonly settingRepo: Repository<TenantSetting>,
     @InjectRepository(CustomerDiscount)
@@ -116,7 +108,7 @@ export class DiscountEvaluationService {
     /** The signed-in account's role, which sets how much it may discount without a pin. */
     callerRole?: string | null,
   ): Promise<DiscountQuoteResult> {
-    const { orderDraft, manualDiscount, couponCode } = request;
+    const { orderDraft, manualDiscount } = request;
     const currencyCode = orderDraft.currencyCode || 'IRR';
     const now = new Date();
 
@@ -124,9 +116,7 @@ export class DiscountEvaluationService {
     const warnings: string[] = [];
 
     const requestedItems = orderDraft.items || [];
-    // Only real product ids go to the database. The coupon test bench quotes a stand-in
-    // line ('temp-item'), and Postgres rejects a non-uuid in a uuid IN (...), which turned
-    // every coupon check on that screen into a 500.
+    // Only real product ids go to the database: Postgres rejects a non-uuid in a uuid IN (...).
     const isUuid = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     const productIds = [...new Set(requestedItems.map((item) => item.productId).filter((id) => id && isUuid(id)))];
     const products = this.productRepo && productIds.length > 0
@@ -347,99 +337,7 @@ export class DiscountEvaluationService {
       }
     }
 
-    // B. Workflow 4: One-Time Coupon Code, percentage or free item (Second Precedence)
-    // A presented coupon is a deliberate act at the till, so it wins over the customer's
-    // standing rate. The coupon carries its own terms.
-    if (!singleDiscountApplied && couponCode && couponCode.trim()) {
-      const normalizedCode = couponCode.trim().toUpperCase();
-      const couponName = `Coupon (${normalizedCode})`;
-      const reject = (rejectionReason: string, warning: string) => {
-        consideredDiscounts.push({
-          source: 'COUPON',
-          name: couponName,
-          couponCode: normalizedCode,
-          discountType: 'COUPON',
-          status: 'REJECTED',
-          rejectionReason,
-          amount: '0.0000',
-        });
-        warnings.push(warning);
-      };
-
-      const coupon = await this.couponRepo.findOne({
-        where: { tenant_id: tenantId, code: normalizedCode },
-      });
-
-      if (!coupon || !coupon.is_active) {
-        reject('INVALID_OR_INACTIVE_COUPON', `Coupon code ${normalizedCode} is invalid or inactive`);
-      } else if (coupon.effective_from && new Date(coupon.effective_from) > now) {
-        reject('COUPON_NOT_YET_ACTIVE', `Coupon code ${normalizedCode} is not active yet`);
-      } else if (coupon.effective_to && new Date(coupon.effective_to) < now) {
-        reject('COUPON_EXPIRED', `Coupon code ${normalizedCode} has expired`);
-      } else if ((coupon.uses_count ?? 0) >= (coupon.max_uses ?? 1)) {
-        reject('COUPON_MAX_USES_REACHED', `Coupon code ${normalizedCode} has reached maximum usage limit`);
-      } else if (
-        orderDraft.customerId &&
-        (await this.usageRepo.count({
-          where: { tenant_id: tenantId, coupon_id: coupon.id, customer_id: orderDraft.customerId, reversed_at: IsNull() },
-        })) >= 1
-      ) {
-        reject('COUPON_ALREADY_REDEEMED_BY_CUSTOMER', `Coupon ${normalizedCode} already used by this customer`);
-      } else if (coupon.minimum_subtotal && MoneyUtil.lessThan(subtotal, coupon.minimum_subtotal)) {
-        reject(
-          'COUPON_MINIMUM_NOT_MET',
-          `Coupon ${normalizedCode} needs a subtotal of at least ${coupon.minimum_subtotal}`,
-        );
-      } else {
-        const freeItem = coupon.coupon_type === 'FREE_ITEM' ? this.freeItemDiscounts(coupon, lineItems, remainingBases, isDiscountableLine) : null;
-        if (freeItem && 'rejection' in freeItem) {
-          reject(freeItem.rejection, `Coupon ${normalizedCode}: ${freeItem.warning}`);
-        }
-        const pctDec = MoneyUtil.divide(coupon.percentage, '100', 6);
-        let lineDiscs =
-          freeItem && 'lineDiscs' in freeItem
-            ? freeItem.lineDiscs
-            : freeItem
-              ? lineItems.map(() => '0.0000')
-              : lineItems.map((_, i) =>
-                  isDiscountableLine[i] && MoneyUtil.greaterThan(remainingBases[i], '0')
-                    ? MoneyUtil.multiply(remainingBases[i], pctDec)
-                    : '0.0000',
-                );
-        const sum = (values: string[]) => values.reduce((acc, v) => MoneyUtil.add(acc, v), '0.0000');
-        const uncapped = sum(lineDiscs);
-
-        // The cap is on the coupon as a whole. Each line is scaled down in proportion so
-        // the per-line figures still add up to what the order is discounted by.
-        const cap = coupon.maximum_discount_amount;
-        if (cap && MoneyUtil.greaterThan(uncapped, cap)) {
-          lineDiscs = lineDiscs.map((d) => MoneyUtil.divide(MoneyUtil.multiply(d, cap), uncapped));
-        }
-        const couponAmount = sum(lineDiscs);
-
-        for (let i = 0; i < lineItems.length; i++) {
-          if (MoneyUtil.lessThanOrEqual(lineDiscs[i], '0')) continue;
-          lineItems[i].discountTotal = MoneyUtil.add(lineItems[i].discountTotal, lineDiscs[i]);
-          remainingBases[i] = MoneyUtil.subtract(remainingBases[i], lineDiscs[i]);
-        }
-
-        if (MoneyUtil.greaterThan(couponAmount, '0')) {
-          discountTotal = MoneyUtil.add(discountTotal, couponAmount);
-          consideredDiscounts.push({
-            source: 'COUPON',
-            name: freeItem ? `${couponName} free item` : `${couponName} ${MoneyUtil.format(coupon.percentage, 2)}%`,
-            couponId: coupon.id,
-            couponCode: normalizedCode,
-            discountType: freeItem ? 'FREE_ITEM' : 'PERCENTAGE',
-            status: 'APPLIED',
-            amount: couponAmount,
-          });
-          singleDiscountApplied = true;
-        }
-      }
-    }
-
-    // C. Workflow 1: Customer-Specific Discount (Third Precedence)
+    // B. Workflow 1: Customer-Specific Discount (Second Precedence)
     if (!singleDiscountApplied && orderDraft.customerId) {
       const customerDiscount = await this.customerDiscountRepo.findOne({
         where: { tenant_id: tenantId, customer_id: orderDraft.customerId, is_active: true },
@@ -511,118 +409,5 @@ export class DiscountEvaluationService {
       approvalRequired,
       approvalReason,
     };
-  }
-
-  /**
-   * What a free-item coupon takes off each line, or why it does not apply. The basket must
-   * hold `buy_quantity` of the buy product (any product when none is named) besides the free
-   * units, and the reward product itself: the cashier rings up the free drink, and the coupon
-   * makes up to `reward_quantity` units of it free. When the buy and reward product are the
-   * same ("buy 2, get 1 free") the free units don't count towards the buy.
-   */
-  private freeItemDiscounts(
-    coupon: Coupon,
-    lineItems: QuotedLineItem[],
-    remainingBases: string[],
-    isDiscountableLine: boolean[],
-  ): { lineDiscs: string[] } | { rejection: string; warning: string } {
-    const units = (line: QuotedLineItem) => Math.floor(Number(line.quantity) || 0);
-    const rewardLines = lineItems.map((line, i) => ({ line, i })).filter(({ line }) => line.productId === coupon.reward_product_id);
-    const rewardUnits = rewardLines.reduce((acc, { line }) => acc + units(line), 0);
-    if (rewardUnits === 0) {
-      return { rejection: 'COUPON_REWARD_NOT_IN_ORDER', warning: 'add the free item to the order to use this coupon' };
-    }
-
-    const buyQuantity = coupon.buy_quantity || 1;
-    const rewardQuantity = coupon.reward_quantity || 1;
-    const sameProduct = !!coupon.buy_product_id && coupon.buy_product_id === coupon.reward_product_id;
-    let free: number;
-    if (sameProduct) {
-      free = Math.min(rewardQuantity, rewardUnits - buyQuantity);
-    } else {
-      const bought = lineItems
-        .filter((line) => (coupon.buy_product_id ? line.productId === coupon.buy_product_id : line.productId !== coupon.reward_product_id))
-        .reduce((acc, line) => acc + units(line), 0);
-      free = bought >= buyQuantity ? Math.min(rewardQuantity, rewardUnits) : 0;
-    }
-    if (free <= 0) {
-      return { rejection: 'COUPON_BUY_CONDITION_NOT_MET', warning: `buy ${buyQuantity} to get ${rewardQuantity} free` };
-    }
-
-    const lineDiscs = lineItems.map(() => '0.0000');
-    let left = free;
-    for (const { line, i } of rewardLines) {
-      if (left <= 0) break;
-      if (!isDiscountableLine[i] || MoneyUtil.lessThanOrEqual(remainingBases[i], '0')) continue;
-      const take = Math.min(left, units(line));
-      const amount = MoneyUtil.multiply(line.unitPrice, String(take));
-      lineDiscs[i] = MoneyUtil.greaterThan(amount, remainingBases[i]) ? remainingBases[i] : amount;
-      left -= take;
-    }
-    return { lineDiscs };
-  }
-
-  /**
-   * Counts a coupon redemption against its limit, inside the order's transaction. The row
-   * is locked so two tills cannot both spend the last use of the same code.
-   */
-  async consumeUsage(
-    tenantId: string,
-    orderId: string,
-    customerId: string | undefined,
-    couponId: string,
-    discountAmount: string,
-    entityManager: EntityManager,
-  ): Promise<void> {
-    const coupon = await entityManager
-      .createQueryBuilder(Coupon, 'cp')
-      .setLock('pessimistic_write')
-      .where('cp.id = :couponId AND cp.tenant_id = :tenantId', { couponId, tenantId })
-      .getOne();
-
-    if (!coupon) return;
-
-    const maxUses = coupon.max_uses ?? 1;
-    if (coupon.uses_count >= maxUses) {
-      throw new ConflictException(`Coupon ${coupon.code} max redemptions reached during submission`);
-    }
-    coupon.uses_count += 1;
-    await entityManager.save(coupon);
-
-    const usage = entityManager.create(DiscountUsage, {
-      tenant_id: tenantId,
-      coupon_id: coupon.id,
-      customer_id: customerId || null,
-      order_id: orderId,
-      amount: MoneyUtil.format(discountAmount),
-      currency_code: 'IRR',
-      used_at: new Date(),
-    });
-    await entityManager.save(usage);
-  }
-
-  /**
-   * Gives back the coupon uses a cancelled order took. A code limited to one use per customer
-   * would otherwise stay spent on a sale that never happened.
-   */
-  async releaseUsage(tenantId: string, orderId: string): Promise<void> {
-    await this.usageRepo.manager.transaction(async (em) => {
-      const usages = await em.find(DiscountUsage, {
-        where: { tenant_id: tenantId, order_id: orderId, reversed_at: IsNull() },
-      });
-      for (const usage of usages) {
-        const coupon = await em
-          .createQueryBuilder(Coupon, 'cp')
-          .setLock('pessimistic_write')
-          .where('cp.id = :couponId AND cp.tenant_id = :tenantId', { couponId: usage.coupon_id, tenantId })
-          .getOne();
-        if (coupon && coupon.uses_count > 0) {
-          coupon.uses_count -= 1;
-          await em.save(coupon);
-        }
-        usage.reversed_at = new Date();
-        await em.save(usage);
-      }
-    });
   }
 }

@@ -105,7 +105,7 @@ const ACTIVE_LINE_STATE = 'ACTIVE';
 const isActiveLine = (item: { state?: string }): boolean =>
   (item.state || ACTIVE_LINE_STATE) === ACTIVE_LINE_STATE;
 
-/** The one order discount (manual, coupon or customer rate) inside an order's discount total. */
+/** The one order discount (manual or customer rate) inside an order's discount total. */
 const previousOrderDiscount = (order: OrderHeader): string => {
   const rest = MoneyUtil.subtract(order.discount_total || order.discount_amount || '0.0000', order.item_discount_total || '0.0000');
   return MoneyUtil.greaterThan(rest, '0.0000') ? rest : '0.0000';
@@ -530,7 +530,6 @@ export class OrderService {
         customer_address_id: dto.delivery_address_id || null,
         delivery_zone_id: dto.delivery_zone_id || null,
         delivery_fee_manual: dto.delivery_fee ?? null,
-        coupon_code: dto.coupon_code ? dto.coupon_code.toUpperCase() : null,
         notes: dto.notes || null,
         created_by: userId || null,
       });
@@ -591,7 +590,6 @@ export class OrderService {
       if (dto.order_type !== undefined) order.order_type = dto.order_type as any;
       if (dto.customer_id !== undefined) order.customer_id = dto.customer_id;
       if (dto.notes !== undefined) order.notes = dto.notes;
-      if (dto.coupon_code !== undefined) order.coupon_code = dto.coupon_code;
       if (dto.terminal_id !== undefined) order.terminal_id = dto.terminal_id;
       if (dto.shift_id !== undefined) order.shift_id = dto.shift_id;
       if (dto.channel !== undefined) order.channel = dto.channel;
@@ -641,8 +639,6 @@ export class OrderService {
   }
 
   private async evaluateOrderQuote(tenantId: string, order: OrderHeader, request?: OrderQuoteRequestDto, callerRole?: string | null) {
-    const couponCode = request?.couponCode || order.coupon_code;
-
     const draftItems = (order.items || []).filter(isActiveLine).map((i) => {
       const modPerUnit = (i.quantity && Number(i.quantity) > 0 && i.modifier_total)
         ? MoneyUtil.divide(i.modifier_total, i.quantity)
@@ -671,7 +667,6 @@ export class OrderService {
         items: draftItems,
       },
       manualDiscount: request?.manualDiscount,
-      couponCode: couponCode || undefined,
     }, callerRole);
 
     return {
@@ -705,7 +700,7 @@ export class OrderService {
 
       // Check stale quote if version provided
       if (dto.quoteVersion && dto.quoteVersion !== order.quote_version) {
-        const freshQuote = await this.evaluateOrderQuote(tenantId, order, { couponCode: order.coupon_code });
+        const freshQuote = await this.evaluateOrderQuote(tenantId, order);
         throw new ConflictException({
           statusCode: 409,
           code: 'QUOTE_STALE',
@@ -763,7 +758,6 @@ export class OrderService {
           }),
         },
         manualDiscount: submittedManualDiscount,
-        couponCode: order.coupon_code || undefined,
       }, callerRole);
 
       // A discount the cashier typed is given or the order is not sent. Charging full price
@@ -779,23 +773,6 @@ export class OrderService {
         }
       }
 
-      // A coupon is the one discount with a use limit, so its redemption is counted here,
-      // inside the transaction. Before this passed the coupon, only the hidden campaign
-      // behind it was counted and the coupon's own uses never moved.
-      const appliedCoupon = quoteRes.consideredDiscounts.find(
-        (d) => d.status === 'APPLIED' && d.source === 'COUPON' && d.couponId,
-      );
-      if (appliedCoupon) {
-        await this.discountEngine.consumeUsage(
-          tenantId,
-          order.id,
-          order.customer_id || undefined,
-          appliedCoupon.couponId!,
-          appliedCoupon.amount,
-          em,
-        );
-      }
-
       // Persist OrderAdjustment records for applied discounts
       const appliedDiscounts = quoteRes.consideredDiscounts.filter((d) => d.status === 'APPLIED');
       for (const disc of appliedDiscounts) {
@@ -804,8 +781,8 @@ export class OrderService {
           order_id: order.id,
           type: 'DISCOUNT',
           source_type: disc.source,
-          source_id: disc.couponId || disc.itemDiscountId || null,
-          code: disc.couponCode || (disc.source === 'MANUAL' ? 'MANUAL_DISCOUNT' : disc.source === 'ITEM' ? 'ITEM_DISCOUNT' : null),
+          source_id: disc.itemDiscountId || null,
+          code: (disc.source === 'MANUAL' ? 'MANUAL_DISCOUNT' : disc.source === 'ITEM' ? 'ITEM_DISCOUNT' : null),
           name: disc.name,
           amount: disc.amount,
           funding_source: 'MERCHANT',
@@ -2275,9 +2252,6 @@ export class OrderService {
           userId,
           correlationId,
         );
-
-    // The sale did not happen, so any coupon it used can be used again.
-    await this.discountEngine.releaseUsage(tenantId, id);
 
     await this.stopKitchenAfterCancel(
       tenantId,
