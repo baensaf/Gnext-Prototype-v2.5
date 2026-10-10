@@ -170,7 +170,6 @@ export function StopReportPage() {
                       <TableCell>{t('catalog.stopReport.offAt')}</TableCell>
                       <TableCell>{t('catalog.stopReport.item')}</TableCell>
                       <TableCell>{t('catalog.stopReport.where')}</TableCell>
-                      <TableCell>{t('catalog.stopReport.reason')}</TableCell>
                       <TableCell>{t('catalog.stopReport.by')}</TableCell>
                       <TableCell>{t('catalog.stopReport.ended')}</TableCell>
                       <TableCell align="center">{t('catalog.stopReport.hoursOff')}</TableCell>
@@ -185,7 +184,6 @@ export function StopReportPage() {
                           {s.chain_wide ? t('catalog.stopReport.allBranches') : s.branch}
                           {s.channel && <Chip size="small" variant="outlined" color="warning" label={s.channel} sx={{ ms: 1 }} />}
                         </TableCell>
-                        <TableCell>{s.reason || '—'}</TableCell>
                         <TableCell>
                           {s.by || '—'}
                           {s.approver && (
@@ -207,7 +205,7 @@ export function StopReportPage() {
                     ))}
                     {report.stops.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                        <TableCell colSpan={6} align="center" sx={{ py: 3, color: 'text.secondary' }}>
                           {t('catalog.stopReport.empty')}
                         </TableCell>
                       </TableRow>

@@ -92,12 +92,12 @@ describe('Snappfood-style menu controls (PostgreSQL)', () => {
   });
 
   it('takes one variant off sale, and a whole-product stop and resume leave it alone', async () => {
-    await catalog.suspendProduct(tenantId, sandwich, branchId, 0, 'No cold cuts', 'test', { variantId: cold });
+    await catalog.suspendProduct(tenantId, sandwich, branchId, 'test', { variantId: cold });
 
     await expect(order([{ product_id: sandwich, variant_id: cold, quantity: 1 }])).rejects.toThrow('suspended');
     await expect(order([{ product_id: sandwich, variant_id: hot, quantity: 1 }])).resolves.toBeDefined();
 
-    await catalog.suspendProduct(tenantId, sandwich, branchId, 2, 'Rush', 'test');
+    await catalog.suspendProduct(tenantId, sandwich, branchId, 'test');
     await catalog.resumeProduct(tenantId, sandwich, branchId, 'test');
     await expect(order([{ product_id: sandwich, variant_id: cold, quantity: 1 }])).rejects.toThrow('suspended');
 
@@ -112,13 +112,13 @@ describe('Snappfood-style menu controls (PostgreSQL)', () => {
     await expect(order(withSauce(chili))).rejects.toThrow('not offered');
     await expect(order(withSauce(ketchup))).resolves.toBeDefined();
 
-    await catalog.suspendProduct(tenantId, undefined, branchId, 0, 'Out', 'test', { optionItemId: ketchup });
+    await catalog.suspendProduct(tenantId, undefined, branchId, 'test', { optionItemId: ketchup });
     await expect(order(withSauce(ketchup))).rejects.toThrow('not available');
     await catalog.resumeProduct(tenantId, undefined, branchId, 'test', { optionItemId: ketchup });
     await expect(order(withSauce(ketchup))).resolves.toBeDefined();
   });
 
-  it('keeps one opening time a day and comes back at the next one', async () => {
+  it('keeps one opening time a day', async () => {
     const days = [0, 1, 2, 3, 4, 5, 6];
     await tenants.updateBranchHours(
       tenantId,
@@ -136,12 +136,5 @@ describe('Snappfood-style menu controls (PostgreSQL)', () => {
         { day_of_week: 1, open_time: '19:00:00', close_time: '23:00:00' },
       ], 'test'),
     ).rejects.toThrow('more than one opening time');
-
-    // 10:00Z is 13:30 in Tehran, while open: the next opening is 12:00 the next day, 08:30Z.
-    const next = await catalog.nextShiftStart(tenantId, branchId, new Date('2026-09-16T10:00:00Z'));
-    expect(next.toISOString()).toBe('2026-09-17T08:30:00.000Z');
-
-    const stop = await catalog.suspendProduct(tenantId, lasagne, branchId, undefined, 'Ran out', 'test', { untilNextShift: true });
-    expect(new Date(stop.suspended_until!).getTime()).toBeGreaterThan(Date.now());
   });
 });

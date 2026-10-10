@@ -63,48 +63,30 @@ describe('86 from the POS tile (PostgreSQL)', () => {
   const manager = () => session(managerId, 'MANAGER');
   const stopped = async () => (await catalog.getSuspension(tenantId, burger, branchId)).isSuspended;
 
-  it('lets a cashier stop an item until the next shift, with a reason, and logs who did it', async () => {
-    await expect(controller.posStop({ productId: burger, until: 'NEXT_SHIFT', reason: '  ' }, cashier())).rejects.toThrow('Pick why');
-
-    const stop = await controller.posStop({ productId: burger, until: 'NEXT_SHIFT', reason: 'Sold out' }, cashier());
-    expect(stop.suspended_until).not.toBeNull();
+  it('lets a cashier stop an item until further notice, with no reason or pin, and logs who did it', async () => {
+    const stop = await controller.posStop({ productId: burger }, cashier());
+    expect(stop.suspended_until).toBeNull();
+    expect(stop.reason).toBeNull();
     expect(await stopped()).toBe(true);
 
     const log = await dataSource.getRepository(AuditEvent).findOne({ where: { tenant_id: tenantId, action: 'PRODUCT_SUSPENDED' }, order: { occurred_at: 'DESC' } });
     expect(log).toMatchObject({ actor_id: cashierId, branch_id: branchId });
-    expect(log!.details).toMatchObject({ reason: 'Sold out', source: 'POS', approverId: null });
+    expect(log!.details).toMatchObject({ source: 'POS' });
   });
 
-  it("needs an approver's pin for a cashier to stop an item until further notice", async () => {
-    await expect(controller.posStop({ productId: burger, until: 'FURTHER_NOTICE', reason: 'Fryer down' }, cashier())).rejects.toThrow();
-    await expect(controller.posStop({ productId: burger, until: 'FURTHER_NOTICE', reason: 'Fryer down', approverPin: '0000' }, cashier())).rejects.toThrow('Invalid manager PIN');
-
-    const stop = await controller.posStop({ productId: burger, until: 'FURTHER_NOTICE', reason: 'Fryer down', approverPin: PIN }, cashier());
-    expect(stop.suspended_until).toBeNull();
-    const log = await dataSource.getRepository(AuditEvent).findOne({ where: { tenant_id: tenantId, action: 'PRODUCT_SUSPENDED' }, order: { occurred_at: 'DESC' } });
-    expect(log!.details).toMatchObject({ approverId: managerId, untilNextShift: false });
-  });
-
-  it("needs an approver's pin for a cashier to put an item back; a manager needs none", async () => {
-    await expect(controller.posResume({ productId: burger }, cashier())).rejects.toThrow();
-    expect(await stopped()).toBe(true);
-
-    await controller.posResume({ productId: burger, approverPin: PIN }, cashier());
-    expect(await stopped()).toBe(false);
-
-    await controller.posStop({ productId: burger, until: 'FURTHER_NOTICE', reason: 'Fryer down' }, manager());
-    await controller.posResume({ productId: burger }, manager());
+  it('lets a cashier put an item back with no pin', async () => {
+    await controller.posResume({ productId: burger }, cashier());
     expect(await stopped()).toBe(false);
   });
 
   it("keeps a branch register to its own branch, and head office to the branch it names", async () => {
     // A cashier naming another branch still acts on their own.
-    await controller.posStop({ productId: burger, until: 'NEXT_SHIFT', reason: 'Sold out', branchId: otherBranchId }, cashier());
+    await controller.posStop({ productId: burger, branchId: otherBranchId }, cashier());
     expect((await catalog.getSuspension(tenantId, burger, otherBranchId)).isSuspended).toBe(false);
     expect(await stopped()).toBe(true);
     await controller.posResume({ productId: burger }, manager());
 
-    await expect(controller.posStop({ productId: burger, until: 'NEXT_SHIFT', reason: 'Sold out' }, session(managerId, 'ADMIN', null))).rejects.toThrow(
+    await expect(controller.posStop({ productId: burger }, session(managerId, 'ADMIN', null))).rejects.toThrow(
       'Pick the branch',
     );
   });

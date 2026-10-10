@@ -274,10 +274,6 @@ export interface StopRequest {
   variantId?: string;
   optionItemId?: string;
   branchId?: string;
-  /** NEXT_SHIFT: back when the branch next opens. MANUAL: until someone puts it back. */
-  until: 'NEXT_SHIFT' | 'MANUAL' | 'HOURS';
-  hours?: number;
-  reason?: string;
   /** Off on this channel only (SNAPPFOOD); empty for everywhere. */
   channel?: string;
 }
@@ -508,35 +504,21 @@ export const catalogApi = {
     const res = await httpClient.get('/api/v1/availability', { params: { branchId } });
     return res.data;
   },
-  suspendProduct: async (productId: string, branchId?: string, hours: number = 2, reason?: string): Promise<any> => {
-    const res = await httpClient.post('/api/v1/availability/suspend', { productId, branchId, hours, reason });
-    return res.data;
-  },
   resumeProduct: async (productId: string, branchId?: string): Promise<any> => {
     const res = await httpClient.post('/api/v1/availability/resume', { productId, branchId });
     return res.data;
   },
-  /**
-   * The register's own 86. Until the next shift needs only a reason; until further notice
-   * needs an approver, or an approver's pin from anyone else.
-   */
-  posStop: async (body: {
-    productId: string;
-    variantId?: string | null;
-    until: 'NEXT_SHIFT' | 'FURTHER_NOTICE';
-    reason: string;
-    branchId?: string | null;
-    approverPin?: string;
-  }): Promise<ProductAvailability> => {
+  /** The register's own 86: off until somebody puts it back, no reason, no pin. */
+  posStop: async (body: { productId: string; variantId?: string | null; branchId?: string | null }): Promise<ProductAvailability> => {
     const res = await httpClient.post('/api/v1/availability/pos-stop', { ...body, variantId: body.variantId || undefined, branchId: body.branchId || undefined });
     return res.data;
   },
-  /** Put an item back on sale from the register: an approver, or an approver's pin. */
-  posResume: async (body: { productId: string; variantId?: string | null; branchId?: string | null; approverPin?: string }): Promise<void> => {
+  /** Put an item back on sale from the register. */
+  posResume: async (body: { productId: string; variantId?: string | null; branchId?: string | null }): Promise<void> => {
     await httpClient.post('/api/v1/availability/pos-resume', { ...body, variantId: body.variantId || undefined, branchId: body.branchId || undefined });
   },
   bulkStop: async (
-    body: BulkStopRequest & { until?: 'NEXT_SHIFT'; hours?: number; reason: string }
+    body: BulkStopRequest
   ): Promise<{ products: number; branches: number; stopped: number }> => {
     const res = await httpClient.post('/api/v1/availability/bulk-stop', body);
     return res.data;
@@ -551,12 +533,8 @@ export const catalogApi = {
     return res.data;
   },
   /** Take a product, one variant or an add-on off sale, Snappfood-style. */
-  stopItem: async ({ until, hours, ...target }: StopRequest): Promise<ProductAvailability> => {
-    const res = await httpClient.post('/api/v1/availability/suspend', {
-      ...target,
-      until: until === 'NEXT_SHIFT' ? 'NEXT_SHIFT' : undefined,
-      hours: until === 'HOURS' ? hours : 0,
-    });
+  stopItem: async (target: StopRequest): Promise<ProductAvailability> => {
+    const res = await httpClient.post('/api/v1/availability/suspend', target);
     return res.data;
   },
   resumeItem: async (target: {
@@ -567,10 +545,6 @@ export const catalogApi = {
     channel?: string;
   }): Promise<any> => {
     const res = await httpClient.post('/api/v1/availability/resume', target);
-    return res.data;
-  },
-  getNextShift: async (branchId?: string): Promise<{ next_shift_start: string }> => {
-    const res = await httpClient.get('/api/v1/availability/next-shift', { params: { branchId } });
     return res.data;
   },
   getDailyStock: async (branchId?: string): Promise<DailyStockLine[]> => {

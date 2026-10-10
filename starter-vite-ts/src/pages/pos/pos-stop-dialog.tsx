@@ -3,36 +3,9 @@ import type { Product, ProductVariant, ProductAvailability } from 'src/api/catal
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
-import {
-  Chip,
-  Stack,
-  Alert,
-  Radio,
-  Button,
-  Dialog,
-  Select,
-  MenuItem,
-  TextField,
-  Typography,
-  InputLabel,
-  RadioGroup,
-  DialogTitle,
-  FormControl,
-  DialogActions,
-  DialogContent,
-  FormControlLabel,
-} from '@mui/material';
-
-import { fDateTime } from 'src/utils/format-time';
+import { Stack, Alert, Button, Dialog, Select, MenuItem, InputLabel, DialogTitle, FormControl, DialogActions, DialogContent } from '@mui/material';
 
 import { catalogApi } from 'src/api/catalogApi';
-import { useAuthStore } from 'src/store/useAuthStore';
-import { isApproverRole } from 'src/config/role-access';
-
-import { VersionTag } from 'src/components/version-tag';
-
-/** The reasons a register picks from; OTHER asks for a few words. */
-export const STOP_REASONS = ['SOLD_OUT', 'INGREDIENT_MISSING', 'EQUIPMENT_DOWN', 'QUALITY', 'OTHER'] as const;
 
 const WHOLE = '';
 
@@ -49,29 +22,19 @@ type Props = {
 const isLive = (a: ProductAvailability) => a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date());
 
 /**
- * 86 an item from its tile: the whole product or one size, until the next shift (anyone,
- * with a reason) or until further notice (an approver, or anyone with an approver's pin).
- * An item already off here can be put back the same way; one head office stopped at every
- * branch cannot be put back from a register.
+ * 86 an item from its tile: the whole product or one size, off until somebody puts it back.
+ * Anyone at the register can do it, with no reason and no pin. One head office stopped at
+ * every branch cannot be put back from a register.
  */
 export function PosStopDialog({ product, branchId, availabilities, onClose, onDone }: Props) {
   const { t } = useTranslation();
-  const approver = isApproverRole(useAuthStore((state) => state.user?.role));
   const [sizes, setSizes] = useState<ProductVariant[]>([]);
   const [variantId, setVariantId] = useState(WHOLE);
-  const [reason, setReason] = useState<(typeof STOP_REASONS)[number] | ''>('');
-  const [otherText, setOtherText] = useState('');
-  const [until, setUntil] = useState<'NEXT_SHIFT' | 'FURTHER_NOTICE'>('NEXT_SHIFT');
-  const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setVariantId(WHOLE);
-    setReason('');
-    setOtherText('');
-    setUntil('NEXT_SHIFT');
-    setPin('');
     setError(null);
     setSizes([]);
     if (!product) return;
@@ -88,58 +51,21 @@ export function PosStopDialog({ product, branchId, availabilities, onClose, onDo
   const chainStop = availabilities.find((a) => target(a) && !a.branch_id && isLive(a));
   const current = chainStop || branchStop;
 
-  const needsPin = !approver && (!!branchStop || until === 'FURTHER_NOTICE');
-  const reasonText = reason === 'OTHER' ? otherText.trim() : reason ? t(`pos.stop.reasons.${reason}`) : '';
-  const canStop = !!reasonText && (!needsPin || pin.trim().length > 0);
-
-  const fail = (err: any) => setError(err?.detail || err?.message || t('pos.stop.failed'));
-
-  const stop = async () => {
+  const run = async (action: () => Promise<unknown>, message: string) => {
     setBusy(true);
     try {
-      await catalogApi.posStop({
-        productId: product.id,
-        variantId: variantId || null,
-        until,
-        reason: reasonText,
-        branchId,
-        approverPin: needsPin ? pin.trim() : undefined,
-      });
-      onDone(t(until === 'NEXT_SHIFT' ? 'pos.stop.stoppedNextShift' : 'pos.stop.stoppedFurtherNotice', { name: product.name }));
+      await action();
+      onDone(message);
     } catch (err: any) {
-      fail(err);
+      setError(err?.detail || err?.message || t('pos.stop.failed'));
     } finally {
       setBusy(false);
     }
   };
-
-  const resume = async () => {
-    setBusy(true);
-    try {
-      await catalogApi.posResume({ productId: product.id, variantId: variantId || null, branchId, approverPin: needsPin ? pin.trim() : undefined });
-      onDone(t('pos.stop.resumed', { name: product.name }));
-    } catch (err: any) {
-      fail(err);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const pinField = needsPin && (
-    <TextField
-      size="small"
-      type="password"
-      label={t('pos.stop.approverPin')}
-      helperText={
-        <>
-          {t('pos.stop.approverPinHelp')} <VersionTag feature="pos.stop.approverPin" />
-        </>
-      }
-      value={pin}
-      onChange={(e) => setPin(e.target.value)}
-      slotProps={{ htmlInput: { inputMode: 'numeric', autoComplete: 'off' } }}
-    />
-  );
+  const stop = () =>
+    run(() => catalogApi.posStop({ productId: product.id, variantId: variantId || null, branchId }), t('pos.stop.stoppedFurtherNotice', { name: product.name }));
+  const resume = () =>
+    run(() => catalogApi.posResume({ productId: product.id, variantId: variantId || null, branchId }), t('pos.stop.resumed', { name: product.name }));
 
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="xs">
@@ -167,56 +93,9 @@ export function PosStopDialog({ product, branchId, availabilities, onClose, onDo
           )}
 
           {current ? (
-            <>
-              <Alert severity={chainStop ? 'warning' : 'info'}>
-                {chainStop ? t('pos.stop.chainWide') : t('pos.stop.isOff')}
-                {current.reason && ` — ${current.reason}`}
-                {current.suspended_until
-                  ? ` (${t('pos.stop.backAt', { at: fDateTime(current.suspended_until) })})`
-                  : ` (${t('pos.stop.untilFurtherNotice')})`}
-              </Alert>
-              {!chainStop && pinField}
-            </>
+            <Alert severity={chainStop ? 'warning' : 'info'}>{chainStop ? t('pos.stop.chainWide') : t('pos.stop.isOff')}</Alert>
           ) : (
-            <>
-              <div>
-                <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  {t('pos.stop.why')} <VersionTag feature="pos.stop.reason" />
-                </Typography>
-                <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
-                  {STOP_REASONS.map((r) => (
-                    <Chip
-                      key={r}
-                      label={t(`pos.stop.reasons.${r}`)}
-                      color={reason === r ? 'primary' : 'default'}
-                      variant={reason === r ? 'filled' : 'outlined'}
-                      onClick={() => setReason(r)}
-                    />
-                  ))}
-                </Stack>
-                {reason === 'OTHER' && (
-                  <TextField
-                    size="small"
-                    fullWidth
-                    sx={{ mt: 1.5 }}
-                    label={t('pos.stop.otherReason')}
-                    value={otherText}
-                    onChange={(e) => setOtherText(e.target.value)}
-                    slotProps={{ htmlInput: { maxLength: 200 } }}
-                  />
-                )}
-              </div>
-              <VersionTag feature="pos.stop.duration" sx={{ alignSelf: 'flex-start', mb: -1.5 }} />
-              <RadioGroup value={until}onChange={(e) => setUntil(e.target.value as 'NEXT_SHIFT' | 'FURTHER_NOTICE')}>
-                <FormControlLabel value="NEXT_SHIFT" control={<Radio />} label={t('pos.stop.untilNextShift')} />
-                <FormControlLabel
-                  value="FURTHER_NOTICE"
-                  control={<Radio />}
-                  label={approver ? t('pos.stop.untilFurtherNotice') : `${t('pos.stop.untilFurtherNotice')} — ${t('pos.stop.needsManager')}`}
-                />
-              </RadioGroup>
-              {pinField}
-            </>
+            <Alert severity="info">{t('pos.stop.untilFurtherNotice')}</Alert>
           )}
         </Stack>
       </DialogContent>
@@ -226,12 +105,12 @@ export function PosStopDialog({ product, branchId, availabilities, onClose, onDo
         </Button>
         {current ? (
           !chainStop && (
-            <Button variant="contained" color="success" onClick={resume} disabled={busy || (needsPin && !pin.trim())}>
+            <Button variant="contained" color="success" onClick={resume} disabled={busy}>
               {t('pos.stop.putBack')}
             </Button>
           )
         ) : (
-          <Button variant="contained" color="error" onClick={stop} disabled={busy || !canStop}>
+          <Button variant="contained" color="error" onClick={stop} disabled={busy}>
             {t('pos.stop.takeOff')}
           </Button>
         )}

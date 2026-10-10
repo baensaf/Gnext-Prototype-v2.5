@@ -74,9 +74,6 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
 /** Features that ship later than the page they sit on. */
 export const FEATURE_LABELS = {
   // POS register
-  'pos.stop.reason': 'F',
-  'pos.stop.duration': 'F',
-  'pos.stop.approverPin': 'F',
   'pos.coupon': 'V3',
   'pos.customerCredit': 'V3',
   // Delivery platforms (Snappfood) come with the incoming orders, in V3.
@@ -114,9 +111,7 @@ export const FEATURE_LABELS = {
   'catalog.priceHistory': 'V4',
   // Availability: a V1 item is available, or off until someone puts it back.
   'catalog.snappfoodStop': 'V3',
-  'catalog.stopReason': 'F',
   // V1 stops are "until further notice" only: off until the next shift and off for set hours are F.
-  'catalog.stopDuration': 'F',
   'catalog.stopBranches': 'V4',
   'catalog.sellingWindows': 'V2',
   'import.customers': 'F',

@@ -53,19 +53,19 @@ describe('Stops on one channel (PostgreSQL)', () => {
     (await catalog.getChannelPriceSheet(tenantId, 'SNAPPFOOD', branch)).items.find((i) => i.product_id === burger)!.off;
 
   it('stops an item on Snappfood while the register and the kiosk keep selling it', async () => {
-    await catalog.suspendProduct(tenantId, burger, branchId, 0, 'Kitchen slammed', 'test', { channel: 'SNAPPFOOD' });
+    await catalog.suspendProduct(tenantId, burger, branchId, 'test', { channel: 'SNAPPFOOD' });
 
     await expect(sellInStore()).resolves.toBeDefined();
     const boot = await kiosk.getBootstrapContext(tenantId, branchId);
     expect((boot.products.find((p: any) => p.id === burger) as any).is_available).toBe(true);
 
-    expect(await onSnappfood()).toMatchObject({ reason: 'Kitchen slammed', everywhere: false, chain_wide: false });
+    expect(await onSnappfood()).toMatchObject({ everywhere: false, chain_wide: false });
     // Head office's sheet, with no branch, shows only chain-wide stops.
     expect(await onSnappfood(null)).toBeNull();
   });
 
   it('keeps a stop everywhere beside a Snappfood one, and lifts each on its own', async () => {
-    await catalog.suspendProduct(tenantId, burger, branchId, 0, 'Out of buns', 'test');
+    await catalog.suspendProduct(tenantId, burger, branchId, 'test');
     await expect(sellInStore()).rejects.toThrow('suspended');
 
     await catalog.resumeProduct(tenantId, burger, branchId, 'test');
@@ -77,7 +77,7 @@ describe('Stops on one channel (PostgreSQL)', () => {
   });
 
   it("shows head office's Snappfood stop at every branch, and a branch cannot lift it", async () => {
-    await catalog.suspendProduct(tenantId, burger, undefined, 0, 'Recipe change', 'test', { channel: 'SNAPPFOOD' });
+    await catalog.suspendProduct(tenantId, burger, undefined, 'test', { channel: 'SNAPPFOOD' });
     expect(await onSnappfood(null)).toMatchObject({ chain_wide: true, everywhere: false });
     expect(await onSnappfood()).toMatchObject({ chain_wide: true });
     await expect(sellInStore()).resolves.toBeDefined();
@@ -88,6 +88,6 @@ describe('Stops on one channel (PostgreSQL)', () => {
   });
 
   it('refuses a channel it does not know', async () => {
-    await expect(catalog.suspendProduct(tenantId, burger, branchId, 0, 'x', 'test', { channel: 'TAPSI' })).rejects.toThrow('SNAPPFOOD');
+    await expect(catalog.suspendProduct(tenantId, burger, branchId, 'test', { channel: 'TAPSI' })).rejects.toThrow('SNAPPFOOD');
   });
 });
