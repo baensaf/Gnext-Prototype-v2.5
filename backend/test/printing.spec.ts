@@ -122,11 +122,14 @@ describe('PrintingModule (Unit & Integration)', () => {
     printerRepo.rows.push({ id, tenant_id: T, branch_id: BR, name: id, is_active: true, ...extra });
   const categoryRoute = (categoryId: string, printerId: string) =>
     routeRepo.rows.push({ tenant_id: T, branch_id: BR, category_id: categoryId, printer_id: printerId });
-  const productRoute = (productId: string, printerId: string) =>
+  const productRoute = (productId: string, printerId: string | null) =>
     routeRepo.rows.push({ tenant_id: T, branch_id: BR, product_id: productId, printer_id: printerId });
+  /** On the branch's "not printed" list: no kitchen chit. */
+  const notPrintedCategory = (categoryId: string) =>
+    routeRepo.rows.push({ tenant_id: T, branch_id: BR, category_id: categoryId, printer_id: null });
   const till = (id: string, extra: any = {}) =>
     terminalRepo.rows.push({ id, tenant_id: T, branch_id: BR, terminal_type: 'CASHIER', receipt_copies: 1, receipt_printer_id: null, ...extra });
-  const product = (id: string, categoryId: string) => productRepo.rows.push({ id, tenant_id: T, category_id: categoryId });
+  const product = (id: string, categoryId: string, name = id) => productRepo.rows.push({ id, tenant_id: T, category_id: categoryId, name });
   const line = (id: string, productId: string, name: string, state = 'ACTIVE') => ({
     id,
     product_id: productId,
@@ -229,11 +232,33 @@ describe('PrintingModule (Unit & Integration)', () => {
       categoryRoute('cat-burgers', 'prn-expo');
       productRoute('p-egg-burger', 'prn-fryer');
 
-      const printers = await routingService.printersFor(T, BR, ['p-burger', 'p-egg-burger', 'p-tea']);
+      const printers = await routingService.routeProducts(T, BR, ['p-burger', 'p-egg-burger', 'p-tea']);
 
-      expect(printers.get('p-burger')!.map((p) => p.id)).toEqual(['prn-grill', 'prn-expo']);
-      expect(printers.get('p-egg-burger')!.map((p) => p.id)).toEqual(['prn-fryer']);
-      expect(printers.get('p-tea')!.map((p) => p.id)).toEqual(['prn-pass']);
+      expect(printers.get('p-burger')!.printers.map((p) => p.id)).toEqual(['prn-grill', 'prn-expo']);
+      expect(printers.get('p-egg-burger')!.printers.map((p) => p.id)).toEqual(['prn-fryer']);
+      expect(printers.get('p-tea')!.printers.map((p) => p.id)).toEqual(['prn-pass']);
+      expect([...printers.values()].map((r) => r.source)).toEqual(['CATEGORY', 'PRODUCT', 'DEFAULT']);
+    });
+
+    it('keeps a category on the "not printed" list off every kitchen printer, unless a product is sent somewhere', async () => {
+      printer('prn-pass', { printer_type: 'KITCHEN_IMPACT' });
+      printer('prn-bar');
+      product('p-coke', 'cat-drinks');
+      product('p-lemonade', 'cat-drinks');
+      notPrintedCategory('cat-drinks');
+      productRoute('p-lemonade', 'prn-bar');
+
+      const printers = await routingService.routeProducts(T, BR, ['p-coke', 'p-lemonade']);
+
+      expect(printers.get('p-coke')).toEqual({ printers: [], source: 'NOT_PRINTED' });
+      expect(printers.get('p-lemonade')!.printers.map((p) => p.id)).toEqual(['prn-bar']);
+    });
+
+    it('says a product has nowhere to print when the branch has no kitchen printer', async () => {
+      printer('prn-counter', { printer_type: 'THERMAL_RECEIPT' });
+      product('p-tea', 'cat-hot');
+
+      expect((await routingService.routeProducts(T, BR, ['p-tea'])).get('p-tea')).toEqual({ printers: [], source: 'NOWHERE' });
     });
 
     it('prints on the printer the branch marked as its default kitchen printer', async () => {
@@ -241,9 +266,9 @@ describe('PrintingModule (Unit & Integration)', () => {
       printer('prn-b', { printer_type: 'KITCHEN_IMPACT', kitchen_default: true });
       product('p-tea', 'cat-hot');
 
-      const printers = await routingService.printersFor(T, BR, ['p-tea']);
+      const printers = await routingService.routeProducts(T, BR, ['p-tea']);
 
-      expect(printers.get('p-tea')!.map((p) => p.id)).toEqual(['prn-b']);
+      expect(printers.get('p-tea')!.printers.map((p) => p.id)).toEqual(['prn-b']);
     });
 
     it('skips a routed printer that is out of service, and falls back when none is left', async () => {
@@ -252,9 +277,9 @@ describe('PrintingModule (Unit & Integration)', () => {
       product('p-burger', 'cat-burgers');
       categoryRoute('cat-burgers', 'prn-dead');
 
-      const printers = await routingService.printersFor(T, BR, ['p-burger']);
+      const printers = await routingService.routeProducts(T, BR, ['p-burger']);
 
-      expect(printers.get('p-burger')!.map((p) => p.id)).toEqual(['prn-kitchen']);
+      expect(printers.get('p-burger')!.printers.map((p) => p.id)).toEqual(['prn-kitchen']);
     });
 
     it("prints a receipt on the till's own printer, with the till's copies and paper", async () => {
@@ -314,15 +339,79 @@ describe('PrintingModule (Unit & Integration)', () => {
       expect(jobsFor(jobs, 'prn-counter')).toHaveLength(0);
     });
 
-    // What an Iranian kitchen works from: the number, very large, and the printer's food.
-    it('prints a compact chit: the big number and the items, nothing else', async () => {
-      orderRepo.rows.find((o) => o.id === 'ord-1').call_number = 123;
+    // What an Iranian kitchen works from: the number, very large, and the printer's food; with
+    // how the order leaves, its note, and which other stations are making the rest of it.
+    it('prints a compact chit: the big number, how it leaves, the items, the note and the other stations', async () => {
+      const ord = orderRepo.rows.find((o) => o.id === 'ord-1');
+      ord.call_number = 123;
+      ord.notes = 'Allergic to nuts';
       const [grill] = jobsFor(await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET'), 'prn-grill');
 
       expect(grill.rendered_html).toContain('<div class="huge">۱۲۳</div>');
+      expect(grill.rendered_html).toMatch(/<div class="c title">سالن · [۰-۹]{2}:[۰-۹]{2}<\/div>/);
       expect(grill.rendered_html).toContain('Classic Burger');
+      expect(grill.rendered_html).toContain('توضیحات سفارش: Allergic to nuts');
+      expect(grill.rendered_html).toContain('بخش‌های دیگر: Fryer، Bar');
       expect(grill.rendered_html).not.toContain('ORD-1');
-      expect(grill.rendered_html).not.toContain('سالن');
+    });
+
+    it('prints nothing in the kitchen for a category on the "not printed" list', async () => {
+      routeRepo.rows.splice(routeRepo.rows.findIndex((r) => r.category_id === 'cat-drinks'), 1);
+      notPrintedCategory('cat-drinks');
+
+      const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
+
+      expect(jobs.map((j) => j.label)).toEqual(['Grill (1/2)', 'Fryer (2/2)']);
+      expect(jobs.some((j) => j.rendered_html.includes('Coke'))).toBe(false);
+    });
+
+    it('prints no job and raises no alert for an order of nothing but unprinted items', async () => {
+      notPrintedCategory('cat-drinks');
+      routeRepo.rows.splice(routeRepo.rows.findIndex((r) => r.category_id === 'cat-drinks' && r.printer_id), 1);
+      order('ord-cola', [line('l-coke', 'p-coke', 'Coke')]);
+
+      expect(await queueService.enqueueOrderPrintJobs(T, 'ord-cola', 'KITCHEN_TICKET')).toEqual([]);
+      expect(alertRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('prints the whole order once more at the pass, unprinted items included', async () => {
+      printerRepo.rows.find((p) => p.id === 'prn-pass').prints_whole_order = true;
+      routeRepo.rows.splice(routeRepo.rows.findIndex((r) => r.category_id === 'cat-drinks'), 1);
+      notPrintedCategory('cat-drinks');
+
+      const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
+
+      expect(jobs.map((j) => j.label)).toEqual(['Grill (1/2)', 'Fryer (2/2)', 'pass']);
+      const [pass] = jobsFor(jobs, 'prn-pass');
+      expect(pass.rendered_html).toContain('کل سفارش');
+      for (const name of ['Classic Burger', 'Cheeseburger', 'Fries', 'Coke']) expect(pass.rendered_html).toContain(name);
+      expect(pass.rendered_html).not.toContain('Fanta');
+      expect(pass.rendered_html).not.toContain('بخش‌های دیگر');
+    });
+
+    it('previews the chits a made-up order would print, and queues nothing', async () => {
+      product('p-burger', 'cat-burgers', 'Classic Burger');
+      product('p-fries', 'cat-sides', 'Fries');
+      product('p-coke', 'cat-drinks', 'Coke');
+      routeRepo.rows.splice(routeRepo.rows.findIndex((r) => r.category_id === 'cat-drinks'), 1);
+      notPrintedCategory('cat-drinks');
+      jobRepo.save.mockClear();
+
+      const preview = await queueService.previewKitchenChits(T, BR, {
+        product_ids: ['p-burger', 'p-fries', 'p-coke'],
+        order_type: 'AGGREGATOR',
+        notes: 'No onion',
+      });
+
+      expect(preview.chits.map((c) => [c.printer_id, c.label])).toEqual([
+        ['prn-grill', 'Grill (1/2)'],
+        ['prn-fryer', 'Fryer (2/2)'],
+      ]);
+      expect(preview.chits[0].html).toContain('Classic Burger');
+      expect(preview.chits[0].html).toContain('اسنپ‌فود');
+      expect(preview.chits[0].html).toContain('No onion');
+      expect(preview.not_printed).toEqual(['Coke']);
+      expect(jobRepo.save).not.toHaveBeenCalled();
     });
 
     it('labels each chit with its printer and its part of the order', async () => {
@@ -644,6 +733,7 @@ describe('PrintingModule (Unit & Integration)', () => {
       expect(jobs.some((j) => j.rendered_html.includes('Doogh'))).toBe(false);
       expect(jobsFor(jobs, 'prn-bar')).toHaveLength(0);
       expect(grill.reason).toBe('Order amended: Swapped main for dessert');
+      expect(grill.rendered_html).toContain('علت: Swapped main for dessert');
     });
 
     it('tells every printer holding live lines to stop when the order is cancelled', async () => {

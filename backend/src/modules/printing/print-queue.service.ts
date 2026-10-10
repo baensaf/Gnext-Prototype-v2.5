@@ -13,6 +13,7 @@ import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { Payment } from '../../entities/Payment.entity';
+import { Product } from '../../entities/Product.entity';
 import { CALENDAR_SETTING_KEY, readCalendar } from '../../common/utils/calendar.util';
 import { markAsReprint, PrintRenderService, RenderDocOptions, TicketTemplate } from './print-render.service';
 import { PrintRoutingService, RoutedPrinter } from './print-routing.service';
@@ -34,6 +35,19 @@ interface PrinterBatch {
   printer: Printer | null;
   label: string;
   lines: Array<{ item: OrderItem; change?: LineChange }>;
+  /** Every line of the order, for a printer at the pass. */
+  wholeOrder?: boolean;
+  /** The other stations' chits for the same order, by name. */
+  otherStations?: string[];
+}
+
+/** One kitchen chit a made-up order would print, for checking routing before service. */
+export interface KitchenChitPreview {
+  printer_id: string | null;
+  printer_name: string | null;
+  label: string;
+  whole_order: boolean;
+  html: string;
 }
 
 interface JobOptions {
@@ -61,6 +75,7 @@ export class PrintQueueService {
     private readonly auditWriter: AuditWriter,
     @InjectRepository(OperationalAlert) private readonly alertRepo: Repository<OperationalAlert>,
     private readonly agentPrinting: AgentPrintingService,
+    @InjectRepository(Product) private readonly productRepo: Repository<Product>,
   ) {}
 
   /**
@@ -123,13 +138,7 @@ export class PrintQueueService {
       );
       const jobs: PrintJob[] = [];
       for (const batch of batches) {
-        const html = this.renderService.renderDocument({
-          ...heading,
-          documentType,
-          isReprint,
-          stationLabel: batch.label,
-          items: batch.lines.map((l) => this.renderLine(l.item)),
-        });
+        const html = this.renderKitchenChit(heading, batch, { isReprint });
         jobs.push(...(await this.recordBatchJobs(tenantId, order, html, batch, opts)));
       }
       return jobs;
@@ -176,14 +185,10 @@ export class PrintQueueService {
       const heading = await this.orderHeading(order);
       const jobs: PrintJob[] = [];
       for (const batch of await this.splitByPrinter(tenantId, order, lines)) {
-        const html = this.renderService.renderDocument({
-          ...heading,
-          documentType: 'KITCHEN_TICKET',
-          stationLabel: batch.label,
+        const html = this.renderKitchenChit(heading, batch, {
           kitchenChange: change.kind,
           changeReason: change.reason,
           placedAt: new Date(),
-          items: batch.lines.map((l) => this.renderLine(l.item, l.change)),
         });
         jobs.push(...(await this.recordBatchJobs(tenantId, order, html, batch, opts)));
       }
@@ -315,15 +320,28 @@ export class PrintQueueService {
 
   /**
    * Group lines by the printers they print on, keeping the order the lines came in. A line sent
-   * to two printers is on both chits. Lines with nowhere to print share one batch with no
-   * printer, which fails and raises an alert.
+   * to two printers is on both chits; a line on the "not printed" list is on none. Lines with
+   * nowhere to print share one batch with no printer, which fails and raises an alert. Each
+   * printer at the pass gets one more chit with every line, so whoever bags the order sees it
+   * whole; a line routed only to such a printer is on that chit already.
    */
-  private async splitByPrinter(tenantId: string, order: OrderHeader, lines: PrinterBatch['lines']): Promise<PrinterBatch[]> {
-    const printersOf = await this.routingService.printersFor(tenantId, order.branch_id, lines.map((l) => l.item.product_id));
+  private async splitByPrinter(
+    tenantId: string,
+    order: Pick<OrderHeader, 'branch_id'>,
+    lines: PrinterBatch['lines'],
+  ): Promise<PrinterBatch[]> {
+    const [routing, passPrinters] = await Promise.all([
+      this.routingService.routeProducts(tenantId, order.branch_id, lines.map((l) => l.item.product_id)),
+      this.routingService.wholeOrderPrinters(tenantId, order.branch_id),
+    ]);
+    const atPass = new Set(passPrinters.map((p) => p.id));
 
     const batches = new Map<string, PrinterBatch>();
     for (const line of lines) {
-      const printers = printersOf.get(line.item.product_id) ?? [];
+      const routed = routing.get(line.item.product_id);
+      if (routed?.source === 'NOT_PRINTED') continue;
+      const printers = (routed?.printers ?? []).filter((p) => !atPass.has(p.id));
+      if (printers.length === 0 && routed?.printers.length) continue;
       for (const printer of printers.length ? printers : [null]) {
         const key = printer?.id ?? '';
         const batch = batches.get(key);
@@ -332,12 +350,77 @@ export class PrintQueueService {
       }
     }
 
-    const result = [...batches.values()];
-    for (const [index, batch] of result.entries()) {
-      const name = batch.printer?.name || 'آشپزخانه';
-      batch.label = result.length > 1 ? `${name} (${index + 1}/${result.length})` : name;
+    const stations = [...batches.values()];
+    const names = stations.map((batch) => batch.printer?.name || 'آشپزخانه');
+    for (const [index, batch] of stations.entries()) {
+      batch.label = stations.length > 1 ? `${names[index]} (${index + 1}/${stations.length})` : names[index];
+      batch.otherStations = names.filter((_, i) => i !== index);
     }
-    return result;
+    const whole = passPrinters.map((printer): PrinterBatch => ({ printer, label: printer.name, lines, wholeOrder: true }));
+    return [...stations, ...whole];
+  }
+
+  private renderKitchenChit(
+    heading: Omit<RenderDocOptions, 'documentType' | 'items'>,
+    batch: PrinterBatch,
+    extra: Partial<RenderDocOptions> = {},
+  ): string {
+    return this.renderService.renderDocument({
+      ...heading,
+      documentType: 'KITCHEN_TICKET',
+      stationLabel: batch.label,
+      otherStations: batch.otherStations,
+      wholeOrder: batch.wholeOrder,
+      items: batch.lines.map((l) => this.renderLine(l.item, l.change)),
+      ...extra,
+    });
+  }
+
+  /**
+   * The kitchen chits a made-up order would print at the branch, as they would come out, with
+   * nothing queued or printed: a manager checks the routing before service, not during it.
+   * Products on the "not printed" list are named, since they print nowhere to be seen.
+   */
+  async previewKitchenChits(
+    tenantId: string,
+    branchId: string,
+    input: { product_ids: string[]; order_type?: string; notes?: string },
+  ): Promise<{ chits: KitchenChitPreview[]; not_printed: string[] }> {
+    const ids = input.product_ids || [];
+    const products = ids.length ? await this.productRepo.find({ where: { id: In([...new Set(ids)]), tenant_id: tenantId } }) : [];
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const lines: PrinterBatch['lines'] = ids
+      .filter((id) => byId.has(id))
+      .map((id, index) => ({
+        item: { id: `preview-${index}`, product_id: id, product_name: byId.get(id)!.name, quantity: '1', line_number: index + 1 } as unknown as OrderItem,
+      }));
+    if (lines.length === 0) return { chits: [], not_printed: [] };
+
+    const order = {
+      tenant_id: tenantId,
+      branch_id: branchId,
+      order_number: 'PREVIEW',
+      call_number: 123,
+      order_type: input.order_type || 'TAKEAWAY',
+      channel: input.order_type === 'AGGREGATOR' ? 'AGGREGATOR' : 'POS',
+      notes: input.notes || null,
+      placed_at: new Date(),
+    } as unknown as OrderHeader;
+    const [heading, routing, batches] = await Promise.all([
+      this.orderHeading(order),
+      this.routingService.routeProducts(tenantId, branchId, ids),
+      this.splitByPrinter(tenantId, order, lines),
+    ]);
+    return {
+      chits: batches.map((batch) => ({
+        printer_id: batch.printer?.id ?? null,
+        printer_name: batch.printer?.name ?? null,
+        label: batch.label,
+        whole_order: !!batch.wholeOrder,
+        html: this.renderKitchenChit(heading, batch),
+      })),
+      not_printed: [...new Set(lines.filter((l) => routing.get(l.item.product_id)?.source === 'NOT_PRINTED').map((l) => l.item.product_name))],
+    };
   }
 
   /**

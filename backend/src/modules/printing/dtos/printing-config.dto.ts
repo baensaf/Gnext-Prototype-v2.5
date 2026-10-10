@@ -1,5 +1,7 @@
 import { Transform } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsInt,
   IsNotEmpty,
@@ -7,6 +9,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   Min,
 } from 'class-validator';
 
@@ -95,6 +98,10 @@ export class UpdatePrinterDto {
   @IsOptional()
   @IsBoolean()
   is_active?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  prints_whole_order?: boolean;
 }
 
 /** Everything one printer prints: whole categories, and single products. Replaces what it had. */
@@ -106,4 +113,38 @@ export class SetPrinterRoutesDto {
   @IsOptional()
   @IsUUID('all', { each: true })
   product_ids?: string[];
+}
+
+/** What prints in no kitchen at a branch: whole categories, and single products. Replaces the list. */
+export class SetNotPrintedDto {
+  @IsUUID()
+  branch_id: string;
+
+  @IsOptional()
+  @IsUUID('all', { each: true })
+  category_ids?: string[];
+
+  @IsOptional()
+  @IsUUID('all', { each: true })
+  product_ids?: string[];
+}
+
+/** A made-up order to see which chits it would print, without printing anything. */
+export class PreviewKitchenChitsDto {
+  @IsUUID()
+  branch_id: string;
+
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsUUID('all', { each: true })
+  product_ids: string[];
+
+  @IsOptional()
+  @IsString()
+  order_type?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  notes?: string;
 }

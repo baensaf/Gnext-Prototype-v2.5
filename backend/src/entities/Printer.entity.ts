@@ -41,6 +41,10 @@ export class Printer {
   @Column({ type: 'boolean', default: false })
   kitchen_default: boolean;
 
+  /** Prints every line of every order on one chit, for the pass: whoever bags the order. */
+  @Column({ type: 'boolean', default: false })
+  prints_whole_order: boolean;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

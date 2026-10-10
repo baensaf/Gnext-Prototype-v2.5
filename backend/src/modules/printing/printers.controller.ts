@@ -12,7 +12,7 @@ import { parseDeviceConnection } from '../../common/utils/device-connection.util
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
-import { CreatePrinterDto, SetPrinterRoutesDto, UpdatePrinterDto } from './dtos/printing-config.dto';
+import { CreatePrinterDto, PreviewKitchenChitsDto, SetNotPrintedDto, SetPrinterRoutesDto, UpdatePrinterDto } from './dtos/printing-config.dto';
 
 @Controller('api/v1')
 export class PrintersController {
@@ -219,6 +219,38 @@ export class PrintersController {
       afterData: saved,
     });
     return saved;
+  }
+
+  /** Where each menu item prints at the branch, and why. */
+  @Get('print-routes/by-product')
+  async getMenuRouting(@Query('branchId') branchId: string, @Req() req: Request) {
+    if (!branchId) throw new BadRequestException('branchId is required');
+    return await this.routingService.menuRouting((req as any).tenantId, branchId);
+  }
+
+  @Roles(...MANAGER_AND_ABOVE)
+  @Put('print-routes/not-printed')
+  async setNotPrinted(@Body() body: SetNotPrintedDto, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const saved = await this.routingService.setNotPrinted(tenantId, body.branch_id, body.category_ids || [], body.product_ids || []);
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId: (req as any).userId,
+      action: 'PRINT_ROUTES_SET',
+      entityType: 'Branch',
+      entityId: body.branch_id,
+      correlationId: (req as any).correlationId,
+      afterData: saved,
+    });
+    return saved;
+  }
+
+  /** The chits a made-up order would print. Nothing is queued or printed. */
+  @Roles(...MANAGER_AND_ABOVE)
+  @Post('print-routes/preview')
+  async previewKitchenChits(@Body() body: PreviewKitchenChitsDto, @Req() req: Request) {
+    return await this.queueService.previewKitchenChits((req as any).tenantId, body.branch_id, body);
   }
 
   @BranchOwned(Printer)
