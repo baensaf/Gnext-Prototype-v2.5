@@ -129,7 +129,7 @@ describe('order edit policy: money on the order', () => {
 });
 
 describe('order edit policy: open-check appending', () => {
-  it.each<OrderState>(['DRAFT', 'SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'])(
+  it.each<OrderState>(['DRAFT', 'SUBMITTED', 'CONFIRMED'])(
     'allows adding an item while the check is open in %s',
     (state) => {
       expect(decide('ADD_ITEM', { state, submittedAt: minutesAgo(120) })).toBe('ALLOW');
@@ -142,18 +142,6 @@ describe('order edit policy: open-check appending', () => {
 });
 
 describe('order edit policy: fulfillment stages', () => {
-  it('escalates every removal once preparation starts, regardless of window', () => {
-    expect(decide('VOID_ITEM', { state: 'PREPARING', submittedAt: minutesAgo(0) })).toBe(
-      'REQUIRE_APPROVAL',
-    );
-    expect(decide('REPLACE_ITEM', { state: 'READY', submittedAt: minutesAgo(0) })).toBe(
-      'REQUIRE_APPROVAL',
-    );
-    expect(decide('CANCEL_ORDER', { state: 'PREPARING', submittedAt: minutesAgo(0) })).toBe(
-      'REQUIRE_APPROVAL',
-    );
-  });
-
   it('locks item edits out for delivery but keeps an approved cancellation path', () => {
     expect(decide('VOID_ITEM', { state: 'OUT_FOR_DELIVERY' })).toBe('FORBID');
     expect(decide('REPLACE_ITEM', { state: 'OUT_FOR_DELIVERY' })).toBe('FORBID');
@@ -206,11 +194,6 @@ describe('order edit policy: changing the order type', () => {
 
   it('is free on a draft, which has neither fired nor been paid', () => {
     expect(decide('CHANGE_ORDER_TYPE', { state: 'DRAFT', submittedAt: null })).toBe('ALLOW');
-  });
-
-  it('needs a manager once a cook has the ticket', () => {
-    expect(decide('CHANGE_ORDER_TYPE', { state: 'PREPARING' })).toBe('REQUIRE_APPROVAL');
-    expect(decide('CHANGE_ORDER_TYPE', { state: 'READY' })).toBe('REQUIRE_APPROVAL');
   });
 
   it('is refused outright while a courier is carrying the food', () => {

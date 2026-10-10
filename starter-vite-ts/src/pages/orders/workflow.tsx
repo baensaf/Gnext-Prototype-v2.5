@@ -122,7 +122,7 @@ import {
 // print tickets and have no screen that would ever move an order to "preparing" or "ready".
 // The server files every order under one of these (see `order-list.ts`), so the tab counts
 // add up to All.
-const OPEN_STATUSES = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'KITCHEN_PREPARING', 'READY', 'OUT_FOR_DELIVERY'];
+const OPEN_STATUSES = ['SUBMITTED', 'CONFIRMED', 'OUT_FOR_DELIVERY'];
 
 type Lifecycle = OrderLifecycle;
 type TabKey = Lifecycle | 'ALL';
@@ -154,8 +154,6 @@ const STATE_AUDIT_ACTIONS = new Set([
   'ORDER_SUBMITTED',
   'ORDER_ACCEPT',
   'ORDER_REJECT',
-  'ORDER_START_PREPARATION',
-  'ORDER_MARK_READY',
   'ORDER_DISPATCH',
   'ORDER_COMPLETE',
   'ORDER_CANCEL',
@@ -232,11 +230,6 @@ const progressKeyOf = (status: string): string | null => {
     case 'SUBMITTED':
     case 'CONFIRMED':
       return 'sentToKitchen';
-    case 'PREPARING':
-    case 'KITCHEN_PREPARING':
-      return 'preparing';
-    case 'READY':
-      return 'ready';
     case 'OUT_FOR_DELIVERY':
       return 'outForDelivery';
     default:

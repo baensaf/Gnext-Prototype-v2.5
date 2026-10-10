@@ -505,8 +505,6 @@
     },
     "progress": {
       "sentToKitchen": "Sent to kitchen",
-      "preparing": "Preparing",
-      "ready": "Ready",
       "outForDelivery": "Out for delivery"
     },
     "table": {
@@ -699,8 +697,6 @@
     "unitPrice": "Unit Price",
     "total": "Total",
     "statusPending": "Pending",
-    "statusPreparing": "Preparing",
-    "statusReady": "Ready",
     "statusDelivered": "Delivered",
     "statusCancelled": "Cancelled",
     "printReceipt": "Thermal Receipt",
@@ -2727,7 +2723,7 @@
       "subtitle": "Configure order lifecycle automation, cashier edit and cancellation time windows, and channel policies.",
       "saveSuccess": "Order workflow settings saved successfully.",
       "timeWindowsTitle": "Cashier Time Windows & Escalation",
-      "timeWindowsDesc": "Measured from when the order is submitted. Inside the window a cashier can remove items or cancel without a PIN; after it, a manager PIN is required. Removing items once the kitchen has started preparing, or from an order that has been paid, always needs a manager PIN. Adding items never does.",
+      "timeWindowsDesc": "Measured from when the order is submitted. Inside the window a cashier can remove items or cancel without a PIN; after it, a manager PIN is required. Removing items from an order that has been paid always needs a manager PIN. Adding items never does.",
       "editWindowLabel": "Order Edit Grace Window (Minutes)",
       "editWindowHelp": "Number of minutes a cashier can modify items on an open order without manager PIN approval.",
       "cancelWindowLabel": "Order Cancellation Grace Window (Minutes)",
@@ -2795,7 +2791,7 @@
       "editMethod": "Edit Payment Method",
       "drawerSubtitle": "Configure instrument parameters, reconciliation flags, and alternative refund rules.",
       "formCode": "Method Code",
-      "formCodePlaceholder": "e.g. CARD_POS, CASH, TARA_PAY",
+      "formCodePlaceholder": "e.g. CARD_POS, CASH",
       "formName": "Display Name",
       "formNamePlaceholder": "e.g. Bank POS Terminal, Cash Tender",
       "formKind": "Instrument Kind",
@@ -2819,12 +2815,11 @@
         "CREDIT": "Customer Credit Account",
         "ONLINE": "Online Payment Gateway",
         "BANK_TRANSFER": "Bank Transfer / Sheba",
-        "OTHER": "Other / Tara Pay",
+        "OTHER": "Other",
         "CARD_POS": "EFT POS Terminal",
         "CUSTOMER_CREDIT": "Customer Credit Account",
         "NETWORK_POS": "Network IP-POS",
-        "MOBILE_POS": "Mobile POS (Courier)",
-        "TARA_PAY": "Tara Pay / BNPL"
+        "MOBILE_POS": "Mobile POS (Courier)"
       }
     },
     "approvalsPage": {

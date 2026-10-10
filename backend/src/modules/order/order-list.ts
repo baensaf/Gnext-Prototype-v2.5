@@ -18,7 +18,7 @@ import { OrderHeader } from '../../entities/OrderHeader.entity';
 export const LIFECYCLE_GROUPS = ['WAITING', 'OPEN', 'HELD', 'COMPLETED', 'REFUNDED', 'CANCELLED', 'OTHER'] as const;
 export type LifecycleGroup = (typeof LIFECYCLE_GROUPS)[number];
 
-export const OPEN_STATUSES = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'KITCHEN_PREPARING', 'READY', 'OUT_FOR_DELIVERY'];
+export const OPEN_STATUSES = ['SUBMITTED', 'CONFIRMED', 'OUT_FOR_DELIVERY'];
 
 /**
  * Groups that are still somebody's job, whenever they were placed. A date range on the list

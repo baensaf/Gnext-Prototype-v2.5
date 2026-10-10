@@ -109,7 +109,6 @@ describe('SimulationService (Unit)', () => {
       orderItemRepo.create.mockImplementation((dto: any) => dto);
       orderItemRepo.save.mockImplementation((dto: any) => Promise.resolve(dto));
       branchRepo.find.mockResolvedValue([
-        { id: 'br-office', code: 'HQ', branch_type: 'OFFICE' },
         { id: 'br-vanak', code: 'VANAK', branch_type: 'RESTAURANT' },
         { id: 'br-tajrish', code: 'TAJRISH', branch_type: 'RESTAURANT' },
       ]);
@@ -142,7 +141,7 @@ describe('SimulationService (Unit)', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('without a branch, goes to a restaurant rather than the head office', async () => {
+    it('without a branch, goes to the first restaurant', async () => {
       const payload = { event_id: 'evt-303', order_code: 'SF-303' };
       const { rawBody, sig } = signed(payload);
 
@@ -162,7 +161,7 @@ describe('SimulationService (Unit)', () => {
 
       await service.acceptOrder('t-1', 'SF-304', {});
       expect(order.state).toBe('CONFIRMED');
-      expect(order.status).toBe('KITCHEN_PREPARING');
+      expect(order.status).toBe('CONFIRMED');
     });
 
     // The store's own accept/reject (OrderService) moves the order itself and then tells

@@ -152,18 +152,12 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       expect(result.state).toBe('SUBMITTED');
     });
 
-    it('should transition SUBMITTED -> CONFIRMED -> PREPARING -> READY -> OUT_FOR_DELIVERY -> COMPLETED', async () => {
+    it('should transition SUBMITTED -> CONFIRMED -> OUT_FOR_DELIVERY -> COMPLETED', async () => {
       const order = { id: 'ord-1', tenant_id: 't-1', order_number: 'ORD-100', state: 'SUBMITTED', status: 'SUBMITTED' };
       orderRepo.findOne.mockResolvedValue(order);
 
       await service.transitionState('t-1', 'ord-1', 'CONFIRM', {});
       expect(order.state).toBe('CONFIRMED');
-
-      await service.transitionState('t-1', 'ord-1', 'START_PREPARATION', {});
-      expect(order.state).toBe('PREPARING');
-
-      await service.transitionState('t-1', 'ord-1', 'MARK_READY', {});
-      expect(order.state).toBe('READY');
 
       await service.transitionState('t-1', 'ord-1', 'DISPATCH', {});
       expect(order.state).toBe('OUT_FOR_DELIVERY');

@@ -1029,7 +1029,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
       correlationId,
     );
     expect(acceptResult.success).toBe(true);
-    expect(acceptResult.order.status).toBe('KITCHEN_PREPARING');
+    expect(acceptResult.order.status).toBe('CONFIRMED');
 
     // Assert pre-paid amount on OrderHeader: Snappfood collected it, not the till.
     expect(MoneyUtil.format(createdOrder.paid_amount)).toBe(MoneyUtil.format(createdOrder.total_amount));

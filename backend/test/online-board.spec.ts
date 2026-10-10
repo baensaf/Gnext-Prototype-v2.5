@@ -80,7 +80,6 @@ describe('the Online board', () => {
     openOrders = [
       order({ id: 'NEW1', state: 'PENDING_ACCEPTANCE', placed_at: minutesAgo(2) }),
       order({ id: 'COOK1', state: 'CONFIRMED', accepted_at: minutesAgo(5), promised_minutes: 20 }),
-      order({ id: 'READY1', state: 'READY', accepted_at: minutesAgo(5), promised_minutes: 20 }),
     ];
 
     const board = await service.board('t-1', 'b-1', now);
@@ -88,7 +87,6 @@ describe('the Online board', () => {
     expect(board.cards.map((c) => [c.displayCode, c.lane])).toEqual([
       ['NEW1', 'NEW'],
       ['COOK1', 'ACCEPTED'],
-      ['READY1', 'ACCEPTED'],
     ]);
     expect(board.doneToday).toBe(7);
     expect(board.shiftOpen).toBe(true);

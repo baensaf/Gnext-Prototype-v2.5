@@ -275,8 +275,8 @@ describe('Order edit command (spec 7.9)', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('still lets a cashier append during preparation without a manager', async () => {
-      order.state = 'PREPARING';
+    it('still lets a cashier append to an order already sent without a manager', async () => {
+      order.state = 'CONFIRMED';
 
       await service.editOrder(TENANT, ORDER_ID, {
         changes: { add: [{ product_id: 'prod-9', quantity: '1.0000' } as any] },

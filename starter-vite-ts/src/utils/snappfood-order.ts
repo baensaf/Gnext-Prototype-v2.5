@@ -14,7 +14,7 @@ export const SNAPPFOOD_REPORT_WINDOW_MINUTES = 60;
 export const SNAPPFOOD_DELAY_REASON_ID = 153;
 
 /** States in which the kitchen still has an accepted order. */
-const KITCHEN_STATES = ['SUBMITTED', 'CONFIRMED', 'PREPARING', 'READY'];
+const KITCHEN_STATES = ['SUBMITTED', 'CONFIRMED'];
 
 export const isSnappfoodOrder = (order: Pick<OrderHeader, 'channel'>) => order.channel === 'AGGREGATOR';
 
