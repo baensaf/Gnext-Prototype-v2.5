@@ -1,11 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, VersionColumn, DeleteDateColumn } from 'typeorm';
 
-/**
- * Card tenders. A card paid on an Iranian terminal cannot be refunded on it, so these are paid
- * back another way (cash, card-to-card) by default: `allows_alternative_refund` starts on.
- */
-export const CARD_PAYMENT_KINDS = ['CARD_POS', 'NETWORK_POS', 'CARD', 'MOBILE_POS'];
-
 @Entity('payment_method')
 export class PaymentMethod {
   @PrimaryGeneratedColumn('uuid')
@@ -31,12 +25,6 @@ export class PaymentMethod {
 
   @Column({ type: 'boolean', default: false })
   requires_device: boolean;
-
-  @Column({ type: 'boolean', default: true })
-  allows_refund: boolean;
-
-  @Column({ type: 'boolean', default: false })
-  allows_alternative_refund: boolean;
 
   @Column({ type: 'boolean', default: true })
   is_active: boolean;

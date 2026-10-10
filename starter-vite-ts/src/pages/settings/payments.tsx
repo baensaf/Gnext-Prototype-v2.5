@@ -68,8 +68,6 @@ export function PaymentSettingsPage() {
   const [formCurrency, setFormCurrency] = useState(currency);
   const [formRequiresRef, setFormRequiresRef] = useState(false);
   const [formRequiresDevice, setFormRequiresDevice] = useState(true);
-  const [formAllowsRefund, setFormAllowsRefund] = useState(true);
-  const [formAllowsAltRefund, setFormAllowsAltRefund] = useState(false);
   const [formActive, setFormActive] = useState(true);
   const [savingMethod, setSavingMethod] = useState(false);
 
@@ -111,8 +109,6 @@ export function PaymentSettingsPage() {
     setFormCurrency(currency);
     setFormRequiresRef(false);
     setFormRequiresDevice(true);
-    setFormAllowsRefund(true);
-    setFormAllowsAltRefund(false);
     setFormActive(true);
     setDrawerOpen(true);
   };
@@ -125,8 +121,6 @@ export function PaymentSettingsPage() {
     setFormCurrency(m.currency_code || currency);
     setFormRequiresRef(m.requires_reference);
     setFormRequiresDevice(m.requires_device);
-    setFormAllowsRefund(m.allows_refund);
-    setFormAllowsAltRefund(m.allows_alternative_refund);
     setFormActive(m.is_active);
     setDrawerOpen(true);
   };
@@ -152,8 +146,6 @@ export function PaymentSettingsPage() {
       currency_code: formCurrency,
       requires_reference: formRequiresRef,
       requires_device: formRequiresDevice,
-      allows_refund: formAllowsRefund,
-      allows_alternative_refund: formAllowsAltRefund,
       is_active: formActive,
     };
 
@@ -207,11 +199,11 @@ export function PaymentSettingsPage() {
   return (
     <Box sx={{ pb: 6 }}>
       <CustomBreadcrumbs
-        heading={t('settings.paymentsPage.title', 'Payment & Refund Methods')}
+        heading={t('settings.paymentsPage.title', 'Payment Methods')}
         links={[
           { name: t('nav.home', 'Home'), href: '/app/dashboard' },
           { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
-          { name: t('settings.paymentsPage.title', 'Payments & Refunds') },
+          { name: t('settings.paymentsPage.title', 'Payment Methods') },
         ]}
         action={
           <Stack direction="row" spacing={1.5}>
@@ -249,9 +241,6 @@ export function PaymentSettingsPage() {
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colKind', 'Kind')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colCurrency', 'Currency')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colDevice', 'Device / Reference')}</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>
-                  {t('settings.paymentsPage.colRefund', 'Refund Policy')} <VersionTag feature="settings.refundMethods" />
-                </TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colStatus', 'Status')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }} align="right">
                   {t('settings.paymentsPage.colActions', 'Actions')}
@@ -293,18 +282,6 @@ export function PaymentSettingsPage() {
                       )}
                       {!m.requires_device && !m.requires_reference && (
                         <Typography variant="caption" color="text.secondary">—</Typography>
-                      )}
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" spacing={0.5}>
-                      {m.allows_refund ? (
-                        <Chip size="small" label={t('settings.paymentsPage.refundable', 'Refundable')} color="success" variant="outlined" />
-                      ) : (
-                        <Chip size="small" label={t('settings.paymentsPage.noRefund', 'No Refund')} color="error" variant="outlined" />
-                      )}
-                      {m.allows_alternative_refund && (
-                        <Chip size="small" label={t('settings.paymentsPage.altRefund', 'Alt Refund Allowed')} color="warning" variant="outlined" />
                       )}
                     </Stack>
                   </TableCell>
@@ -427,7 +404,7 @@ export function PaymentSettingsPage() {
               : t('settings.paymentsPage.newMethod', 'New Payment Method')}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            {t('settings.paymentsPage.drawerSubtitle', 'Configure instrument parameters, reconciliation flags, and alternative refund rules.')}
+            {t('settings.paymentsPage.drawerSubtitle', 'Configure instrument parameters and reconciliation flags.')}
           </Typography>
 
           <Stack spacing={2.5}>
@@ -487,16 +464,6 @@ export function PaymentSettingsPage() {
             <FormControlLabel
               control={<Switch checked={formRequiresRef} onChange={(e) => setFormRequiresRef(e.target.checked)} />}
               label={t('settings.paymentsPage.reqRef', 'Requires Transaction Reference / RRN')}
-            />
-
-            <FormControlLabel
-              control={<Switch checked={formAllowsRefund} onChange={(e) => setFormAllowsRefund(e.target.checked)} />}
-              label={t('settings.paymentsPage.allowRefund', 'Allows Direct Refund')}
-            />
-
-            <FormControlLabel
-              control={<Switch checked={formAllowsAltRefund} onChange={(e) => setFormAllowsAltRefund(e.target.checked)} />}
-              label={t('settings.paymentsPage.allowAltRefund', 'Allows Alternative Refund Method (e.g. Cash for Card)')}
             />
 
             <FormControlLabel

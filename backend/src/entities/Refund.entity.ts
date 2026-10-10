@@ -55,17 +55,8 @@ export class Refund {
   @Column({ type: 'text', nullable: true })
   reason_text: string;
 
-  @Column({ type: 'varchar', length: 160, nullable: true })
-  reference: string;
-
-  @Column({ type: 'boolean', default: false })
-  is_alternative_method: boolean;
-
   @Column({ type: 'uuid', nullable: true })
   approval_request_id: string;
-
-  @Column({ type: 'uuid', nullable: true })
-  device_id: string;
 
   @Column({ type: 'uuid', nullable: true })
   settlement_account_id: string;
