@@ -29,7 +29,7 @@ import { RejectDialog, ReportDialog, DetailsDialog } from './online-dialogs';
 // ----------------------------------------------------------------------
 
 /** Most urgent first: what went wrong, what needs an answer, what waits at the counter, what cooks. */
-const LANES: OnlineLane[] = ['ISSUE', 'NEW', 'READY', 'PREPARING'];
+const LANES: OnlineLane[] = ['ISSUE', 'NEW', 'ACCEPTED'];
 
 type Props = {
   /** `panel` fills the POS catalog column and scrolls inside it; `page` is the full-page board. */
@@ -39,9 +39,10 @@ type Props = {
 };
 
 /**
- * The standard online-order workflow, the same for every platform: answer it (New), cook it
- * (Preparing), hand it over (Ready), and see anything that went wrong (Issues). What a button
- * does on the platform's side is the server's adapter's business.
+ * The standard online-order workflow, the same for every platform: answer it (New), hand it over
+ * or send it out once cooked (Accepted), and see anything that went wrong (Issues). The kitchen
+ * works from printed tickets, so nobody taps "ready". What a button does on the platform's side
+ * is the server's adapter's business.
  */
 export function OnlineBoard({ variant, highlightId }: Props) {
   const { t } = useTranslation();
@@ -103,7 +104,6 @@ export function OnlineBoard({ variant, highlightId }: Props) {
       markOpened(card);
       setDetails(card);
     },
-    ready: (card) => run(card, () => onlineOrdersApi.ready(card.id), t('online.toast.readyDone', { code: card.displayCode })),
     handOver: (card) => {
       // A cash order the customer collects is paid at the till first, then handed over.
       if (owesMoney(card)) {

@@ -45,7 +45,6 @@ export class SnappfoodAdapter implements ChannelAdapter {
     report: true,
     reportWindowMinutes: SNAPPFOOD_REPORT_WINDOW_MINUTES,
     adjustTime: false,
-    notifiesReady: false,
     notifiesHandover: false,
     riderStatus: true,
     // No pause call in the annex: every menu goes off with menu_toggle, and back on after.
@@ -113,10 +112,6 @@ export class SnappfoodAdapter implements ChannelAdapter {
     const reasons = (await this.deps.simulation?.getDeclineReasons()) ?? [];
     const title = reasons.find((r) => r.id === reasonId)?.title;
     return [`${reasonId}${title ? ` ${title}` : ''}`, comment].filter(Boolean).join(': ').slice(0, 255);
-  }
-
-  async ready() {
-    // Snappfood has no call for it.
   }
 
   async handedOver() {

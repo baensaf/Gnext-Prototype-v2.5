@@ -81,6 +81,8 @@ export const FEATURE_LABELS = {
   'pos.stop.approverPin': 'F',
   'pos.coupon': 'V3',
   'pos.customerCredit': 'V3',
+  // Delivery platforms (Snappfood) come with the incoming orders, in V3.
+  'pos.onlineTab': 'V3',
   // The pay panel saying a delivery order's remainder goes with the courier
   'pos.pay.courierCollects': 'V3',
   // Orders list and the order drawer
@@ -103,6 +105,11 @@ export const FEATURE_LABELS = {
   'delivery.availability': 'V4',
   'delivery.moveCourier': 'V4',
   'delivery.courierDetail': 'V4',
+  // V1 dispatch: assign and send out, then settle on return. Everything else waits.
+  'delivery.failRide': 'V4',
+  'delivery.swapRider': 'V4',
+  'delivery.checkIn': 'V4',
+  'delivery.mobilePos': 'V4',
   'delivery.settlementReview': 'V4',
   'delivery.settlementReverse': 'V2',
   'delivery.audit': 'F',

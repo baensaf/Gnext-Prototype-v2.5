@@ -701,6 +701,7 @@ export function DeliveryPage() {
                           onClick={() => handleOpenFailModal(del)}
                         >
                           {t('delivery.card.failed')}
+                          <VersionTag feature="delivery.failRide" sx={{ ml: 0.5 }} />
                         </Button>
                       </>
                     )}
@@ -712,6 +713,7 @@ export function DeliveryPage() {
                         sx={{ ml: 'auto' }}
                       >
                         {t('delivery.card.reassign')}
+                        <VersionTag feature="delivery.swapRider" sx={{ ml: 0.5 }} />
                       </Button>
                     )}
                   </DeliveryCard>
@@ -738,7 +740,9 @@ export function DeliveryPage() {
               <TableRow>
                 <TableCell>{t('delivery.couriers.code')}</TableCell>
                 <TableCell>{t('delivery.couriers.nameAndPhone')}</TableCell>
-                <TableCell>{t('delivery.couriers.mobilePosAssignment')}</TableCell>
+                <TableCell>
+                  {t('delivery.couriers.mobilePosAssignment')} <VersionTag feature="delivery.mobilePos" />
+                </TableCell>
                 <TableCell align="right">{t('delivery.couriers.actions')}</TableCell>
               </TableRow>
             </TableHead>
@@ -788,6 +792,7 @@ export function DeliveryPage() {
                           sx={isCheckedIn ? undefined : { color: 'text.secondary' }}
                         >
                           {t('delivery.couriers.checkIn')}
+                          <VersionTag feature="delivery.checkIn" sx={{ ml: 0.5 }} />
                         </Button>
                       </Stack>
                     </TableCell>

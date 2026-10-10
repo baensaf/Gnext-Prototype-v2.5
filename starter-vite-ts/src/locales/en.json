@@ -4378,14 +4378,12 @@
     },
     "lane": {
       "NEW": "New",
-      "PREPARING": "Preparing",
-      "READY": "Ready",
-      "ISSUE": "Needs attention"
+      "ISSUE": "Needs attention",
+      "ACCEPTED": "Accepted"
     },
     "laneEmpty": {
       "NEW": "No new orders",
-      "PREPARING": "Nothing in the kitchen",
-      "READY": "Nothing waiting"
+      "ACCEPTED": "Nothing accepted waiting to go out"
     },
     "fulfilment": {
       "PLATFORM_RIDER": "{{platform}} rider",
@@ -4406,7 +4404,6 @@
     "accept": "Accept · {{count}} min",
     "reject": "Reject",
     "details": "Details",
-    "ready": "Ready",
     "handedToRider": "Handed to rider",
     "collected": "Collected",
     "collectAndHandOver": "Take {{amount}} and hand over",
@@ -4503,7 +4500,6 @@
       },
       "accepted": "Order {{code}} accepted and sent to the kitchen",
       "rejected": "Order {{code}} rejected",
-      "readyDone": "Order {{code}} is ready",
       "handedOver": "Order {{code}} handed over",
       "reported": "Order {{code}} is with {{platform}} support",
       "seen": "Order {{code}} cleared",

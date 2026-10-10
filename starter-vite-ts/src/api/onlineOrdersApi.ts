@@ -9,7 +9,7 @@ import { httpClient } from './httpClient';
 // platform allows, so the panel never asks which platform an order came from.
 
 export type OnlinePlatform = 'SNAPPFOOD';
-export type OnlineLane = 'NEW' | 'PREPARING' | 'READY' | 'ISSUE';
+export type OnlineLane = 'NEW' | 'ACCEPTED' | 'ISSUE';
 export type OnlineIssue = 'PLATFORM_CANCELLED' | 'TIMED_OUT' | 'WITH_SUPPORT';
 /** Who carries the food: the platform's rider, one of our couriers, or the customer. */
 export type Fulfilment = 'PLATFORM_RIDER' | 'OWN_COURIER' | 'PICKUP';
@@ -56,7 +56,6 @@ export interface ChannelCapabilities {
   report: boolean;
   reportWindowMinutes: number | null;
   adjustTime: boolean;
-  notifiesReady: boolean;
   notifiesHandover: boolean;
   riderStatus: boolean;
   pause: boolean;
@@ -96,11 +95,6 @@ export const onlineOrdersApi = {
   /** A cashier opened a waiting order; the platform likes to hear it (Snappfood: pick). */
   opened: async (id: string): Promise<void> => {
     await httpClient.post(`/api/v1/orders/${id}/online/opened`);
-  },
-
-  ready: async (id: string): Promise<OrderHeader> => {
-    const res = await httpClient.post(`/api/v1/orders/${id}/online/ready`);
-    return res.data;
   },
 
   handedOver: async (id: string): Promise<OrderHeader> => {
