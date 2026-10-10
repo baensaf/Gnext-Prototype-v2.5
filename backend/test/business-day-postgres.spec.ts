@@ -68,13 +68,14 @@ describe('the overnight business day (PostgreSQL)', () => {
     const categoryId = (await save(Category, { tenant_id: tenantId, code: 'BDAY-MAINS', name: 'Mains', is_active: true })).id;
     burger = (await save(Product, { tenant_id: tenantId, category_id: categoryId, code: 'BURGER', name: 'Burger', base_price: '100000.0000', tax_rate: '0.0000', is_active: true })).id;
     cash = (await save(PaymentMethod, { tenant_id: tenantId, code: 'CASH', name: 'Cash', kind: 'CASH', currency_code: 'IRR', is_active: true })).id;
-    // Head office's rule, as the migration writes it for every chain.
-    await settings.updateSetting(tenantId, 'BUSINESS_DAY', { cutoff: '04:00', opensAt: '08:00', closesAt: '04:00', autoClose: true }, 'bday-setup');
-
     // Only Date: Postgres and the pool keep their real timers.
     jest.useFakeTimers({
       doNotFake: ['hrtime', 'nextTick', 'performance', 'queueMicrotask', 'setImmediate', 'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout'],
     });
+    // Head office's rule, as the migration writes it for every chain. Written before every date
+    // the tests use, so the real calendar never lands inside them.
+    tehranTime('2026-09-01T12:00:00');
+    await settings.updateSetting(tenantId, 'BUSINESS_DAY', { cutoff: '04:00', opensAt: '08:00', closesAt: '04:00', autoClose: true }, 'bday-setup');
   }, 60000);
 
   afterAll(async () => {
@@ -243,6 +244,13 @@ describe('the overnight business day (PostgreSQL)', () => {
   });
 
   it('shows what the current rule would date differently, without changing anything', async () => {
+    // Postgres stamps placed_at and initiated_at with its own clock, which Jest doesn't fake. Put
+    // the rows sold above at noon of their business day, as a real till would have, so the real
+    // calendar never lands inside the review window.
+    const noon = "((business_date || ' 12:00')::timestamp AT TIME ZONE 'Asia/Tehran')";
+    for (const [table, column] of [['order_header', 'placed_at'], ['payment', 'initiated_at'], ['cashier_shift', 'opened_at']]) {
+      await dataSource.query(`UPDATE ${table} SET ${column} = ${noon} WHERE tenant_id = $1 AND business_date IS NOT NULL`, [tenantId]);
+    }
     // An order from before the overnight day: stamped by the calendar at 01:30.
     const legacy = await dataSource.getRepository(OrderHeader).save(
       dataSource.getRepository(OrderHeader).create({
