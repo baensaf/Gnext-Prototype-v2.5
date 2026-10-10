@@ -18,6 +18,7 @@ import { OrderAdjustment } from '../../entities/OrderAdjustment.entity';
 import { OrderNote } from '../../entities/OrderNote.entity';
 import { OrderLink } from '../../entities/OrderLink.entity';
 import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
+import { AuditEvent } from '../../entities/AuditEvent.entity';
 import { Product } from '../../entities/Product.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { ProductVariant } from '../../entities/ProductVariant.entity';
@@ -2358,6 +2359,34 @@ export class OrderService {
       currentState: order.state,
       events,
     };
+  }
+
+  /**
+   * What changed on an order besides its state: lines edited, type changed, order split.
+   * The order's audit-log entries, oldest first, with secrets masked. Scoped like the order
+   * itself: the tenant, and a 404 for an order that is not there.
+   */
+  async getOrderChanges(tenantId: string, id: string) {
+    const order = await this.orderRepo.findOne({ where: { id, tenant_id: tenantId }, select: ['id'] });
+    if (!order) throw new NotFoundException(`Order ${id} not found`);
+    const events = await this.orderRepo.manager.find(AuditEvent, {
+      where: { tenant_id: tenantId, entity_id: id },
+      order: { occurred_at: 'ASC' },
+    });
+    const mask = (obj: any) => {
+      if (!obj || typeof obj !== 'object') return obj;
+      const copy = JSON.parse(JSON.stringify(obj));
+      if (copy.password) copy.password = '***MASKED***';
+      if (copy.pin) copy.pin = '***MASKED***';
+      if (copy.card_number) copy.card_number = '**** **** **** 1234';
+      return copy;
+    };
+    return events.map((e) => ({
+      ...e,
+      before_data: mask(e.before_data),
+      after_data: mask(e.after_data),
+      details: mask(e.details),
+    }));
   }
 
   private async addItemsToDraft(

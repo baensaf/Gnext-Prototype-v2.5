@@ -148,6 +148,28 @@ const CHANNELS = ['POS', 'KIOSK', 'ONLINE', 'AGGREGATOR'];
 const PAGE_SIZES = [25, 50, 100];
 const SORTABLE = ['placed_at', 'grand_total', 'outstanding_total', 'order_number'] as const;
 
+// Audit actions that only repeat one of the order's own state changes.
+const STATE_AUDIT_ACTIONS = new Set([
+  'ORDER_CREATED',
+  'ORDER_SUBMITTED',
+  'ORDER_ACCEPT',
+  'ORDER_REJECT',
+  'ORDER_DISPATCH',
+  'ORDER_COMPLETE',
+  'ORDER_CANCEL',
+  'ORDER_CANCELLED',
+]);
+// The other order changes the timeline names; anything else reads as "Order changed".
+const AUDIT_EVENT_KEYS = [
+  'ORDER_EDITED',
+  'ORDER_UPDATED',
+  'ORDER_TYPE_CHANGED',
+  'DINING_TABLE_MOVED',
+  'DINING_ORDERS_MERGED',
+  'ORDER_SPLIT',
+  'ORDER_DELIVERY_FAILED',
+];
+
 // Which columns each role starts without. Every column stays in the grid's Columns picker.
 type ColumnRole = 'cashier' | 'manager' | 'headOffice';
 const DEFAULT_HIDDEN_COLUMNS: Record<ColumnRole, GridColumnVisibilityModel> = {
@@ -331,6 +353,7 @@ export function OrdersWorkflowPage() {
   // than the one that used to be the only possibility.
   const [cancelEscalation, setCancelEscalation] = useState<string>('');
   const [selectedDrawerOrder, setSelectedDrawerOrder] = useState<any | null>(null);
+  const [orderAuditLogs, setOrderAuditLogs] = useState<any[]>([]);
   const [orderPayments, setOrderPayments] = useState<PaymentRecord[]>([]);
   const [orderRefunds, setOrderRefunds] = useState<RefundRecord[]>([]);
   const [loadingDrawerDetails, setLoadingDrawerDetails] = useState(false);
@@ -554,13 +577,18 @@ export function OrdersWorkflowPage() {
     async (orderId: string) => {
       setLoadingDrawerDetails(true);
       try {
-        const [detail, payments, refunds] = await Promise.all([
+        const [detail, audit, payments, refunds] = await Promise.all([
           axios.get(`/api/v1/orders/${orderId}`).then((res) => res.data),
+          axios
+            .get(`/api/v1/orders/${orderId}/changes`)
+            .then((res) => res.data)
+            .catch(() => []),
           paymentApi.getOrderPayments(orderId).catch(() => [] as PaymentRecord[]),
           refundApi.getRefunds({ orderId }).catch(() => [] as RefundRecord[]),
         ]);
         setSelectedDrawerOrder(detail);
         setSelectedOrder(detail);
+        setOrderAuditLogs(Array.isArray(audit) ? audit : audit?.data || []);
         setOrderPayments(payments);
         setOrderRefunds(refunds);
       } catch (err: any) {
@@ -576,6 +604,7 @@ export function OrdersWorkflowPage() {
   useEffect(() => {
     if (!drawerOrderId) return;
     setDrawerTab('details');
+    setOrderAuditLogs([]);
     setOrderPayments([]);
     setOrderRefunds([]);
     loadDrawerDetails(drawerOrderId);
@@ -1191,7 +1220,9 @@ export function OrdersWorkflowPage() {
   };
 
   /**
-   * The order's history, oldest first: its state changes.
+   * The order's history, oldest first: its state changes, and the changes that are not a
+   * state of their own (lines edited, type changed, table moved). The audit log records each
+   * state change again, so those entries are left to the state events.
    */
   const timelineOf = (order: any) => {
     const actorNames: Record<string, string> = order.context?.actor_names || {};
@@ -1208,6 +1239,23 @@ export function OrdersWorkflowPage() {
         reason: (evt.reason_text as string | null) || null,
         cancelled: evt.to_state === 'CANCELLED',
       })),
+      ...orderAuditLogs
+        .filter((log: any) => !STATE_AUDIT_ACTIONS.has(log.action))
+        .map((log: any, idx: number) => ({
+          key: log.id || `audit-${idx}`,
+          at: log.occurred_at as string | undefined,
+          label: AUDIT_EVENT_KEYS.includes(log.action)
+            ? t(`orders.drawer.events.${log.action}`)
+            : t('orders.drawer.events.other'),
+          color: 'default',
+          actor: nameOf(log.actor_id || log.user_id),
+          detail:
+            log.action === 'ORDER_TYPE_CHANGED' && log.details?.from && log.details?.to
+              ? `${getOrderTypeLabel(log.details.from)} → ${getOrderTypeLabel(log.details.to)}`
+              : null,
+          reason: (log.details?.reason as string | null) || null,
+          cancelled: false,
+        })),
     ];
     return steps.sort((x, y) => new Date(x.at || 0).getTime() - new Date(y.at || 0).getTime());
   };

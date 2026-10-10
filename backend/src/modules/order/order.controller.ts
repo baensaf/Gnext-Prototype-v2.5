@@ -284,6 +284,12 @@ export class OrdersController {
     return await this.orderService.getOrderHistory(tenantId, id);
   }
 
+  // The order's other changes (lines edited, type changed, split), for the drawer timeline.
+  @Get(':id/changes')
+  async getOrderChanges(@Param('id') id: string, @Req() req: Request) {
+    return await this.orderService.getOrderChanges((req as any).tenantId, id);
+  }
+
   @Get(':id/guest-bill')
   async getGuestBill(@Param('id') id: string, @Query('locale') locale: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

@@ -656,7 +656,17 @@
       },
       "paidWithoutDetail": "The order is marked paid, but no payment record was kept for it.",
       "orderTaken": "Order taken",
-      "reason": "Reason: {{reason}}"
+      "reason": "Reason: {{reason}}",
+      "events": {
+        "ORDER_EDITED": "Lines edited",
+        "ORDER_UPDATED": "Order changed",
+        "ORDER_TYPE_CHANGED": "Type changed",
+        "DINING_TABLE_MOVED": "Moved to another table",
+        "DINING_ORDERS_MERGED": "Merged with another order",
+        "ORDER_SPLIT": "Order split",
+        "ORDER_DELIVERY_FAILED": "Not delivered",
+        "other": "Order changed"
+      }
     },
     "errors": {
       "loadFailed": "Failed to load active orders",

@@ -656,7 +656,17 @@
       },
       "paidWithoutDetail": "سفارش پرداخت‌شده ثبت شده، اما سابقه پرداختی برای آن نگه داشته نشده است.",
       "orderTaken": "ثبت سفارش",
-      "reason": "علت: {{reason}}"
+      "reason": "علت: {{reason}}",
+      "events": {
+        "ORDER_EDITED": "اقلام ویرایش شد",
+        "ORDER_UPDATED": "سفارش تغییر کرد",
+        "ORDER_TYPE_CHANGED": "نوع سفارش تغییر کرد",
+        "DINING_TABLE_MOVED": "جابه‌جایی میز",
+        "DINING_ORDERS_MERGED": "ادغام با سفارش دیگر",
+        "ORDER_SPLIT": "تقسیم سفارش",
+        "ORDER_DELIVERY_FAILED": "تحویل نشد",
+        "other": "سفارش تغییر کرد"
+      }
     },
     "errors": {
       "loadFailed": "خطا در بارگذاری سفارش‌های فعال",
