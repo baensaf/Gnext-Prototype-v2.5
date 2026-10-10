@@ -1,15 +1,11 @@
 import type { GridPaginationModel } from '@mui/x-data-grid-premium';
+import type { CreditAccount } from 'src/api/creditApi';
+import type { Customer, CustomerAddress } from 'src/api/customerApi';
 import type { AddressDraftState } from 'src/components/customer-register';
-import type {
-  Customer,
-  CustomerAddress,
-  CustomerCreditAccount,
-  CustomerCreditTransaction,
-} from 'src/api/customerApi';
 
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import HomeIcon from '@mui/icons-material/Home';
@@ -28,19 +24,15 @@ import {
   Paper,
   Alert,
   Button,
-  Select,
   Dialog,
   TableRow,
-  MenuItem,
   TableBody,
   TableCell,
   TableHead,
   TextField,
   Typography,
   IconButton,
-  InputLabel,
   CardContent,
-  FormControl,
   DialogTitle,
   DialogContent,
   DialogActions,
@@ -51,8 +43,9 @@ import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
-import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
+import { useCurrencyLabel } from 'src/utils/currency';
 
+import { creditApi } from 'src/api/creditApi';
 import { customerApi } from 'src/api/customerApi';
 import { useIsHeadOffice } from 'src/store/useAuthStore';
 
@@ -75,14 +68,10 @@ export function CustomersPage() {
 
   const [registerOpen, setRegisterOpen] = useState(false);
 
-  // Credit ledger dialog (V3)
+  // Credit account dialog (V3): balance, limit and the account's transactions
   const [creditDialogOpen, setCreditDialogOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [creditAccount, setCreditAccount] = useState<CustomerCreditAccount | null>(null);
-  const [transactions, setTransactions] = useState<CustomerCreditTransaction[]>([]);
-  const [txType, setTxType] = useState<string>('CHARGE');
-  const [txAmount, setTxAmount] = useState<string>('0');
-  const [txNote, setTxNote] = useState<string>('');
+  const [creditAccount, setCreditAccount] = useState<CreditAccount | null>(null);
 
   // Address dialog
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
@@ -130,35 +119,16 @@ export function CustomersPage() {
   const handleOpenCredit = useCallback(
     async (c: Customer) => {
       setSelectedCustomer(c);
+      setCreditAccount(null);
       setCreditDialogOpen(true);
       try {
-        const res = await customerApi.getCreditAccount(c.id);
-        setCreditAccount(res.account);
-        setTransactions(res.transactions);
+        if (c.credit_account) setCreditAccount(await creditApi.getAccountById(c.credit_account.id));
       } catch (err: any) {
         setError(err.detail || t('customers.directory.errors.creditFailed'));
       }
     },
     [t]
   );
-
-  const handlePostTransaction = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCustomer) return;
-    try {
-      const res = await customerApi.postCreditTransaction(selectedCustomer.id, {
-        transaction_type: txType,
-        amount: txAmount,
-        note: txNote,
-      });
-      setCreditAccount(res.account);
-      const updated = await customerApi.getCreditAccount(selectedCustomer.id);
-      setTransactions(updated.transactions);
-      setTxNote('');
-    } catch (err: any) {
-      setError(err.detail || t('customers.directory.errors.creditFailed'));
-    }
-  };
 
   const handleOpenAddresses = async (c: Customer) => {
     setSelectedCustomer(c);
@@ -188,8 +158,6 @@ export function CustomersPage() {
       setError(err.detail || t('customers.directory.errors.addressesFailed'));
     }
   };
-
-  const txLabel = (type: string) => t(`customers.directory.credit.types.${type}`, type);
 
   return (
     <Box>
@@ -393,42 +361,6 @@ export function CustomersPage() {
             </Grid>
           )}
 
-          <Box component="form" onSubmit={handlePostTransaction} sx={{ mb: 3, p: 2, bgcolor: 'background.neutral', borderRadius: 2 }}>
-            <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1.5 }}>
-              {t('customers.directory.credit.postTitle')}
-            </Typography>
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { xs: 'stretch', md: 'center' }, flexWrap: { md: 'wrap' } }}>
-              <FormControl size="small" sx={{ width: { xs: '100%', md: 200 } }}>
-                <InputLabel>{t('customers.directory.credit.type')}</InputLabel>
-                <Select value={txType} label={t('customers.directory.credit.type')} onChange={(e) => setTxType(e.target.value)}>
-                  {['CHARGE', 'DEBIT', 'SETTLEMENT', 'ADJUSTMENT'].map((type) => (
-                    <MenuItem key={type} value={type}>
-                      {txLabel(type)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              <TextField
-                size="small"
-                label={`${t('customers.directory.credit.amount')} (${currency})`}
-                type="number"
-                value={toToman(txAmount)}
-                onChange={(e) => setTxAmount(fromToman(e.target.value))}
-                sx={{ width: { xs: '100%', md: 180 } }}
-              />
-              <TextField
-                size="small"
-                label={t('customers.directory.credit.note')}
-                value={txNote}
-                onChange={(e) => setTxNote(e.target.value)}
-                sx={{ flex: '1 1 220px' }}
-              />
-              <Button type="submit" variant="contained" size="small" sx={{ fontWeight: 'bold', whiteSpace: 'nowrap', minHeight: 40 }}>
-                {t('customers.directory.credit.post')}
-              </Button>
-            </Stack>
-          </Box>
-
           <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
             {t('customers.directory.credit.history')}
           </Typography>
@@ -445,22 +377,22 @@ export function CustomersPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {transactions.map((tx) => {
-                  const type: string = tx.transaction_type || (tx as any).entry_type || 'ADJUSTMENT';
+                {(creditAccount?.entries ?? []).map((tx) => {
+                  const type = tx.entry_type;
                   return (
                     <TableRow key={tx.id}>
-                      <TableCell>{fDateTime(tx.recorded_at || (tx as any).posted_at || Date.now())}</TableCell>
+                      <TableCell>{fDateTime(tx.posted_at)}</TableCell>
                       <TableCell>
                         <Chip
-                          label={txLabel(type)}
+                          label={t(`credit.types.${type}`, type)}
                           size="small"
-                          color={type === 'CHARGE' || type === 'SETTLEMENT' || type === 'REPAYMENT' ? 'success' : 'warning'}
+                          color={MoneyUtil.greaterThan(tx.amount, '0') ? 'success' : 'warning'}
                         />
                       </TableCell>
                       <TableCell align="right" sx={{ fontWeight: 'bold' }}>
                         {MoneyUtil.formatCurrency(tx.amount)} {currency}
                       </TableCell>
-                      <TableCell>{tx.note || (tx as any).reason_text || (tx as any).reference || '—'}</TableCell>
+                      <TableCell>{tx.reason_text || tx.reference || '—'}</TableCell>
                     </TableRow>
                   );
                 })}

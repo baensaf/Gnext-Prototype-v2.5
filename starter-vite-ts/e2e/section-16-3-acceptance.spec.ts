@@ -182,7 +182,7 @@ test.describe('Specification §16.3 End-to-End Acceptance Workflows', () => {
   // =========================================================================
   // §16.3.2 CUSTOMER CREDIT & BOTH REFUNDS ACCEPTANCE WORKFLOW
   // =========================================================================
-  test('§16.3.2 Customer Credit & Both Refund Paths: Credit Split Payment, Repayment, Aging, Original & Alternative Cash Refunds', async ({ page }) => {
+  test('§16.3.2 Customer Credit & Both Refund Paths: Credit Split Payment, Transactions, Original & Alternative Cash Refunds', async ({ page }) => {
     await loginUser(page);
 
     // 1. Create a customer with credit limit in Customer Directory
@@ -232,36 +232,17 @@ test.describe('Specification §16.3 End-to-End Acceptance Workflows', () => {
     const customerRow = page.locator('tbody tr').filter({ hasText: 'Acceptance Tester' }).first();
     await expect(customerRow).toBeVisible({ timeout: 15000 });
 
-    const repayBtn = customerRow.locator('button').filter({ hasText: /Repayment \/ Top-Up|پرداخت \/ شارژ/i }).first();
-    await expect(repayBtn).toBeVisible({ timeout: 10000 });
-    await repayBtn.click({ force: true });
-
-    const repayDialog = page.locator('.MuiDialog-root').filter({ hasText: /Post Credit Repayment|Repayment|پرداخت/i }).first();
-    await expect(repayDialog).toBeVisible({ timeout: 10000 });
-
-    const amountInput = repayDialog.locator('input[type="number"]').first();
-    await expect(amountInput).toBeVisible({ timeout: 5000 });
-    await amountInput.fill('500000');
-
-    const submitRepayPromise = page.waitForResponse(resp => resp.url().includes('/credit-account/repayments') && resp.request().method() === 'POST');
-    const confirmBtn = repayDialog.locator('button').filter({ hasText: /Confirm Repayment|تایید/i }).first();
-    await confirmBtn.click();
-    await submitRepayPromise;
-
-    await expect(page.locator('.MuiDialog-root').filter({ hasText: /Post Credit Repayment|Repayment|پرداخت/i })).not.toBeVisible({ timeout: 5000 });
-    await page.waitForTimeout(300);
-
     const targetRow = page.locator('tbody tr').filter({ hasText: 'Acceptance Tester' }).first();
-    const statementBtn = targetRow.locator('button').filter({ hasText: /Statement|صورتحساب/i }).first();
-    await expect(statementBtn).toBeVisible({ timeout: 10000 });
-    await statementBtn.click({ force: true });
+    const transactionsBtn = targetRow.locator('button').filter({ hasText: /Transactions|تراکنش‌ها/i }).first();
+    await expect(transactionsBtn).toBeVisible({ timeout: 10000 });
+    await transactionsBtn.click({ force: true });
 
-    const stmtDialog = page.locator('.MuiDialog-root').filter({ hasText: /Customer Credit Statement|Statement|صورتحساب/i }).first();
-    await expect(stmtDialog).toBeVisible({ timeout: 10000 });
+    const txDialog = page.locator('.MuiDialog-root').filter({ hasText: /Credit transactions|تراکنش‌های اعتباری/i }).first();
+    await expect(txDialog).toBeVisible({ timeout: 10000 });
 
-    const closeStmtBtn = stmtDialog.locator('button').filter({ hasText: /Close|بستن/i }).first();
-    await expect(closeStmtBtn).toBeVisible({ timeout: 5000 });
-    await closeStmtBtn.click();
+    const closeTxBtn = txDialog.locator('button').filter({ hasText: /Close|بستن/i }).first();
+    await expect(closeTxBtn).toBeVisible({ timeout: 5000 });
+    await closeTxBtn.click();
     await page.waitForTimeout(300);
 
     await navigateViaSidebar(page, '/app/refunds', '/app/refunds');

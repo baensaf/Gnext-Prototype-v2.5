@@ -95,7 +95,6 @@ export const FEATURE_LABELS = {
   'pricing.addonPrices': 'V4',
   // Customers and credit
   'customers.credit': 'V3',
-  'credit.aging': 'V4',
   // Operations
   'terminals.kiosk': 'V3',
   'printers.simulated': 'F',

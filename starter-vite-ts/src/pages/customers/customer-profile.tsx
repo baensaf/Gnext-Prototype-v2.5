@@ -5,7 +5,6 @@ import { useState, useEffect, useCallback } from 'react';
 
 import HomeIcon from '@mui/icons-material/Home';
 import PersonIcon from '@mui/icons-material/Person';
-import LocalOfferIcon from '@mui/icons-material/LocalOffer';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import {
   Box,
@@ -210,44 +209,6 @@ export function CustomerProfilePage() {
               )}
             </InfoCard>
           </Grid>
-
-          <Grid size={{ xs: 12 }}>
-            <InfoCard title={t('profile.customer.tagsConsents')} icon={<LocalOfferIcon color="action" />}>
-              <Stack spacing={2}>
-                <Stack sx={{ flexDirection: 'row', flexWrap: 'wrap', gap: 1 }}>
-                  {profile.tags.length === 0 ? (
-                    <Typography color="text.secondary">{t('profile.customer.noTags')}</Typography>
-                  ) : (
-                    profile.tags.map((tag) => (
-                      <Chip
-                        key={tag.id}
-                        size="small"
-                        label={tag.name}
-                        sx={tag.color ? { bgcolor: tag.color, color: 'common.white' } : undefined}
-                      />
-                    ))
-                  )}
-                </Stack>
-                <Stack sx={{ flexDirection: 'row', flexWrap: 'wrap', gap: 1 }}>
-                  {profile.consents.length === 0 ? (
-                    <Typography color="text.secondary">{t('profile.customer.noConsents')}</Typography>
-                  ) : (
-                    profile.consents.map((consent) => (
-                      <Chip
-                        key={consent.id}
-                        size="small"
-                        variant="outlined"
-                        color={consent.granted ? 'success' : 'default'}
-                        label={`${consent.consent_type}: ${
-                          consent.granted ? t('profile.customer.granted') : t('profile.customer.withdrawn')
-                        }`}
-                      />
-                    ))
-                  )}
-                </Stack>
-              </Stack>
-            </InfoCard>
-          </Grid>
         </Grid>
       )}
 
@@ -268,16 +229,6 @@ export function CustomerProfilePage() {
                 {
                   label: t('profile.customer.available'),
                   value: formatMoney(MoneyUtil.add(credit.account.current_balance, credit.account.credit_limit)),
-                },
-                {
-                  label: t('profile.status'),
-                  value: (
-                    <Chip
-                      size="small"
-                      label={credit.account.is_blocked ? t('profile.customer.blocked') : credit.account.status}
-                      color={credit.account.is_blocked ? 'error' : 'success'}
-                    />
-                  ),
                 },
               ]}
             />

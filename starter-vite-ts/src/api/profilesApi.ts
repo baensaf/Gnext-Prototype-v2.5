@@ -54,8 +54,6 @@ export interface CustomerProfile {
   };
   phones: { id: string; phone_number: string; label: string; is_primary: boolean; is_verified: boolean }[];
   addresses: { id: string; title: string; address_text: string; postal_code?: string | null; is_default: boolean }[];
-  consents: { id: string; consent_type: string; granted: boolean; granted_at: string }[];
-  tags: { id: string; name: string; color: string | null }[];
   stats: ProfileOrderStats;
   orders: ProfileOrder[];
   credit: {
@@ -64,8 +62,6 @@ export interface CustomerProfile {
       credit_limit: string;
       current_balance: string;
       currency_code: string;
-      status: string;
-      is_blocked: boolean;
     };
     entries: {
       id: string;
