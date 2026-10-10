@@ -254,19 +254,13 @@ describe('CustomerService (Unit)', () => {
       accountRepo.create.mockImplementation((dto: any) => dto);
     });
 
-    it('takes the whole name in one box, the mobile as the code, gender and wedding date', async () => {
-      const saved = await service.createCustomer(
-        't-1',
-        { name: '  Sara Ahmadi ', mobile: '09121234567', gender: 'female', marriage_date: '2015-06-01' } as any,
-        'corr',
-      );
-      expect(saved).toMatchObject({ first_name: 'Sara Ahmadi', last_name: '', code: '+989121234567', gender: 'FEMALE', marriage_date: '2015-06-01' });
+    it('takes the whole name in one box and the mobile as the code', async () => {
+      const saved = await service.createCustomer('t-1', { name: '  Sara Ahmadi ', mobile: '09121234567' } as any, 'corr');
+      expect(saved).toMatchObject({ first_name: 'Sara Ahmadi', last_name: '', code: '+989121234567' });
     });
 
-    it('refuses an empty name, an unknown gender and a wedding date in the future', async () => {
+    it('refuses an empty name', async () => {
       await expect(service.createCustomer('t-1', { name: ' ', mobile: '09121234567' } as any, 'corr')).rejects.toThrow(BadRequestException);
-      await expect(service.createCustomer('t-1', { name: 'A', mobile: '09121234567', gender: 'X' } as any, 'corr')).rejects.toThrow('gender');
-      await expect(service.createCustomer('t-1', { name: 'A', mobile: '09121234567', marriage_date: '2999-01-01' } as any, 'corr')).rejects.toThrow('marriage_date');
       expect(customerRepo.save).not.toHaveBeenCalled();
     });
 

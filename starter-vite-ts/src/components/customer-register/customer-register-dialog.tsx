@@ -1,5 +1,5 @@
 import type { AddressDraftState } from './customer-address-fields';
-import type { Customer, CustomerRegistration } from 'src/api/customerApi';
+import type { Customer, CustomField, CustomerRegistration } from 'src/api/customerApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
@@ -16,19 +16,20 @@ import {
   TextField,
   Typography,
   DialogTitle,
-  ToggleButton,
   DialogContent,
   DialogActions,
   InputAdornment,
   CircularProgress,
-  ToggleButtonGroup,
 } from '@mui/material';
 
 import { fromToman, useCurrencyLabel } from 'src/utils/currency';
 
+import { customerApi } from 'src/api/customerApi';
+
 import { VersionTag } from 'src/components/version-tag';
 import { CalendarDateField } from 'src/components/calendar-date-field';
 
+import { CustomFieldInputs } from './custom-field-inputs';
 import { CustomerAddressFields } from './customer-address-fields';
 
 type AddressRow = AddressDraftState & { key: number };
@@ -61,8 +62,9 @@ type Props = {
 
 /**
  * Register a customer in one step: the name in one box, the mobile (which is also the
- * customer code), optional gender, birthday and wedding date, and any delivery addresses,
- * each with an optional pin on the map. Used by the customers page and the POS.
+ * customer code), an optional birthday, the customer fields head office has added (gender, a
+ * wedding date…), and any delivery addresses, each with an optional pin on the map. Used by the
+ * customers page and the POS.
  */
 export function CustomerRegisterDialog({ open, onClose, onCreated, createCustomer, showCredit, startWithAddress, initialMobile, initialName }: Props) {
   const { t } = useTranslation();
@@ -70,9 +72,9 @@ export function CustomerRegisterDialog({ open, onClose, onCreated, createCustome
 
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
-  const [gender, setGender] = useState<'MALE' | 'FEMALE' | null>(null);
   const [birthDate, setBirthDate] = useState('');
-  const [marriageDate, setMarriageDate] = useState('');
+  const [fields, setFields] = useState<CustomField[]>([]);
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [creditLimit, setCreditLimit] = useState('0');
   const [addresses, setAddresses] = useState<AddressRow[]>([]);
   const [nextKey, setNextKey] = useState(1);
@@ -86,9 +88,9 @@ export function CustomerRegisterDialog({ open, onClose, onCreated, createCustome
     if (!open) return;
     setName(initialName || '');
     setMobile(initialMobile || '');
-    setGender(null);
     setBirthDate('');
-    setMarriageDate('');
+    setCustomValues({});
+    customerApi.getCustomFields().then(setFields).catch(() => setFields([]));
     setCreditLimit('0');
     setAddresses(startWithAddress ? [emptyAddress(0, defaultTitle)] : []);
     setNextKey(1);
@@ -129,15 +131,19 @@ export function CustomerRegisterDialog({ open, onClose, onCreated, createCustome
       setError(t('customers.register.errors.addressText'));
       return;
     }
+    const missing = fields.find((f) => f.is_required && !customValues[f.id]?.trim());
+    if (missing) {
+      setError(t('customers.register.errors.fieldRequired', { name: missing.name }));
+      return;
+    }
     try {
       setSaving(true);
       setError(null);
       const created = await createCustomer({
         name: name.trim(),
         mobile: mobile.trim(),
-        gender,
         birth_date: birthDate || undefined,
-        marriage_date: marriageDate || undefined,
+        custom_values: Object.keys(customValues).length ? customValues : undefined,
         ...(showCredit ? { credit_limit: fromToman(creditLimit || '0') } : {}),
         addresses: filled.map((a) => ({
           title: a.title.trim() || defaultTitle,
@@ -193,20 +199,6 @@ export function CustomerRegisterDialog({ open, onClose, onCreated, createCustome
                 slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'tel' } }}
               />
             </Grid>
-            <Grid size={{ xs: 12 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                {t('customers.register.gender')}
-              </Typography>
-              <ToggleButtonGroup
-                exclusive
-                size="small"
-                value={gender}
-                onChange={(_e, next) => setGender(next)}
-              >
-                <ToggleButton value="MALE">{t('customers.register.male')}</ToggleButton>
-                <ToggleButton value="FEMALE">{t('customers.register.female')}</ToggleButton>
-              </ToggleButtonGroup>
-            </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>
               <CalendarDateField
                 label={t('customers.register.birthDate')}
@@ -216,15 +208,11 @@ export function CustomerRegisterDialog({ open, onClose, onCreated, createCustome
                 onChange={(e) => setBirthDate(e.target.value)}
               />
             </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <CalendarDateField
-                label={t('customers.register.marriageDate')}
-                fullWidth
-                size="small"
-                value={marriageDate}
-                onChange={(e) => setMarriageDate(e.target.value)}
-              />
-            </Grid>
+            <CustomFieldInputs
+              fields={fields}
+              values={customValues}
+              onChange={(fieldId, value) => setCustomValues((current) => ({ ...current, [fieldId]: value }))}
+            />
             {showCredit && (
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField

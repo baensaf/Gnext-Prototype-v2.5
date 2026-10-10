@@ -115,6 +115,7 @@ export const paths = {
       paymentsRefunds: `${ROOTS.APP}/settings/payments-refunds`,
       approvals: `${ROOTS.APP}/settings/approvals`,
       reasons: `${ROOTS.APP}/settings/reasons`,
+      customerFields: `${ROOTS.APP}/settings/customer-fields`,
       noteTemplates: `${ROOTS.APP}/settings/note-templates`,
       localization: `${ROOTS.APP}/settings/localization`,
       dataReset: `${ROOTS.APP}/settings/data-reset`,

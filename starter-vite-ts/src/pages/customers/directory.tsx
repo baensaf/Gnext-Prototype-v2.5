@@ -286,12 +286,6 @@ export function CustomersPage() {
             width: 170,
             renderCell: (params) => <span dir="ltr">{params.value}</span>,
           },
-          {
-            field: 'gender',
-            headerName: t('customers.register.gender'),
-            width: 100,
-            valueGetter: (value) => (value === 'MALE' ? t('customers.register.male') : value === 'FEMALE' ? t('customers.register.female') : '—'),
-          },
           ...(isHeadOffice
             ? [
                 {

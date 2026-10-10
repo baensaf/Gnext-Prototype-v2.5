@@ -10,9 +10,8 @@ export interface Customer {
   national_id?: string;
   /** Gregorian YYYY-MM-DD; the picker shows it in the chain's calendar. */
   birth_date?: string | null;
-  gender?: 'MALE' | 'FEMALE' | null;
-  /** Wedding date, Gregorian YYYY-MM-DD. */
-  marriage_date?: string | null;
+  /** Answers to head office's customer fields, by field id. */
+  custom_values?: Record<string, string | null>;
   /**
    * The chain refuses to serve this customer: they cannot be put on a new order at all.
    * Not the same as a blocked credit account, which only stops them paying on account.
@@ -53,12 +52,26 @@ export interface CustomerAddressDraft {
 export interface CustomerRegistration {
   name: string;
   mobile: string;
-  gender?: 'MALE' | 'FEMALE' | null;
   birth_date?: string;
-  marriage_date?: string;
+  custom_values?: Record<string, string | null>;
   credit_limit?: string;
   addresses?: CustomerAddressDraft[];
 }
+
+export type CustomFieldType = 'TEXT' | 'NUMBER' | 'DATE' | 'CHOICE';
+
+/** A question head office adds to every customer record, such as gender or a wedding date. */
+export interface CustomField {
+  id: string;
+  name: string;
+  data_type: CustomFieldType;
+  /** The answers a CHOICE field offers. */
+  options: string[];
+  is_required: boolean;
+  is_active: boolean;
+}
+
+export type CustomFieldDraft = Pick<CustomField, 'name' | 'data_type' | 'options' | 'is_required'>;
 
 export interface CustomerCreditAccount {
   id: string;
@@ -85,6 +98,22 @@ export interface CustomerPage {
 }
 
 export const customerApi = {
+  getCustomFields: async (includeArchived = false): Promise<CustomField[]> => {
+    const res = await httpClient.get('/api/v1/customer-fields', { params: includeArchived ? { includeArchived: 'true' } : undefined });
+    return res.data;
+  },
+  createCustomField: async (data: CustomFieldDraft): Promise<CustomField> => {
+    const res = await httpClient.post('/api/v1/customer-fields', data);
+    return res.data;
+  },
+  updateCustomField: async (id: string, data: Partial<CustomFieldDraft>): Promise<CustomField> => {
+    const res = await httpClient.patch(`/api/v1/customer-fields/${id}`, data);
+    return res.data;
+  },
+  archiveCustomField: async (id: string): Promise<void> => {
+    await httpClient.delete(`/api/v1/customer-fields/${id}`);
+  },
+
 
   /** Every customer, unpaged. Only for small lists (the V3 credit screens); the POS and the
    *  customers page search on the server instead. */

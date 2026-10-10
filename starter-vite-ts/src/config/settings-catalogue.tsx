@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import TuneIcon from '@mui/icons-material/Tune';
 import EventIcon from '@mui/icons-material/Event';
+import BadgeIcon from '@mui/icons-material/Badge';
 import GavelIcon from '@mui/icons-material/Gavel';
 import PrintIcon from '@mui/icons-material/Print';
 import ShieldIcon from '@mui/icons-material/Shield';
@@ -297,6 +298,15 @@ export function useSettingsCatalogue(): SettingCategory[] {
           icon: <ReceiptLongIcon sx={{ color: 'info.main' }} />,
           badge: { color: 'info', label: t('settings.hub.items.moadian.badge', 'Simulated') },
           tags: ['moadian', 'tax', 'e-invoice', 'vat', 'مودیان', 'مالیات', 'صورتحساب الکترونیکی'],
+        },
+        {
+          id: 'customerFields',
+          scope: 'ORG',
+          title: t('settings.hub.items.customerFields.title'),
+          description: t('settings.hub.items.customerFields.description'),
+          path: '/app/settings/customer-fields',
+          icon: <BadgeIcon sx={{ color: 'info.main' }} />,
+          tags: ['customers', 'fields', 'gender', 'birthday', 'wedding', 'مشتری', 'فیلد', 'جنسیت', 'ازدواج'],
         },
         {
           id: 'reasons',

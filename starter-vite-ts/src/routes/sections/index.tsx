@@ -72,6 +72,7 @@ import { ProductDetailPage } from 'src/pages/catalog/product-detail';
 import { NoteTemplatesPage } from 'src/pages/settings/note-templates';
 import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { PrintRoutingPage } from 'src/pages/operations/print-routing';
+import { CustomerFieldsPage } from 'src/pages/settings/customer-fields';
 import { CardTerminalsPage } from 'src/pages/operations/card-terminals';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 import { CourierDetailPage } from 'src/pages/operations/courier-detail';
@@ -288,6 +289,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/payments', element: <Navigate to="/app/settings/payments-refunds" replace /> },
       { path: 'settings/approvals', element: <ApprovalsSettingsPage /> },
       { path: 'settings/reasons', element: <ReasonCodesPage /> },
+      { path: 'settings/customer-fields', element: <CustomerFieldsPage /> },
       { path: 'settings/note-templates', element: <NoteTemplatesPage /> },
       { path: 'settings/localization', element: <MediaLocalizationDemoPage /> },
       { path: 'settings/data-reset', element: <DataResetPage /> },

@@ -83,6 +83,8 @@ const CHAIN_ONLY_PATHS = [
   '/app/settings/payments',
   '/app/settings/payments-refunds',
   '/app/settings/reasons',
+  // The customer record is the chain's, so its questions are asked the same at every branch.
+  '/app/settings/customer-fields',
   '/app/settings/localization',
   '/app/operations/branches',
   // Which PC may speak for a branch is decided centrally; a branch account could otherwise
