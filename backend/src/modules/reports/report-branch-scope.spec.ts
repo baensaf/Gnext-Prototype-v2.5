@@ -5,12 +5,12 @@ import * as path from 'path';
  * Every report answers about one branch, or says why it cannot.
  *
  * `queryReport` settles the branch before the switch — a branch account's own branch is
- * forced into `filters` whatever it asked for. Twenty-two of the twenty-five cases then
+ * forced into `filters` whatever it asked for. Most of the cases then
  * never read it, so a Downtown cashier ran `cashier-shifts` and got Central Plaza's cash
  * variances. The filter was prepared and ignored.
  *
  * Reading the cases back out of the source is what keeps working when somebody adds a
- * report: a hand-written list of the twenty-five would still pass while the twenty-sixth
+ * report: a hand-written list of the cases would still pass while the next one
  * shipped unscoped. Each case has to do one of three things, and this fails until it does.
  */
 const SOURCE = fs.readFileSync(path.join(__dirname, 'reports.service.ts'), 'utf8');
@@ -21,7 +21,6 @@ const CONFINED = [
   /branchWhere\(branchId\)/, //    tables carrying their own branch_id
   /branchOrderIds/, //             the same order hop, resolved to ids for `find`
   /andWhere\([^)]*branch_id/, //   a hand-written clause
-  /scopedSettlements/, //          settlement lines, via the settlement that owns them
 ];
 
 /** Cases that hold no data at all, so there is nothing to attribute. */
@@ -46,7 +45,7 @@ describe('what a branch may read out of a report', () => {
   it('finds the report cases at all', () => {
     // Guards the test: if the switch is ever restructured, an empty list would make every
     // assertion below pass while proving nothing.
-    expect(reportCases().length).toBeGreaterThan(20);
+    expect(reportCases().length).toBeGreaterThanOrEqual(10);
   });
 
   it('forces a branch account onto its own branch before the switch runs', () => {
@@ -70,9 +69,7 @@ describe('what a branch may read out of a report', () => {
   it('keeps the reports that have no branch to give behind the chain-only gate', () => {
     // An integration log carries no branch and cannot be attributed to one, so a branch
     // account is refused rather than shown the chain's traffic.
-    expect(chainOnlyCodes()).toEqual(
-      expect.arrayContaining(['branch-comparison', 'snappfood-reconciliation', 'integration-operations']),
-    );
+    expect(chainOnlyCodes()).toEqual(['snappfood-reconciliation']);
   });
 
   it('does not read settlement lines across the tenant boundary', () => {

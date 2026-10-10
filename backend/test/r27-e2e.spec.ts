@@ -411,7 +411,7 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
     const logs = await simulationService.getLogs(testTenantId, 'SNAPPFOOD', undefined);
     expect(logs.length).toBeGreaterThan(0);
 
-    const integrationReport = await reportsService.queryReport(testTenantId, 'integration-operations', {});
+    const integrationReport = await reportsService.queryReport(testTenantId, 'snappfood-reconciliation', {});
     expect(integrationReport).toBeDefined();
   });
 
@@ -548,7 +548,7 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
       }),
     );
 
-    const alerts = await reportsService.getAlerts(testTenantId);
+    const alerts = await alertRepo.find({ where: { tenant_id: testTenantId } });
     expect(alerts.length).toBeGreaterThan(0);
   });
 

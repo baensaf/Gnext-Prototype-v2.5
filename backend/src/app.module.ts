@@ -129,8 +129,6 @@ import { CashMovement } from './entities/CashMovement.entity';
 import { BusinessDayClose } from './entities/BusinessDayClose.entity';
 import { IntegrationLog } from './entities/IntegrationLog.entity';
 import { OperationalAlert } from './entities/OperationalAlert.entity';
-import { SavedReportView } from './entities/SavedReportView.entity';
-import { ReportExportJob } from './entities/ReportExportJob.entity';
 
 
 @Module({
@@ -172,7 +170,7 @@ import { ReportExportJob } from './entities/ReportExportJob.entity';
           CashierShift, CashMovement, BusinessDayClose,
           IntegrationLog,
           ImportJob, ImportRow,
-          OperationalAlert, SavedReportView, ReportExportJob,
+          OperationalAlert,
           Agent, AgentEnrolmentCode, AgentCommand, AgentRelease,
           NoteTemplate,
         ],
