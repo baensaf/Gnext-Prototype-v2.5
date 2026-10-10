@@ -382,8 +382,7 @@ export class CreditService {
   }
 
   // A repayment brings the balance back toward zero; it never takes it past zero, so an
-  // account does not turn into a prepaid wallet by being over-paid. Only a refund the manager
-  // already released (preApproved) may leave the balance above what was owed.
+  // account does not turn into a prepaid wallet by being over-paid.
   async postRepayment(
     tenantId: string,
     accountId: string,
@@ -407,7 +406,7 @@ export class CreditService {
       const signedAmount = repaymentAmount;
       const newBalance = MoneyUtil.add(acc.current_balance, signedAmount);
 
-      if (MoneyUtil.greaterThan(newBalance, '0.0000') && !dto.preApproved) {
+      if (MoneyUtil.greaterThan(newBalance, '0.0000')) {
         throw new BadRequestException({
           statusCode: 400,
           error: 'REPAYMENT_EXCEEDS_BALANCE_OWED',

@@ -32,7 +32,7 @@ export interface CreditAccount {
 export interface CreditEntry {
   id: string;
   account_id: string;
-  entry_type: 'PURCHASE' | 'REPAYMENT' | 'REFUND' | 'REVERSAL' | 'LOYALTY_CASHBACK' | 'LOYALTY_CASHBACK_REVERSAL';
+  entry_type: 'PURCHASE' | 'REPAYMENT' | 'REVERSAL' | 'LOYALTY_CASHBACK' | 'LOYALTY_CASHBACK_REVERSAL';
   amount: string;
   currency_code: string;
   order_id?: string;

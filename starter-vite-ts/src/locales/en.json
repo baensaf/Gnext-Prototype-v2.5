@@ -239,8 +239,6 @@
       "enterAmount": "Enter an amount first.",
       "overDue": "That is more than what is left to pay.",
       "remaining": "Remaining",
-      "clubCredit": "Club credit",
-      "clubCreditShort": "The customer has only {{amount}} {{currency}} of club credit.",
       "courierCollects": "The courier collects what is left",
       "statusFailed": "Failed",
       "statusWaiting": "Waiting",
@@ -249,10 +247,13 @@
       "due": "Due",
       "cash": "Cash",
       "card": "Card",
-      "balance": "Balance {{amount}}",
       "noCustomer": "No customer",
       "settled": "Paid in full",
-      "pay": "Pay"
+      "pay": "Pay",
+      "credit": "Customer credit",
+      "creditShort": "The customer can only buy {{amount}} {{currency}} more on credit.",
+      "available": "Available {{amount}}",
+      "unlimited": "No limit"
     },
     "directTerminalPay": "Direct Terminal Pay (PC-POS)",
     "itemSuspended": "86'd",
@@ -1441,7 +1442,6 @@
     "types": {
       "PURCHASE": "Credit sale",
       "REPAYMENT": "Repayment",
-      "REFUND": "Refund",
       "REVERSAL": "Sale reversed",
       "LOYALTY_CASHBACK": "Cashback",
       "LOYALTY_CASHBACK_REVERSAL": "Cashback reversed"
