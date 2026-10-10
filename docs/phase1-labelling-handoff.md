@@ -38,6 +38,12 @@ prototype rather than labelled F:
 - **Built-in gender and wedding date.** Head office adds its own customer questions on
   Settings → Customer fields (V1); existing answers became two fields.
 
+The same day these F features went too: stop reasons, stop time limits and the stop PIN; the
+"taken offline" marker; the past-dates check; the online payment gateway device; the audit
+explorer and the delivery and customer audit tabs; serial, label and fallback printers;
+production-kitchen and office branches; customer import; blocking a customer; the currencies
+screen; Moadian; and the inventory preview report. Simulators and test tools stay.
+
 Moved to V4: failing a delivery and swapping the rider, the courier "working today" check-in,
 and a mobile card reader per courier. The kiosk stays V3.
 
