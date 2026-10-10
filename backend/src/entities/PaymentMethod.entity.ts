@@ -21,7 +21,7 @@ export class PaymentMethod {
   name: string;
 
   @Column({ type: 'varchar', length: 30 })
-  kind: string; // CASH, CREDIT, NETWORK_POS, MOBILE_POS, ONLINE, BANK_TRANSFER, TARA_PAY
+  kind: string; // CASH, CREDIT, NETWORK_POS, MOBILE_POS, BANK_TRANSFER; ONLINE is the one Snappfood's prepaid orders use
 
   @Column({ type: 'char', length: 3, nullable: true })
   currency_code: string;

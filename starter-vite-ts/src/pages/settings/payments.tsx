@@ -438,7 +438,7 @@ export function PaymentSettingsPage() {
               value={formCode}
               onChange={(e) => setFormCode(e.target.value)}
               disabled={Boolean(editingMethod)}
-              placeholder={t('settings.paymentsPage.formCodePlaceholder', 'e.g. CARD_POS, CASH, TARA_PAY')}
+              placeholder={t('settings.paymentsPage.formCodePlaceholder', 'e.g. CARD_POS, CASH')}
             />
 
             <TextField
@@ -461,9 +461,12 @@ export function PaymentSettingsPage() {
                 <MenuItem value="CARD">{t('settings.paymentsPage.kinds.CARD', 'Card / EFT POS')}</MenuItem>
                 <MenuItem value="POS">{t('settings.paymentsPage.kinds.POS', 'Mobile POS (Courier)')}</MenuItem>
                 <MenuItem value="CREDIT">{t('settings.paymentsPage.kinds.CREDIT', 'Customer Credit Account')}</MenuItem>
-                <MenuItem value="ONLINE">{t('settings.paymentsPage.kinds.ONLINE', 'Online Payment Gateway')}</MenuItem>
+                {/* The method Snappfood's prepaid orders are recorded under; it is kept, not offered as a new kind. */}
+                {formKind === 'ONLINE' && (
+                  <MenuItem value="ONLINE">{t('settings.paymentsPage.kinds.ONLINE', 'Online Payment Gateway')}</MenuItem>
+                )}
                 <MenuItem value="BANK_TRANSFER">{t('settings.paymentsPage.kinds.BANK_TRANSFER', 'Bank Transfer / Sheba')}</MenuItem>
-                <MenuItem value="OTHER">{t('settings.paymentsPage.kinds.OTHER', 'Other / Tara Pay')}</MenuItem>
+                <MenuItem value="OTHER">{t('settings.paymentsPage.kinds.OTHER', 'Other')}</MenuItem>
               </Select>
             </FormControl>
 
