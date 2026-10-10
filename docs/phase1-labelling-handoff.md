@@ -47,6 +47,36 @@ screen; Moadian; and the inventory preview report. Simulators and test tools sta
 Moved to V4: failing a delivery and swapping the rider, the courier "working today" check-in,
 and a mobile card reader per courier. The kiosk stays V3.
 
+**Simplified again on 2026-10-11 (S-11).** An audit against Iran Burger's HAMI backups found
+more built than V1–V4 need. Removed from the prototype:
+
+- **Refunds** are one full refund of a completed order (V2), with a reason and a manager's PIN;
+  each payment goes back by its own method. No partial or per-line refunds, no refund methods
+  or refund policy switches (Y-10).
+- **Coupons**, the coupon field at the POS and the coupon test bench.
+- **Customer credit** (V3) is an account with a limit, selling on credit at the till up to the
+  limit, the balance with its transactions, and repayments. No statements, adjustments,
+  suspending, aging, limit override or prepaid top-up (U-12). Customer merge, duplicates, tags,
+  consents and segments are gone.
+- **Delivery** stays V1 in every version: no check-in, availability, courier page, moving
+  couriers, card reader per courier, failing or swapping a delivery, settlement review step or
+  fleet roll-up (D-12). The failing, check-in and card-reader rows above are now Removed.
+- **Shift close** is one step: counted cash in, difference stored. No blind count, difference
+  reason, tolerance or recount PIN, open-orders PIN (now a notice), safe drops or shift roll-up;
+  the shift policy is the opening float only (P-12).
+- **Reports** are sales, products, payments by method, discounts, cashier shifts, courier
+  settlements and tax (V2), plus Snappfood and customer credit (V3). 13 reports, saved views,
+  export jobs and report alerts are gone. The order drawer's change history now reads
+  `GET /orders/:id/changes`.
+- **Catalog:** the packaging price (a Snappfood order still records Snappfood's packaging),
+  selling windows, today's stock, the 86 report and scheduled price changes.
+- **Monitoring** and every operational alert, with the notifications bell.
+- **Leftovers:** the Preparing and Ready order states, the Menu tables, the Tara Pay payment
+  kind (Online stays internal for Snappfood prepaid orders).
+
+Kept on purpose: the kiosk, the approval engine, zone drawing, the agent's screens, receipt
+copies and templates, discount tiers, call-number ranges and product photos.
+
 ## Where the decisions live
 
 Since 2026-10-10 the master copies are `decisions/register.md` and `decisions/feature-labels.md`
