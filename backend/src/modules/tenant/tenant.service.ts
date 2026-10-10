@@ -17,7 +17,8 @@ import { isHhMm, isTimeZone } from '../../common/utils/business-day';
 import { hoursProblem } from '../../common/utils/opening-hours';
 import { OPEN_STATUSES } from '../order/order-list';
 
-const BRANCH_TYPES: BranchType[] = ['RESTAURANT', 'COMMISSARY', 'OFFICE'];
+// Every branch is a restaurant: production kitchens and offices were removed (2026-10-10).
+const BRANCH_TYPES: BranchType[] = ['RESTAURANT'];
 
 /** What head office may set on a branch. Status, history and the timeline are not on this list. */
 export interface BranchInput {

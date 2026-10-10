@@ -123,7 +123,6 @@ export const FEATURE_LABELS = {
   'credit.aging': 'V4',
   'coupons.testBench': 'F',
   // Operations
-  'branches.nonSellingTypes': 'F',
   'terminals.kiosk': 'V3',
   'printers.simulated': 'F',
   'printQueue.simulate': 'F',

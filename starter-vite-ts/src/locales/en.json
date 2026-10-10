@@ -3483,13 +3483,7 @@
       "createError": "Failed to create branch",
       "archiveError": "Failed to archive branch",
       "noBranches": "No branches found. Click \"Create Branch\" to add one.",
-      "type": "Type",
-      "typeHint": "Only a restaurant takes customer orders. Production kitchens and offices get no POS, kiosk or kitchen display, and are left out of sales comparisons.",
-      "types": {
-        "restaurant": "Restaurant",
-        "commissary": "Production Kitchen",
-        "office": "Office"
-      }
+      "types": {}
     },
     "branchDetail": {
       "title": "Branch Operating Hours Schedule",
@@ -3811,11 +3805,7 @@
     "headOfficeCode": "ORG",
     "headOfficeHint": "Chain-wide view, no single store",
     "manage": "Manage Branches",
-    "type": {
-      "restaurant": "Restaurant",
-      "commissary": "Production kitchen — no sales",
-      "office": "Office — no sales"
-    }
+    "type": {}
   },
   "access": {
     "deniedTitle": "Not available for your role",

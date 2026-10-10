@@ -235,13 +235,6 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
                 <Typography noWrap variant="body2" sx={{ fontWeight: branch.id === selectedBranchId ? 700 : 500 }}>
                   {branch.name}
                 </Typography>
-                <Typography noWrap variant="caption" color="text.secondary">
-                  {branch.branch_type === 'COMMISSARY'
-                    ? t('branchScope.type.commissary', 'Production kitchen — no sales')
-                    : branch.branch_type === 'OFFICE'
-                      ? t('branchScope.type.office', 'Office — no sales')
-                      : t('branchScope.type.restaurant', 'Restaurant')}
-                </Typography>
               </Box>
             </MenuItem>
           ))}
