@@ -18,6 +18,7 @@ import { CreditService } from './credit.service';
 import { CustomerController } from './customer.controller';
 import { CreditController } from './credit.controller';
 import { AuditModule } from '../audit/audit.module';
+import { CustomFieldsService } from './custom-fields.service';
 
 @Module({
   imports: [
@@ -38,8 +39,8 @@ import { AuditModule } from '../audit/audit.module';
     ]),
     AuditModule,
   ],
-  providers: [CustomerService, CreditService],
+  providers: [CustomerService, CreditService, CustomFieldsService],
   controllers: [CustomerController, CreditController],
-  exports: [CustomerService, CreditService],
+  exports: [CustomerService, CreditService, CustomFieldsService],
 })
 export class CustomerModule {}

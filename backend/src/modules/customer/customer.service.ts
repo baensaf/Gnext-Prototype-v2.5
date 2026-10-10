@@ -75,14 +75,6 @@ export function normalizeBirthDate(raw?: string | null, field = 'birth_date'): s
   return datePart;
 }
 
-export function normalizeGender(raw?: string | null): 'MALE' | 'FEMALE' | null {
-  if (!raw) return null;
-  const value = String(raw).trim().toUpperCase();
-  if (!value) return null;
-  if (value !== 'MALE' && value !== 'FEMALE') throw new BadRequestException('gender is MALE or FEMALE');
-  return value;
-}
-
 /** A delivery address typed with the customer, or added later. The map pin is optional. */
 export interface CustomerAddressInput {
   title?: string;
@@ -265,8 +257,6 @@ export class CustomerService {
       email?: string;
       national_id?: string;
       birth_date?: string;
-      gender?: string | null;
-      marriage_date?: string | null;
       credit_limit?: string;
       /** Delivery addresses typed with the customer; the first is the default. */
       addresses?: CustomerAddressInput[];
@@ -278,8 +268,6 @@ export class CustomerService {
     if (fullName === '') throw new BadRequestException({ code: 'NAME_REQUIRED', message: 'A customer needs a name' });
     // Checked before anything is saved, so a bad address doesn't leave a customer behind.
     const addresses = (Array.isArray(data.addresses) ? data.addresses : []).map(normalizeAddress);
-    const gender = normalizeGender(data.gender);
-    const marriageDate = normalizeBirthDate(data.marriage_date, 'marriage_date');
 
     const normMobile = normalizePhone(data.mobile);
     const rawMobile = data.mobile ? data.mobile.trim() : '';
@@ -322,8 +310,6 @@ export class CustomerService {
       email: data.email || null,
       national_id: data.national_id || null,
       birth_date: normalizeBirthDate(data.birth_date),
-      gender,
-      marriage_date: marriageDate,
       is_active: true,
     });
 
@@ -391,8 +377,6 @@ export class CustomerService {
       email?: string | null;
       national_id?: string | null;
       birth_date?: string | null;
-      gender?: string | null;
-      marriage_date?: string | null;
       is_active?: boolean;
     },
     correlationId?: string,
@@ -412,8 +396,6 @@ export class CustomerService {
     if (data.email !== undefined) customer.email = data.email?.trim() || null;
     if (data.national_id !== undefined) customer.national_id = data.national_id?.trim() || null;
     if (data.birth_date !== undefined) customer.birth_date = normalizeBirthDate(data.birth_date);
-    if (data.gender !== undefined) customer.gender = normalizeGender(data.gender);
-    if (data.marriage_date !== undefined) customer.marriage_date = normalizeBirthDate(data.marriage_date, 'marriage_date');
     if (data.is_active !== undefined) customer.is_active = Boolean(data.is_active);
     customer.updated_by = actorId || null;
 

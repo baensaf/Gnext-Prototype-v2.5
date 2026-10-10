@@ -1633,11 +1633,7 @@
       "name": "Name",
       "mobile": "Mobile",
       "mobileHelper": "Also the customer code",
-      "gender": "Gender",
-      "male": "Male",
-      "female": "Female",
       "birthDate": "Birthday (optional)",
-      "marriageDate": "Wedding date (optional)",
       "creditLimit": "Credit limit",
       "addresses": "Delivery addresses",
       "addAddress": "Add address",
@@ -1657,7 +1653,8 @@
         "mobileExists": "A customer with this mobile is already registered",
         "invalidMobile": "That is not a mobile number",
         "addressText": "Each address needs its text",
-        "saveFailed": "Could not register the customer"
+        "saveFailed": "Could not register the customer",
+        "fieldRequired": "{{name}} is required"
       }
     }
   },
@@ -3242,6 +3239,10 @@
         "printRouting": {
           "title": "Print routing",
           "description": "Which kitchen printer prints which categories and products."
+        },
+        "customerFields": {
+          "title": "Customer fields",
+          "description": "Questions asked when a customer is registered, such as gender or a wedding date."
         }
       },
       "scopeLegend": "Organization settings are defined once at head office and apply to every branch. Per-branch settings are configured separately at each location.",
@@ -3367,6 +3368,33 @@
       "saveSuccess": "Business day saved for every branch that follows head office.",
       "loadError": "Failed to load the business day settings",
       "saveError": "Failed to save the business day settings"
+    },
+    "customerFields": {
+      "title": "Customer fields",
+      "hint": "Each field is asked on the register form at every branch. Archiving a field stops asking it; the answers already given stay on the customer.",
+      "add": "Add field",
+      "editTitle": "Edit field",
+      "edit": "Edit {{name}}",
+      "archive": "Archive {{name}}",
+      "archiveTitle": "Archive this field?",
+      "archiveContent": "\"{{name}}\" will no longer be asked. Answers customers already gave are kept.",
+      "archiveConfirm": "Archive",
+      "empty": "No customer fields yet.",
+      "colName": "Name",
+      "colType": "Type",
+      "colChoices": "Choices",
+      "choicesHint": "Type a choice and press Enter. At least two.",
+      "required": "Required",
+      "requiredLabel": "Required when registering a customer",
+      "saved": "{{name}} saved",
+      "saveError": "Could not save the field",
+      "loadError": "Could not load customer fields",
+      "types": {
+        "TEXT": "Text",
+        "NUMBER": "Number",
+        "DATE": "Date",
+        "CHOICE": "Choice"
+      }
     }
   },
   "inventory": {
