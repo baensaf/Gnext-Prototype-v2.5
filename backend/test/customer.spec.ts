@@ -181,55 +181,6 @@ describe('CustomerService (Unit)', () => {
     });
   });
 
-  describe('blocking a customer', () => {
-    beforeEach(() => {
-      customerRepo.findOne.mockResolvedValue({
-        id: 'c-9',
-        tenant_id: 't-1',
-        first_name: 'Reza',
-        last_name: 'Karimi',
-        is_blocked: false,
-      });
-      customerRepo.save.mockImplementation((c: any) => Promise.resolve(c));
-    });
-
-    it('records who, when and why, so the cashier can be told', async () => {
-      const saved = await service.setBlocked(
-        't-1',
-        'c-9',
-        true,
-        '  repeated false addresses  ',
-        'corr-5',
-        'u-1',
-      );
-
-      expect(saved.is_blocked).toBe(true);
-      expect(saved.blocked_reason).toBe('repeated false addresses');
-      expect(saved.blocked_by).toBe('u-1');
-      expect(saved.blocked_at).toBeInstanceOf(Date);
-      expect(auditWriter.write).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'CUSTOMER_BLOCKED' }),
-      );
-    });
-
-    it('refuses to block without a reason', async () => {
-      await expect(service.setBlocked('t-1', 'c-9', true, '   ', 'corr-6', 'u-1')).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('clears the reason and the stamps when the block is lifted', async () => {
-      const saved = await service.setBlocked('t-1', 'c-9', false, undefined, 'corr-7', 'u-2');
-
-      expect(saved.is_blocked).toBe(false);
-      expect(saved.blocked_reason).toBeNull();
-      expect(saved.blocked_at).toBeNull();
-      expect(saved.blocked_by).toBeNull();
-      expect(auditWriter.write).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'CUSTOMER_UNBLOCKED' }),
-      );
-    });
-  });
 
   it('should throw BadRequestException if mobile phone is empty and no code is provided', async () => {
     await expect(

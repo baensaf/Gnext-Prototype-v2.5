@@ -117,7 +117,6 @@ export const FEATURE_LABELS = {
   'pricing.listPrices': 'V4',
   'pricing.addonPrices': 'V4',
   // Customers and credit
-  'customers.block': 'F',
   'customers.credit': 'V3',
   'credit.aging': 'V4',
   'coupons.testBench': 'F',

@@ -3,10 +3,9 @@ import type { Customer } from 'src/api/customerApi';
 import { useTranslation } from 'react-i18next';
 import React, { useRef, useState, useEffect } from 'react';
 
-import BlockIcon from '@mui/icons-material/Block';
 import SearchIcon from '@mui/icons-material/Search';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
-import { Box, Chip, Stack, TextField, Typography, Autocomplete, InputAdornment, CircularProgress } from '@mui/material';
+import { Box, Stack, TextField, Typography, Autocomplete, InputAdornment, CircularProgress } from '@mui/material';
 
 import { localMobile } from 'src/utils/phone';
 
@@ -164,7 +163,6 @@ export function PosCustomerPicker({ value, onChange, search, onRegister, placeho
                   {localMobile(c.mobile)}
                 </Typography>
               </Box>
-              {c.is_blocked && <Chip size="small" color="error" icon={<BlockIcon />} label={t('customers.directory.blocked')} />}
             </Stack>
           </Box>
         );
