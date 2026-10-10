@@ -25,7 +25,6 @@ import { OutboxWriter } from '../src/modules/outbox/outbox-writer.service';
 import { ApprovalService } from '../src/modules/approval/approval.service';
 import { CatalogService } from '../src/modules/catalog/catalog.service';
 import { RefundService } from '../src/modules/refund/refund.service';
-import { KdsService } from '../src/modules/kds/kds.service';
 import { PrintQueueService } from '../src/modules/printing/print-queue.service';
 import { SimulationService } from '../src/modules/simulation/simulation.service';
 import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
@@ -36,9 +35,7 @@ import { NON_REVENUE_ORDER_STATES } from '../src/common/utils/business-date.util
 describe('the store accepts or rejects an incoming aggregator order', () => {
   let service: OrderService;
   let orderRepo: any;
-  let em: any;
-  let kdsService: any;
-  let printQueueService: any;
+  let em: any;  let printQueueService: any;
   let simulationService: any;
   let openShifts: any[];
 
@@ -67,9 +64,7 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
       // A shift is open at the branch unless a test shuts it.
       find: jest.fn((entity) => Promise.resolve(entity === CashierShift ? openShifts : [])),
       getRepository: jest.fn(),
-    };
-    kdsService = { generateTicketsForOrder: jest.fn().mockResolvedValue([]) };
-    printQueueService = { enqueueOrderPrintJobs: jest.fn().mockResolvedValue([]) };
+    };    printQueueService = { enqueueOrderPrintJobs: jest.fn().mockResolvedValue([]) };
     simulationService = {
       notifyAccepted: jest.fn().mockResolvedValue({ status: 204, statusCode: 42 }),
       notifyRejected: jest.fn().mockResolvedValue({ status: 204, statusCode: 51 }),
@@ -102,9 +97,7 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
         { provide: AuditWriter, useValue: { write: jest.fn() } },
         { provide: OutboxWriter, useValue: { enqueueInTransaction: jest.fn(), enqueue: jest.fn() } },
         { provide: ApprovalService, useValue: {} },
-        { provide: DataSource, useValue: { transaction: jest.fn(async (cb) => await cb(em)) } },
-        { provide: KdsService, useValue: kdsService },
-        { provide: PrintQueueService, useValue: printQueueService },
+        { provide: DataSource, useValue: { transaction: jest.fn(async (cb) => await cb(em)) } },        { provide: PrintQueueService, useValue: printQueueService },
         { provide: SimulationService, useValue: simulationService },
         OrderTransitionRecorder,
       ],
@@ -123,8 +116,6 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
       expect(savedStateEvents()).toEqual([
         expect.objectContaining({ from_state: 'PENDING_ACCEPTANCE', to_state: 'CONFIRMED', action: 'ACCEPT', occurred_by: 'user-1' }),
       ]);
-      expect(kdsService.generateTicketsForOrder).toHaveBeenCalledTimes(1);
-      expect(kdsService.generateTicketsForOrder).toHaveBeenCalledWith('t-1', 'order-1', undefined);
       expect(printQueueService.enqueueOrderPrintJobs).toHaveBeenCalledTimes(1);
       expect(printQueueService.enqueueOrderPrintJobs).toHaveBeenCalledWith('t-1', 'order-1', 'KITCHEN_TICKET', false, undefined, 'user-1');
       expect(simulationService.notifyAccepted).toHaveBeenCalledWith('t-1', 'SF-304', { deliveryTime: 25 });
@@ -185,7 +176,6 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
 
       await expect(service.acceptIncomingOrder('t-1', 'order-1', { prepMinutes: 25 })).rejects.toBeInstanceOf(ConflictException);
 
-      expect(kdsService.generateTicketsForOrder).not.toHaveBeenCalled();
       expect(printQueueService.enqueueOrderPrintJobs).not.toHaveBeenCalled();
       expect(simulationService.notifyAccepted).not.toHaveBeenCalled();
     });
@@ -199,7 +189,6 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
       expect(refused).toBeInstanceOf(ConflictException);
       expect(refused.getResponse()).toEqual(expect.objectContaining({ code: 'NO_OPEN_SHIFT' }));
       expect(em.save).not.toHaveBeenCalled();
-      expect(kdsService.generateTicketsForOrder).not.toHaveBeenCalled();
       expect(printQueueService.enqueueOrderPrintJobs).not.toHaveBeenCalled();
       expect(simulationService.notifyAccepted).not.toHaveBeenCalled();
     });
@@ -228,7 +217,6 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
       await service.acceptIncomingOrder('t-1', 'order-1', { prepMinutes: 25 });
 
       expect(simulationService.notifyAccepted).not.toHaveBeenCalled();
-      expect(kdsService.generateTicketsForOrder).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -243,7 +231,6 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
       expect(event).toEqual(expect.objectContaining({ from_state: 'PENDING_ACCEPTANCE', to_state: 'REJECTED', action: 'REJECT' }));
       expect(event.reason_text).toContain('NO_COURIER');
       expect(event.reason_text).toContain('No rider tonight');
-      expect(kdsService.generateTicketsForOrder).not.toHaveBeenCalled();
       expect(printQueueService.enqueueOrderPrintJobs).not.toHaveBeenCalled();
       expect(simulationService.notifyRejected).toHaveBeenCalledWith('t-1', 'SF-304', { reasonId: 113, comment: 'No rider tonight' });
     });
@@ -298,7 +285,6 @@ describe('the store accepts or rejects an incoming aggregator order', () => {
         // Snappfood refuses a reject without one of its decline reasons.
         expect.objectContaining({ reasonId: 153, comment: expect.stringContaining('5 min') }),
       );
-      expect(kdsService.generateTicketsForOrder).not.toHaveBeenCalled();
     });
 
     it('leaves alone an order a cashier answered a moment earlier', async () => {

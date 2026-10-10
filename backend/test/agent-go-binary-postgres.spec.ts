@@ -14,8 +14,7 @@ import { AdminUser } from '../src/entities/AdminUser.entity';
 import { Category } from '../src/entities/Category.entity';
 import { Product } from '../src/entities/Product.entity';
 import { Printer } from '../src/entities/Printer.entity';
-import { KitchenStation } from '../src/entities/KitchenStation.entity';
-import { KdsRoutingRule } from '../src/entities/KdsRoutingRule.entity';
+import { PrintRoute } from '../src/entities/PrintRoute.entity';
 import { PrintJob } from '../src/entities/PrintJob.entity';
 import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { PaymentDevice } from '../src/entities/PaymentDevice.entity';
@@ -116,9 +115,8 @@ const bin = process.env.GNEXT_AGENT_BIN;
         agent_connection: { kind: 'tcp', host: '127.0.0.1', port: printerPort },
       })
     ).id;
-    // Receipts find it as the branch's receipt printer; the food's station prints its chits on it too.
-    const station = await save(KitchenStation, { tenant_id: tenantId, branch_id: branchId, code: 'GOA-ST', name: 'Counter', printer_ids: [printerId] });
-    await save(KdsRoutingRule, { tenant_id: tenantId, branch_id: branchId, category_id: category.id, station_id: station.id });
+    // Receipts find it as the branch's receipt printer; the food's category prints its chits on it too.
+    await save(PrintRoute, { tenant_id: tenantId, branch_id: branchId, category_id: category.id, printer_id: printerId });
     cardMethodId = (await save(PaymentMethod, { tenant_id: tenantId, code: 'CARD_POS', name: 'Bank card', kind: 'CARD_POS', is_active: true })).id;
     const terminalId = (await save(PaymentDevice, { tenant_id: tenantId, branch_id: branchId, code: 'GOA-POS', name: 'Counter terminal', kind: 'POS' })).id;
     await payments.setDeviceAgent(tenantId, terminalId, { agentConnection: { kind: 'tcp', host: '127.0.0.1', port: 8888 }, agentDriver: 'fake' });

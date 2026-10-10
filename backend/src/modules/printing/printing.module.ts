@@ -7,8 +7,7 @@ import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { Product } from '../../entities/Product.entity';
-import { KdsRoutingRule } from '../../entities/KdsRoutingRule.entity';
-import { KitchenStation } from '../../entities/KitchenStation.entity';
+import { PrintRoute } from '../../entities/PrintRoute.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { PrintRenderService } from './print-render.service';
 import { PrintRoutingService } from './print-routing.service';
@@ -28,8 +27,7 @@ import { AgentPrintingService } from './agent-printing.service';
       Branch,
       OperationalAlert,
       Product,
-      KdsRoutingRule,
-      KitchenStation,
+      PrintRoute,
       Terminal,
     ]),
     AuditModule,

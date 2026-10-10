@@ -18,7 +18,6 @@ import Page404 from 'src/pages/error/404';
 import { LoginPage } from 'src/pages/login';
 import { AppShell } from 'src/layouts/AppShell';
 import { KioskPage } from 'src/pages/pos/kiosk';
-import { KdsPage } from 'src/pages/operations/kds';
 import { PosOrderPage } from 'src/pages/pos/order';
 import { DashboardPage } from 'src/pages/dashboard';
 import { ReceiptPage } from 'src/pages/pos/receipt';
@@ -73,6 +72,7 @@ import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
 import { ProductDetailPage } from 'src/pages/catalog/product-detail';
 import { NoteTemplatesPage } from 'src/pages/settings/note-templates';
 import { BranchDetailPage } from 'src/pages/operations/branch-detail';
+import { PrintRoutingPage } from 'src/pages/operations/print-routing';
 import { CardTerminalsPage } from 'src/pages/operations/card-terminals';
 import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 import { CourierDetailPage } from 'src/pages/operations/courier-detail';
@@ -84,7 +84,6 @@ import { BusinessDaySettingsPage } from 'src/pages/settings/business-day';
 import { CustomerProfilePage } from 'src/pages/customers/customer-profile';
 import { IncomingOrdersProvider } from 'src/contexts/incoming-orders-context';
 import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
-import { KdsConfigurationPage } from 'src/pages/operations/kds-configuration';
 import { SettlementDetailPage } from 'src/pages/operations/settlement-detail';
 import { OrderWorkflowSettingsPage } from 'src/pages/settings/order-workflow';
 import DiscountAuthorizationsPage from 'src/pages/settings/discount-authorizations';
@@ -212,7 +211,6 @@ export const routesSection: RouteObject[] = [
       { path: 'orders/incoming', element: <RequiresBranch><IncomingOrdersPage /></RequiresBranch> },
       { path: 'orders/:id', element: <OrderRedirect /> },
       { path: 'dine-in/floor', element: <RequiresBranch><DineInPage /></RequiresBranch> },
-      { path: 'kds', element: <RequiresBranch><KdsPage /></RequiresBranch> },
       { path: 'delivery', element: <Navigate to="/app/delivery/orders" replace /> },
       { path: 'delivery/orders', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
       { path: 'delivery/couriers', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
@@ -262,7 +260,8 @@ export const routesSection: RouteObject[] = [
       { path: 'operations/branches/:id', element: <BranchDetailPage /> },
       { path: 'operations/terminals', element: <RequiresBranch><TerminalsPage /></RequiresBranch> },
       { path: 'operations/card-terminals', element: <RequiresBranch><CardTerminalsPage /></RequiresBranch> },
-      { path: 'operations/kds-configuration', element: <RequiresBranch><KdsConfigurationPage /></RequiresBranch> },
+      { path: 'operations/print-routing', element: <RequiresBranch><PrintRoutingPage /></RequiresBranch> },
+      { path: 'operations/kds-configuration', element: <Navigate to="/app/operations/print-routing" replace /> },
       { path: 'operations/printers', element: <RequiresBranch><PrintersPage /></RequiresBranch> },
       { path: 'operations/print-queue', element: <RequiresBranch><PrintQueuePage /></RequiresBranch> },
       { path: 'print-queue', element: <Navigate to="/app/operations/print-queue" replace /> },

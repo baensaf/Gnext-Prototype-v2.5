@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Req, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Query, Body, Req, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Request } from 'express';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityTarget, Repository } from 'typeorm';
@@ -6,13 +6,13 @@ import { Printer } from '../../entities/Printer.entity';
 import { PrintJob } from '../../entities/PrintJob.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { PrintQueueService } from './print-queue.service';
-import { detachPrinter } from './print-routing.service';
+import { detachPrinter, PrintRoutingService } from './print-routing.service';
 import { AgentConfigService } from '../agent-gateway/agent-config.service';
 import { parseDeviceConnection } from '../../common/utils/device-connection.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
-import { CreatePrinterDto, UpdatePrinterDto } from './dtos/printing-config.dto';
+import { CreatePrinterDto, SetPrinterRoutesDto, UpdatePrinterDto } from './dtos/printing-config.dto';
 
 @Controller('api/v1')
 export class PrintersController {
@@ -21,6 +21,7 @@ export class PrintersController {
     private readonly queueService: PrintQueueService,
     private readonly auditWriter: AuditWriter,
     private readonly agentConfig: AgentConfigService,
+    private readonly routingService: PrintRoutingService,
   ) {}
 
   /** Printers the agent can reach over the network, through Windows, or on a serial port. */
@@ -199,9 +200,45 @@ export class PrintersController {
       body.reason || 'Order Reprint Request',
       userId,
       body.printerId || body.printer_id,
-      // One station's chit only.
-      body.stationId || body.station_id,
+      // One printer's chit only.
+      body.onlyPrinterId || body.only_printer_id,
     );
+  }
+
+  // 3. Print routing: which kitchen printers print which categories and products.
+  @Get('print-routes')
+  async getRoutes(@Query('branchId') branchId: string, @Req() req: Request) {
+    if (!branchId) throw new BadRequestException('branchId is required');
+    return await this.routingService.routes((req as any).tenantId, branchId);
+  }
+
+  @BranchOwned(Printer)
+  @Roles(...MANAGER_AND_ABOVE)
+  @Put('printers/:id/routes')
+  async setRoutes(@Param('id') id: string, @Body() body: SetPrinterRoutesDto, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const saved = await this.routingService.setRoutes(tenantId, id, body.category_ids || [], body.product_ids || []);
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId: (req as any).userId,
+      action: 'PRINT_ROUTES_SET',
+      entityType: 'Printer',
+      entityId: id,
+      correlationId: (req as any).correlationId,
+      afterData: saved,
+    });
+    return saved;
+  }
+
+  @BranchOwned(Printer)
+  @Roles(...MANAGER_AND_ABOVE)
+  @Post('printers/:id/kitchen-default')
+  async setKitchenDefault(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const printer = await this.routingService.setKitchenDefault(tenantId, id);
+    await this.pushConfig(tenantId, printer.branch_id);
+    return printer;
   }
 
   // Marking a job printed or failed by hand is a manager's call, and only on their own

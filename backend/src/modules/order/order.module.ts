@@ -24,7 +24,6 @@ import { DiscountsModule } from '../discounts/discounts.module';
 import { CustomerModule } from '../customer/customer.module';
 import { AuditModule } from '../audit/audit.module';
 import { OutboxModule } from '../outbox/outbox.module';
-import { KdsModule } from '../kds/kds.module';
 import { PrintingModule } from '../printing/printing.module';
 import { DeliveryModule } from '../delivery/delivery.module';
 import { ApprovalModule } from '../approval/approval.module';
@@ -55,7 +54,6 @@ import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module'
     CustomerModule,
     AuditModule,
     OutboxModule,
-    KdsModule,
     PrintingModule,
     DeliveryModule,
     ApprovalModule,

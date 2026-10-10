@@ -1,5 +1,5 @@
-import type { PrinterDevice } from 'src/api/kdsApi';
 import type { PaymentDevice } from 'src/api/paymentApi';
+import type { PrinterDevice } from 'src/api/printingApi';
 import type { Branch, Terminal } from 'src/api/tenantApi';
 
 import { useTranslation } from 'react-i18next';
@@ -34,9 +34,9 @@ import {
   CircularProgress,
 } from '@mui/material';
 
-import { kdsApi } from 'src/api/kdsApi';
 import { tenantApi } from 'src/api/tenantApi';
 import { paymentApi } from 'src/api/paymentApi';
+import { printingApi } from 'src/api/printingApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
 
 import { VersionTag } from 'src/components/version-tag';
@@ -61,7 +61,7 @@ export function TerminalsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
-  const [terminalType, setTerminalType] = useState<'CASHIER' | 'KIOSK' | 'KDS'>('CASHIER');
+  const [terminalType, setTerminalType] = useState<'CASHIER' | 'KIOSK'>('CASHIER');
   // The create form starts at the branch you are working in, which is nearly always
   // the one you are registering a terminal for.
   const [branchId, setBranchId] = useScopedBranchId();
@@ -83,7 +83,7 @@ export function TerminalsPage() {
       setTerminals(tList || []);
       const devices = await paymentApi.getDevices(selectedBranchId || undefined).catch(() => []);
       setCardTerminals((devices || []).filter((d) => d.is_active && d.agent_connection && d.agent_driver));
-      const printerList = await kdsApi.getPrinters(selectedBranchId || undefined).catch(() => []);
+      const printerList = await printingApi.getPrinters(selectedBranchId || undefined).catch(() => []);
       setPrinters((printerList || []).filter((p) => p.is_active));
       setError(null);
     } catch (err: any) {
@@ -160,7 +160,6 @@ export function TerminalsPage() {
     switch (type) {
       case 'CASHIER': return 'primary';
       case 'KIOSK': return 'secondary';
-      case 'KDS': return 'warning';
       default: return 'default';
     }
   };
@@ -274,10 +273,7 @@ export function TerminalsPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {item.terminal_type === 'KDS' ? (
-                            '—'
-                          ) : (
-                            // Where this till's receipts, bills and courier slips come out.
+                            {/* Where this till's receipts, bills and courier slips come out. */}
                             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                               <Select
                                 size="small"
@@ -324,7 +320,6 @@ export function TerminalsPage() {
                                 <MenuItem value="DETAILED">{t('operations.printers.templates.DETAILED')}</MenuItem>
                               </Select>
                             </Stack>
-                          )}
                         </TableCell>
                         <TableCell>
                           <Chip
@@ -416,7 +411,6 @@ export function TerminalsPage() {
                 >
                   <MenuItem value="CASHIER">{t('operations.terminals.types.POS', 'CASHIER (POS Touch)')}</MenuItem>
                   <MenuItem value="KIOSK">{t('operations.terminals.types.KIOSK', 'KIOSK (Self-Service)')} <VersionTag feature="terminals.kiosk" sx={{ ml: 1 }} /></MenuItem>
-                  <MenuItem value="KDS">{t('operations.terminals.types.KDS', 'KDS (Kitchen Display)')} <VersionTag feature="terminals.kds" sx={{ ml: 1 }} /></MenuItem>
                 </Select>
               </FormControl>
 

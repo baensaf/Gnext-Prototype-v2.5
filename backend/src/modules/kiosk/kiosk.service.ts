@@ -20,7 +20,6 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { normalizePhone } from '../customer/customer.service';
-import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
 import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { CatalogService, REFUSED_SALE_CODES } from '../catalog/catalog.service';
@@ -61,7 +60,6 @@ export class KioskService {
     private readonly priceLists: PriceListService,
     private readonly orderService: OrderService,
     private readonly paymentService: PaymentService,
-    @Optional() private readonly kdsService?: KdsService,
     @Optional() private readonly printQueueService?: PrintQueueService,
   ) {}
 

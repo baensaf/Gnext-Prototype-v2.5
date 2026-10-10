@@ -4,7 +4,7 @@ import { CONFIG } from 'src/global-config';
 
 import { CLOUD_BACK_EVENT } from './cloud-back';
 
-export type LiveTopic = 'delivery' | 'kds' | 'print' | 'orders';
+export type LiveTopic = 'delivery' | 'print' | 'orders';
 
 /** Several rows usually change together (an order, its delivery, its courier); re-read once. */
 const DEBOUNCE_MS = 300;

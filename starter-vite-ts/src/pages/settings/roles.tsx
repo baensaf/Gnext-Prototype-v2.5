@@ -73,12 +73,6 @@ const GROUPS: { titleKey: string; title: string; rows: Capability[] }[] = [
         write: { CASHIER: 'FULL', MANAGER: 'FULL', HEAD_OFFICE: 'FULL' },
       },
       {
-        path: '/app/kds',
-        labelKey: 'rolesPage.caps.kds',
-        label: 'Work the kitchen display',
-        write: { CASHIER: 'FULL', MANAGER: 'FULL', HEAD_OFFICE: 'FULL' },
-      },
-      {
         path: '/app/cashier/shifts',
         labelKey: 'rolesPage.caps.shift',
         label: 'Open, count and close a till',

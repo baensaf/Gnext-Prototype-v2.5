@@ -27,8 +27,6 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/dine-in': 'V2',
   // Only Snappfood (and later the website) sends orders that wait to be accepted.
   '/app/orders/incoming': 'V3',
-  // No restaurant in Iran runs a kitchen screen; tickets are printed.
-  '/app/kds': 'F',
   // Shifts, their statements and business days
   '/app/cashier': 'V1',
   // Head office's view of every branch's drawers
@@ -91,7 +89,6 @@ export const FEATURE_LABELS = {
   // Orders list and the order drawer
   'orders.snappfood': 'V3',
   'orders.table': 'V2',
-  'orders.kitchenProgress': 'F',
   'orders.takenOffline': 'F',
   'orders.headOfficeView': 'V4',
   // Dine-in floor: running service from the floor (occupancy, seating, move, merge, split,
@@ -116,13 +113,6 @@ export const FEATURE_LABELS = {
   'delivery.settlementReview': 'V4',
   'delivery.settlementReverse': 'V2',
   'delivery.audit': 'F',
-  // Kitchen screen settings; the stations and routing rules also drive the printers.
-  'kds.screens': 'F',
-  'kds.targetMinutes': 'F',
-  // V1 print routing (2026-09-30): each station has one printer, each category goes to one
-  // station, one chit layout, one copy.
-  'routing.productRule': 'F',
-  'routing.printerOptions': 'F',
   // Catalog. Sizes, add-on groups, combos and the packaging price are V1 (2026-10-04).
   'catalog.maxPerOrder': 'V4',
   'catalog.priceHistory': 'V4',
@@ -147,7 +137,6 @@ export const FEATURE_LABELS = {
   // Operations
   'branches.nonSellingTypes': 'F',
   'terminals.kiosk': 'V3',
-  'terminals.kds': 'F',
   'printers.serial': 'F',
   'printers.simulated': 'F',
   'printers.label': 'F',

@@ -16,7 +16,6 @@ import { Customer } from '../../entities/Customer.entity';
 import { KioskService } from './kiosk.service';
 import { KioskController } from './kiosk.controller';
 import { AuditModule } from '../audit/audit.module';
-import { KdsModule } from '../kds/kds.module';
 import { PrintingModule } from '../printing/printing.module';
 import { CatalogModule } from '../catalog/catalog.module';
 import { ProductVariant } from '../../entities/ProductVariant.entity';
@@ -46,7 +45,6 @@ import { PaymentModule } from '../payment/payment.module';
       PaymentDevice,
     ]),
     AuditModule,
-    KdsModule,
     PrintingModule,
     CatalogModule,
     // A paid kiosk order goes to the kitchen the way a till's does, and a card goes to the

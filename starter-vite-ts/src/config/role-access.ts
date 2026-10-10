@@ -32,7 +32,6 @@ export interface RoleAccess {
  */
 const CASHIER_PATHS = [
   '/app/pos',
-  '/app/kds',
   '/app/dine-in',
   '/app/orders',
   '/app/cashier/shifts',
@@ -138,7 +137,7 @@ const SITE_ONLY_PATHS = [
   '/app/operations/terminals',
   '/app/operations/card-terminals',
   '/app/operations/printers',
-  '/app/operations/kds-configuration',
+  '/app/operations/print-routing',
   '/app/operations/print-queue',
   // Orders from Snappfood and the website are answered at the shop they were sent to.
   '/app/orders/incoming',
@@ -148,7 +147,7 @@ const SITE_ONLY_PATHS = [
  * Tools that only make sense standing in a shop: a register, a kitchen display,
  * a dining floor. A production kitchen and an office have no customers either.
  */
-const SHOP_FLOOR_PATHS = ['/app/pos', '/app/kds', '/app/dine-in'];
+const SHOP_FLOOR_PATHS = ['/app/pos', '/app/dine-in'];
 
 /**
  * What stands behind the shop floor: the orders, the tills and shifts, the money in and
@@ -166,7 +165,7 @@ const SELLING_SITE_PATHS = [
   '/app/refunds',
   '/app/operations/terminals',
   '/app/operations/card-terminals',
-  '/app/operations/kds-configuration',
+  '/app/operations/print-routing',
   '/app/settings/order-workflow',
   '/app/settings/shift-policy',
 ];

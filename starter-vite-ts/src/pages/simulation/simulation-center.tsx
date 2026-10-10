@@ -37,8 +37,8 @@ import { RouterLink } from 'src/routes/components';
 
 import { fTime } from 'src/utils/format-time';
 
-import { kdsApi } from 'src/api/kdsApi';
 import { tenantApi } from 'src/api/tenantApi';
+import { printingApi } from 'src/api/printingApi';
 import { httpClient as axios } from 'src/api/httpClient';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
@@ -67,7 +67,7 @@ export function SimulationCenterPage() {
     try {
       const [logsRes, printersRes, terminalsRes] = await Promise.allSettled([
         axios.get('/api/v1/simulation/logs'),
-        kdsApi.getPrinters(),
+        printingApi.getPrinters(),
         tenantApi.getTerminals(),
       ]);
 

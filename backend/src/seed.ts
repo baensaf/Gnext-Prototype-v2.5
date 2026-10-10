@@ -381,8 +381,8 @@ export async function runSeed() {
   // 6a. Idempotent printers, one receipt and one kitchen printer per selling site, the
   // receipt printer at the site's tills. With none, every receipt and kitchen ticket in the
   // demo had nowhere to go — and a kitchen ticket with no printer is an order nobody cooks.
-  // A kitchen chit finds the kitchen printer by itself; a station with printers of its own
-  // (admin-demo) sends its chits there instead.
+  // The kitchen printer is the site's default: a kitchen line nothing routes elsewhere prints
+  // there (admin-demo routes Valiasr's categories to it).
   const printerRepo = AppDataSource.getRepository('Printer');
   for (const site of sellingBranches) {
     const findOrCreate = async (repo: any, where: Record<string, unknown>, data: Record<string, unknown>) =>
@@ -397,7 +397,7 @@ export async function runSeed() {
       printerRepo,
       { tenant_id: tenant.id, branch_id: site.id, code: `PRN-${site.code}-KIT` },
       // If the kitchen printer jams, the ticket comes out at the counter rather than nowhere.
-      { name: `چاپگر آشپزخانه ${site.name}`, printer_type: 'KITCHEN_IMPACT', paper_width_mm: 80, is_active: true, simulated_address: 'sim://kitchen', fallback_printer_id: receiptPrinter.id },
+      { name: `چاپگر آشپزخانه ${site.name}`, printer_type: 'KITCHEN_IMPACT', paper_width_mm: 80, is_active: true, simulated_address: 'sim://kitchen', fallback_printer_id: receiptPrinter.id, kitchen_default: true },
     );
 
     await terminalRepo.update(

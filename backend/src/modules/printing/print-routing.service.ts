@@ -1,12 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, Repository } from 'typeorm';
 import { Printer } from '../../entities/Printer.entity';
 import { Product } from '../../entities/Product.entity';
-import { KdsRoutingRule } from '../../entities/KdsRoutingRule.entity';
-import { KitchenStation } from '../../entities/KitchenStation.entity';
+import { PrintRoute } from '../../entities/PrintRoute.entity';
 import { Terminal } from '../../entities/Terminal.entity';
-import { stationIdFor } from '../kds/prep-station';
 import { TicketTemplate } from './print-render.service';
 
 /** A printer a job goes to, and how many copies that printer prints. */
@@ -15,17 +13,24 @@ export interface RoutedPrinter {
   copies: number;
 }
 
+/** What a branch sends to one printer. */
+export interface PrinterRoutes {
+  printer_id: string;
+  category_ids: string[];
+  product_ids: string[];
+}
+
 const isKitchenPrinter = (p: Printer) => String(p.printer_type || '').toUpperCase().startsWith('KITCHEN');
 
 /**
- * The branch printer a document prints on when nothing more specific is set up, always the same
- * one (the branch's printers come ordered by code): a kitchen chit on a kitchen printer, anything
- * else on a receipt printer, else on any printer that is not the kitchen's, else on any at all.
- * A kitchen chit with no kitchen printer gets none, so it fails and raises an alert rather than
- * come out at the counter, where nobody cooking would see it.
+ * The branch printer a document prints on when nothing more specific is set up. A kitchen chit
+ * goes to the printer the branch marked as its default kitchen printer, else its first kitchen
+ * printer; with neither it gets none, so it fails and raises an alert rather than come out at the
+ * counter, where nobody cooking would see it. Anything else prints on a receipt printer, else on
+ * any printer that is not the kitchen's, else on any at all.
  */
 export function branchFallback(branchPrinters: Printer[], kitchen: boolean): Printer | undefined {
-  if (kitchen) return branchPrinters.find(isKitchenPrinter);
+  if (kitchen) return branchPrinters.find((p) => p.kitchen_default) ?? branchPrinters.find(isKitchenPrinter);
   return (
     branchPrinters.find((p) => String(p.printer_type || '').toUpperCase().includes('RECEIPT')) ??
     branchPrinters.find((p) => !isKitchenPrinter(p)) ??
@@ -33,32 +38,26 @@ export function branchFallback(branchPrinters: Printer[], kitchen: boolean): Pri
   );
 }
 
-/** A retired printer leaves its stations and tills, so they no longer name a device that is gone. */
+/** A retired printer leaves its routes and tills, so they no longer name a device that is gone. */
 export async function detachPrinter(em: EntityManager, tenantId: string, printerId: string): Promise<void> {
-  await em
-    .createQueryBuilder()
-    .update(KitchenStation)
-    .set({ printer_ids: () => `array_remove("printer_ids", :printerId)` })
-    .where(`"tenant_id" = :tenantId AND :printerId = ANY("printer_ids")`, { tenantId, printerId })
-    .execute();
+  await em.delete(PrintRoute, { tenant_id: tenantId, printer_id: printerId });
   await em.update(Terminal, { tenant_id: tenantId, receipt_printer_id: printerId }, { receipt_printer_id: null });
 }
 
 /**
  * Where paper prints.
  *
- * A kitchen chit goes to the prep station that makes its lines (a product's KDS rule, else its
- * category's) and prints on every printer of that station. A receipt, guest bill or courier
- * slip prints at the till the order was taken on. Anything without its own printer falls back
- * to the branch's printer of that kind.
+ * A kitchen chit line prints on every printer its product is sent to, else every printer its
+ * category is sent to, else the branch's default kitchen printer. A receipt, guest bill or
+ * courier slip prints at the till the order was taken on. Anything without its own printer
+ * falls back to the branch's printer of that kind.
  */
 @Injectable()
 export class PrintRoutingService {
   constructor(
     @InjectRepository(Printer) private readonly printerRepo: Repository<Printer>,
     @InjectRepository(Product) private readonly productRepo: Repository<Product>,
-    @InjectRepository(KdsRoutingRule) private readonly ruleRepo: Repository<KdsRoutingRule>,
-    @InjectRepository(KitchenStation) private readonly stationRepo: Repository<KitchenStation>,
+    @InjectRepository(PrintRoute) private readonly routeRepo: Repository<PrintRoute>,
     @InjectRepository(Terminal) private readonly terminalRepo: Repository<Terminal>,
   ) {}
 
@@ -70,51 +69,84 @@ export class PrintRoutingService {
     });
   }
 
+  /** The branch's default kitchen printer, or none. */
+  async kitchenDefault(tenantId: string, branchId: string): Promise<Printer | undefined> {
+    return branchFallback(await this.branchPrinters(tenantId, branchId), true);
+  }
+
   /**
-   * The prep station of each product at the branch, keyed by product id. A product no rule
-   * claims, or whose station is out of service, is left out.
+   * The printers each product's kitchen lines print on at the branch, keyed by product id, in the
+   * branch's printer order. A product nothing is routed to gets the default kitchen printer, or
+   * an empty list when the branch has none.
    */
-  async stationsFor(tenantId: string, branchId: string, productIds: string[]): Promise<Map<string, KitchenStation>> {
+  async printersFor(tenantId: string, branchId: string, productIds: string[]): Promise<Map<string, Printer[]>> {
     const ids = [...new Set(productIds.filter(Boolean))];
-    const result = new Map<string, KitchenStation>();
+    const result = new Map<string, Printer[]>();
     if (ids.length === 0) return result;
 
-    const [products, rules, stations] = await Promise.all([
+    const [products, routes, printers] = await Promise.all([
       this.productRepo.find({ where: { id: In(ids), tenant_id: tenantId } }),
-      this.ruleRepo.find({ where: { tenant_id: tenantId, branch_id: branchId } }),
-      this.stationRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, is_active: true } }),
+      this.routeRepo.find({ where: { tenant_id: tenantId, branch_id: branchId } }),
+      this.branchPrinters(tenantId, branchId),
     ]);
     const categoryOf = new Map(products.map((p) => [p.id, p.category_id]));
-    const stationById = new Map(stations.map((s) => [s.id, s]));
+    const fallback = branchFallback(printers, true);
 
     for (const productId of ids) {
-      const station = stationById.get(stationIdFor(rules, productId, categoryOf.get(productId)) ?? '');
-      if (station) result.set(productId, station);
+      const own = routes.filter((r) => r.product_id === productId);
+      const category = categoryOf.get(productId);
+      const chosen = own.length ? own : routes.filter((r) => !r.product_id && category && r.category_id === category);
+      const routed = printers.filter((p) => chosen.some((r) => r.printer_id === p.id));
+      result.set(productId, routed.length ? routed : fallback ? [fallback] : []);
     }
     return result;
   }
 
-  async station(tenantId: string, stationId?: string | null): Promise<KitchenStation | null> {
-    if (!stationId) return null;
-    return this.stationRepo.findOne({ where: { id: stationId, tenant_id: tenantId } });
+  /** Every printer's routes at the branch. */
+  async routes(tenantId: string, branchId: string): Promise<PrinterRoutes[]> {
+    const routes = await this.routeRepo.find({ where: { tenant_id: tenantId, branch_id: branchId } });
+    const byPrinter = new Map<string, PrinterRoutes>();
+    for (const r of routes) {
+      const entry = byPrinter.get(r.printer_id) ?? { printer_id: r.printer_id, category_ids: [], product_ids: [] };
+      if (r.category_id) entry.category_ids.push(r.category_id);
+      if (r.product_id) entry.product_ids.push(r.product_id);
+      byPrinter.set(r.printer_id, entry);
+    }
+    return [...byPrinter.values()];
   }
 
-  /**
-   * Every printer of the station that is in service prints the chit, in the station's order,
-   * each the station's copies. A station with none, or no station, prints on the branch's
-   * kitchen printer.
-   */
-  async printersForStation(tenantId: string, branchId: string, station: KitchenStation | null): Promise<RoutedPrinter[]> {
-    const copies = station?.copies || 1;
-    const ids = station?.printer_ids || [];
-    if (ids.length) {
-      const printers = await this.printerRepo.find({ where: { id: In(ids), tenant_id: tenantId, is_active: true } });
-      const byId = new Map(printers.map((p) => [p.id, p]));
-      const routed = ids.filter((id) => byId.has(id)).map((id) => ({ printer: byId.get(id)!, copies }));
-      if (routed.length) return routed;
+  /** Replace what one printer prints. */
+  async setRoutes(tenantId: string, printerId: string, categoryIds: string[], productIds: string[]): Promise<PrinterRoutes> {
+    const printer = await this.printerRepo.findOne({ where: { id: printerId, tenant_id: tenantId } });
+    if (!printer) throw new NotFoundException(`Printer ${printerId} not found`);
+    const categories = [...new Set((categoryIds || []).filter(Boolean))];
+    const products = [...new Set((productIds || []).filter(Boolean))];
+    if (products.length) {
+      const found = await this.productRepo.count({ where: { id: In(products), tenant_id: tenantId } });
+      if (found !== products.length) throw new BadRequestException('One of the products is not on the menu');
     }
-    const fallback = branchFallback(await this.branchPrinters(tenantId, branchId), true);
-    return fallback ? [{ printer: fallback, copies }] : [];
+
+    await this.routeRepo.manager.transaction(async (em) => {
+      await em.delete(PrintRoute, { tenant_id: tenantId, printer_id: printerId });
+      const rows = [
+        ...categories.map((category_id) => ({ category_id, product_id: null })),
+        ...products.map((product_id) => ({ category_id: null, product_id })),
+      ].map((target) => em.create(PrintRoute, { tenant_id: tenantId, branch_id: printer.branch_id, printer_id: printerId, ...target }));
+      if (rows.length) await em.save(rows);
+    });
+    return { printer_id: printerId, category_ids: categories, product_ids: products };
+  }
+
+  /** Make one printer the branch's default kitchen printer. */
+  async setKitchenDefault(tenantId: string, printerId: string): Promise<Printer> {
+    const printer = await this.printerRepo.findOne({ where: { id: printerId, tenant_id: tenantId } });
+    if (!printer) throw new NotFoundException(`Printer ${printerId} not found`);
+    await this.printerRepo.manager.transaction(async (em) => {
+      await em.update(Printer, { tenant_id: tenantId, branch_id: printer.branch_id, kitchen_default: true }, { kitchen_default: false });
+      await em.update(Printer, { id: printer.id, tenant_id: tenantId }, { kitchen_default: true });
+    });
+    printer.kitchen_default = true;
+    return printer;
   }
 
   /**

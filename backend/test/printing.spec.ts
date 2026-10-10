@@ -9,10 +9,8 @@ import { PrintJob } from '../src/entities/PrintJob.entity';
 import { PrintAttempt } from '../src/entities/PrintAttempt.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { Product } from '../src/entities/Product.entity';
-import { KdsRoutingRule } from '../src/entities/KdsRoutingRule.entity';
-import { KitchenStation } from '../src/entities/KitchenStation.entity';
+import { PrintRoute } from '../src/entities/PrintRoute.entity';
 import { Terminal } from '../src/entities/Terminal.entity';
-import { stationIdFor } from '../src/modules/kds/prep-station';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import { AgentPrintingService } from '../src/modules/printing/agent-printing.service';
@@ -61,13 +59,12 @@ describe('PrintingModule (Unit & Integration)', () => {
   let queueService: PrintQueueService;
 
   let printerRepo: ReturnType<typeof fakeRepo>;
-  let stationRepo: ReturnType<typeof fakeRepo>;
   let terminalRepo: ReturnType<typeof fakeRepo>;
   let jobRepo: ReturnType<typeof fakeRepo>;
   let attemptRepo: ReturnType<typeof fakeRepo>;
   let orderRepo: ReturnType<typeof fakeRepo>;
   let productRepo: ReturnType<typeof fakeRepo>;
-  let kdsRuleRepo: ReturnType<typeof fakeRepo>;
+  let routeRepo: ReturnType<typeof fakeRepo>;
   let alertRepo: ReturnType<typeof fakeRepo>;
   let auditWriter: { write: jest.Mock };
   let agentPrinting: { send: jest.Mock; pendingAttempt: jest.Mock; withdraw: jest.Mock };
@@ -79,13 +76,12 @@ describe('PrintingModule (Unit & Integration)', () => {
 
   beforeEach(async () => {
     printerRepo = fakeRepo();
-    stationRepo = fakeRepo();
     terminalRepo = fakeRepo();
     jobRepo = fakeRepo();
     attemptRepo = fakeRepo();
     orderRepo = fakeRepo();
     productRepo = fakeRepo();
-    kdsRuleRepo = fakeRepo();
+    routeRepo = fakeRepo();
     alertRepo = fakeRepo();
     auditWriter = { write: jest.fn() };
     agentPrinting = {
@@ -103,13 +99,12 @@ describe('PrintingModule (Unit & Integration)', () => {
         PrintRoutingService,
         PrintQueueService,
         { provide: getRepositoryToken(Printer), useValue: printerRepo },
-        { provide: getRepositoryToken(KitchenStation), useValue: stationRepo },
         { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
         { provide: getRepositoryToken(PrintJob), useValue: jobRepo },
         { provide: getRepositoryToken(PrintAttempt), useValue: attemptRepo },
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
         { provide: getRepositoryToken(Product), useValue: productRepo },
-        { provide: getRepositoryToken(KdsRoutingRule), useValue: kdsRuleRepo },
+        { provide: getRepositoryToken(PrintRoute), useValue: routeRepo },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: getRepositoryToken(OperationalAlert), useValue: alertRepo },
         { provide: AgentPrintingService, useValue: agentPrinting },
@@ -125,12 +120,10 @@ describe('PrintingModule (Unit & Integration)', () => {
 
   const printer = (id: string, extra: any = {}) =>
     printerRepo.rows.push({ id, tenant_id: T, branch_id: BR, name: id, is_active: true, ...extra });
-  const station = (id: string, name: string, printerIds: string[], extra: any = {}) =>
-    stationRepo.rows.push({ id, tenant_id: T, branch_id: BR, name, printer_ids: printerIds, copies: 1, is_active: true, ...extra });
-  const categoryRule = (categoryId: string, stationId: string) =>
-    kdsRuleRepo.rows.push({ tenant_id: T, branch_id: BR, category_id: categoryId, station_id: stationId });
-  const productRule = (productId: string, stationId: string) =>
-    kdsRuleRepo.rows.push({ tenant_id: T, branch_id: BR, product_id: productId, station_id: stationId });
+  const categoryRoute = (categoryId: string, printerId: string) =>
+    routeRepo.rows.push({ tenant_id: T, branch_id: BR, category_id: categoryId, printer_id: printerId });
+  const productRoute = (productId: string, printerId: string) =>
+    routeRepo.rows.push({ tenant_id: T, branch_id: BR, product_id: productId, printer_id: printerId });
   const till = (id: string, extra: any = {}) =>
     terminalRepo.rows.push({ id, tenant_id: T, branch_id: BR, terminal_type: 'CASHIER', receipt_copies: 1, receipt_printer_id: null, ...extra });
   const product = (id: string, categoryId: string) => productRepo.rows.push({ id, tenant_id: T, category_id: categoryId });
@@ -156,25 +149,22 @@ describe('PrintingModule (Unit & Integration)', () => {
     });
 
   /**
-   * A burger shop: a grill, a fryer and a bar, each with its printer; a pass printer in the
-   * kitchen for anything no station makes; and a counter printer at the till.
+   * A burger shop: a grill, a fryer and a bar printer; a pass printer in the kitchen for
+   * anything nothing routes; and a counter printer at the till.
    */
   const burgerShop = () => {
     printer('prn-counter', { printer_type: 'THERMAL_RECEIPT' });
-    printer('prn-grill');
-    printer('prn-fryer');
-    printer('prn-bar');
-    printer('prn-pass', { printer_type: 'KITCHEN_IMPACT' });
-    station('st-grill', 'Grill', ['prn-grill']);
-    station('st-fryer', 'Fryer', ['prn-fryer']);
-    station('st-bar', 'Bar', ['prn-bar']);
+    printer('prn-grill', { name: 'Grill' });
+    printer('prn-fryer', { name: 'Fryer' });
+    printer('prn-bar', { name: 'Bar' });
+    printer('prn-pass', { name: 'pass', printer_type: 'KITCHEN_IMPACT' });
     product('p-burger', 'cat-burgers');
     product('p-cheese', 'cat-burgers');
     product('p-fries', 'cat-sides');
     product('p-coke', 'cat-drinks');
-    categoryRule('cat-burgers', 'st-grill');
-    categoryRule('cat-sides', 'st-fryer');
-    categoryRule('cat-drinks', 'st-bar');
+    categoryRoute('cat-burgers', 'prn-grill');
+    categoryRoute('cat-sides', 'prn-fryer');
+    categoryRoute('cat-drinks', 'prn-bar');
     till('till-1', { receipt_printer_id: 'prn-counter' });
   };
 
@@ -227,61 +217,44 @@ describe('PrintingModule (Unit & Integration)', () => {
   // --- where a line and a document go ---------------------------------------------------
 
   describe('finding where paper goes', () => {
-    it("takes a product's own station before its category's", () => {
-      const rules = [
-        { category_id: 'cat-burgers', station_id: 'st-grill' },
-        { product_id: 'p-egg-burger', station_id: 'st-fryer' },
-      ] as any[];
-
-      expect(stationIdFor(rules, 'p-egg-burger', 'cat-burgers')).toBe('st-fryer');
-      expect(stationIdFor(rules, 'p-burger', 'cat-burgers')).toBe('st-grill');
-      expect(stationIdFor(rules, 'p-tea', 'cat-hot')).toBeUndefined();
-    });
-
-    it('finds each product its station through the KDS routing rules', async () => {
-      station('st-grill', 'Grill', []);
-      station('st-fryer', 'Fryer', []);
-      station('st-closed', 'Closed', [], { is_active: false });
+    it("sends a product to its own printers before its category's, and anything else to the default", async () => {
+      printer('prn-grill');
+      printer('prn-fryer');
+      printer('prn-expo');
+      printer('prn-pass', { printer_type: 'KITCHEN_IMPACT' });
       product('p-burger', 'cat-burgers');
       product('p-egg-burger', 'cat-burgers');
       product('p-tea', 'cat-hot');
-      product('p-cake', 'cat-cakes');
-      categoryRule('cat-burgers', 'st-grill');
-      productRule('p-egg-burger', 'st-fryer');
-      categoryRule('cat-cakes', 'st-closed');
+      categoryRoute('cat-burgers', 'prn-grill');
+      categoryRoute('cat-burgers', 'prn-expo');
+      productRoute('p-egg-burger', 'prn-fryer');
 
-      const stations = await routingService.stationsFor(T, BR, ['p-burger', 'p-egg-burger', 'p-tea', 'p-cake']);
+      const printers = await routingService.printersFor(T, BR, ['p-burger', 'p-egg-burger', 'p-tea']);
 
-      expect(stations.get('p-burger')!.id).toBe('st-grill');
-      expect(stations.get('p-egg-burger')!.id).toBe('st-fryer');
-      expect(stations.has('p-tea')).toBe(false);
-      // A station out of service makes nothing; its lines go where unrouted lines go.
-      expect(stations.has('p-cake')).toBe(false);
+      expect(printers.get('p-burger')!.map((p) => p.id)).toEqual(['prn-grill', 'prn-expo']);
+      expect(printers.get('p-egg-burger')!.map((p) => p.id)).toEqual(['prn-fryer']);
+      expect(printers.get('p-tea')!.map((p) => p.id)).toEqual(['prn-pass']);
     });
 
-    it('sends a chit to every active printer of the station, in order, the station copies each', async () => {
-      printer('prn-a');
-      printer('prn-b');
-      printer('prn-off', { is_active: false });
-      station('st-grill', 'Grill', ['prn-b', 'prn-off', 'prn-a'], { copies: 3 });
+    it('prints on the printer the branch marked as its default kitchen printer', async () => {
+      printer('prn-a', { printer_type: 'KITCHEN_IMPACT' });
+      printer('prn-b', { printer_type: 'KITCHEN_IMPACT', kitchen_default: true });
+      product('p-tea', 'cat-hot');
 
-      const routed = await routingService.printersForStation(T, BR, stationRepo.rows[0]);
+      const printers = await routingService.printersFor(T, BR, ['p-tea']);
 
-      expect(routed.map((r) => [r.printer.id, r.copies])).toEqual([
-        ['prn-b', 3],
-        ['prn-a', 3],
-      ]);
+      expect(printers.get('p-tea')!.map((p) => p.id)).toEqual(['prn-b']);
     });
 
-    it("falls back to the branch's kitchen printer when the station has none working", async () => {
-      printer('prn-counter', { printer_type: 'THERMAL_RECEIPT' });
+    it('skips a routed printer that is out of service, and falls back when none is left', async () => {
       printer('prn-kitchen', { printer_type: 'KITCHEN_IMPACT' });
       printer('prn-dead', { is_active: false });
-      station('st-grill', 'Grill', ['prn-dead']);
+      product('p-burger', 'cat-burgers');
+      categoryRoute('cat-burgers', 'prn-dead');
 
-      const routed = await routingService.printersForStation(T, BR, stationRepo.rows[0]);
+      const printers = await routingService.printersFor(T, BR, ['p-burger']);
 
-      expect(routed.map((r) => r.printer.id)).toEqual(['prn-kitchen']);
+      expect(printers.get('p-burger')!.map((p) => p.id)).toEqual(['prn-kitchen']);
     });
 
     it("prints a receipt on the till's own printer, with the till's copies and paper", async () => {
@@ -311,7 +284,7 @@ describe('PrintingModule (Unit & Integration)', () => {
 
   // --- the split ------------------------------------------------------------------------
 
-  describe('splitting a kitchen ticket by station', () => {
+  describe('splitting a kitchen ticket by printer', () => {
     beforeEach(() => {
       burgerShop();
       order('ord-1', [
@@ -323,7 +296,7 @@ describe('PrintingModule (Unit & Integration)', () => {
       ], { terminal_id: 'till-1' });
     });
 
-    it('prints one chit per station with only that station its lines', async () => {
+    it('prints one chit per printer with only that printer its lines', async () => {
       const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
 
       expect(jobs).toHaveLength(3);
@@ -341,37 +314,27 @@ describe('PrintingModule (Unit & Integration)', () => {
       expect(jobsFor(jobs, 'prn-counter')).toHaveLength(0);
     });
 
-    // What an Iranian kitchen works from: the number, very large, and the station's food.
-    it('prints a compact chit by default: the big number and the station items, nothing else', async () => {
+    // What an Iranian kitchen works from: the number, very large, and the printer's food.
+    it('prints a compact chit: the big number and the items, nothing else', async () => {
       orderRepo.rows.find((o) => o.id === 'ord-1').call_number = 123;
       const [grill] = jobsFor(await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET'), 'prn-grill');
 
       expect(grill.rendered_html).toContain('<div class="huge">۱۲۳</div>');
       expect(grill.rendered_html).toContain('Classic Burger');
-      expect(grill.rendered_html).not.toContain('Grill (');
       expect(grill.rendered_html).not.toContain('ORD-1');
       expect(grill.rendered_html).not.toContain('سالن');
     });
 
-    it('prints the station, order type and time when the station asks for a detailed chit', async () => {
-      stationRepo.rows.find((st) => st.id === 'st-grill').ticket_template = 'DETAILED';
-      const [grill] = jobsFor(await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET'), 'prn-grill');
-
-      expect(grill.rendered_html).toContain('<div class="inv">Grill (۱/۳)</div>');
-      expect(grill.rendered_html).toContain('سالن');
-    });
-
-    it('labels each chit with its station and its part of the order', async () => {
+    it('labels each chit with its printer and its part of the order', async () => {
       const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
 
       expect(jobs.map((j) => j.label)).toEqual(['Grill (1/3)', 'Fryer (2/3)', 'Bar (3/3)']);
-      expect(jobsFor(jobs, 'prn-grill')[0].station_id).toBe('st-grill');
       expect(jobs.every((j) => j.status === 'SUCCESS')).toBe(true);
       expect(attemptRepo.rows).toHaveLength(3);
     });
 
-    it('lets a product rule pull one burger off the grill', async () => {
-      productRule('p-cheese', 'st-fryer');
+    it('lets a product route pull one burger off the grill', async () => {
+      productRoute('p-cheese', 'prn-fryer');
 
       const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
 
@@ -380,43 +343,39 @@ describe('PrintingModule (Unit & Integration)', () => {
       expect(jobsFor(jobs, 'prn-fryer')[0].rendered_html).toContain('Fries');
     });
 
-    it('prints a station chit on each of its printers, the station copies each', async () => {
-      printer('prn-expo');
-      const grill = stationRepo.rows.find((st) => st.id === 'st-grill');
-      grill.printer_ids = ['prn-grill', 'prn-expo'];
-      grill.copies = 2;
+    it('prints a line on every printer its category goes to', async () => {
+      printer('prn-expo', { name: 'Expo' });
+      categoryRoute('cat-burgers', 'prn-expo');
 
       const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
 
-      expect(jobs.filter((j) => j.station_id === 'st-grill').map((j) => [j.printer_id, j.copies])).toEqual([
-        ['prn-grill', 2],
-        ['prn-expo', 2],
-      ]);
+      expect(jobsFor(jobs, 'prn-grill')[0].rendered_html).toContain('Classic Burger');
+      expect(jobsFor(jobs, 'prn-expo')[0].rendered_html).toContain('Classic Burger');
+      expect(jobsFor(jobs, 'prn-expo')[0].rendered_html).not.toContain('Fries');
     });
 
-    it('reprints one station only when asked', async () => {
-      const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET', true, 'Fell in the fryer', undefined, undefined, 'st-fryer');
+    it("reprints one printer's chit only when asked", async () => {
+      const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET', true, 'Fell in the fryer', undefined, undefined, 'prn-fryer');
 
       expect(jobs.map((j) => j.printer_id)).toEqual(['prn-fryer']);
     });
 
-    it('sends lines no station makes to the kitchen printer, and keeps one chit when nothing splits', async () => {
+    it('sends lines nothing routes to the default kitchen printer, and keeps one chit when nothing splits', async () => {
       order('ord-2', [line('l-tea', 'p-tea', 'Tea'), line('l-cake', 'p-cake', 'Cake')]);
 
       const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-2', 'KITCHEN_TICKET');
 
       expect(jobs).toHaveLength(1);
       expect(jobs[0].printer_id).toBe('prn-pass');
-      expect(jobs[0].label).toBe('آشپزخانه');
-      expect(jobs[0].station_id).toBeUndefined();
+      expect(jobs[0].label).toBe('pass');
     });
 
-    it('prints on the kitchen printer for a station whose printers are all out of service', async () => {
+    it('prints on the default kitchen printer when the routed printer is out of service', async () => {
       printerRepo.rows.find((p) => p.id === 'prn-bar').is_active = false;
 
       const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
 
-      expect(jobs.find((j) => j.station_id === 'st-bar')!.printer_id).toBe('prn-pass');
+      expect(jobsFor(jobs, 'prn-pass')[0].rendered_html).toContain('Coke');
     });
 
     it('prints a single receipt for the whole order at the till it was taken on', async () => {
@@ -485,16 +444,6 @@ describe('PrintingModule (Unit & Integration)', () => {
         expect(reprint.rendered_html).toContain('Classic Burger');
         expect(reprint.rendered_html).toContain('چاپ مجدد');
         expect(reprint.reason).toContain('prn-counter');
-      });
-
-      it('drops the station link, so a later retry cannot send it back to the dead printer', async () => {
-        const jobs = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'KITCHEN_TICKET');
-        const [grill] = jobsFor(jobs, 'prn-grill');
-        expect(grill.station_id).toBe('st-grill');
-
-        const [reprint] = await queueService.reprintJob(T, grill.id, 'Grill printer died', 'user-1', 'prn-counter');
-
-        expect(reprint.station_id).toBeNull();
       });
 
       it('refuses a printer that belongs to another branch', async () => {
@@ -638,27 +587,17 @@ describe('PrintingModule (Unit & Integration)', () => {
       expect(res.job.status).toBe('PROCESSING');
     });
 
-    // The audit of 2026-09-24: a failed grill chit, retried, was routed as though it were a
-    // receipt and went to whichever kitchen printer came first — the bar's.
-    it('sends a failed station chit to its own station, on every printer the station has now', async () => {
-      product('p-burger', 'cat-burgers');
-      station('st-grill', 'Grill', []);
-      categoryRule('cat-burgers', 'st-grill');
+    it('sends a failed kitchen chit, retried, to the default kitchen printer the branch has now', async () => {
       const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-300', 'KITCHEN_TICKET');
       expect(job.status).toBe('FAILED');
-      expect(job.station_id).toBe('st-grill');
 
       printer('prn-bar', { code: 'A', printer_type: 'KITCHEN_IMPACT', agent_connection: TCP });
-      printer('prn-grill-1', { code: 'B', printer_type: 'KITCHEN_IMPACT', agent_connection: TCP });
-      printer('prn-grill-2', { code: 'C', printer_type: 'KITCHEN_IMPACT', agent_connection: TCP });
-      stationRepo.rows[0].printer_ids = ['prn-grill-1', 'prn-grill-2'];
+      printer('prn-pass', { code: 'B', printer_type: 'KITCHEN_IMPACT', agent_connection: TCP, kitchen_default: true });
 
       const res = await queueService.retryJob(T, job.id, {});
 
-      expect(res.jobs.map((j) => j.printer_id)).toEqual(['prn-grill-1', 'prn-grill-2']);
+      expect(res.jobs.map((j) => j.printer_id)).toEqual(['prn-pass']);
       expect(res.jobs[0].id).toBe(job.id);
-      expect(res.jobs[1].rendered_html).toBe(job.rendered_html);
-      expect(agentPrinting.send).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -704,7 +643,7 @@ describe('PrintingModule (Unit & Integration)', () => {
       ]);
     });
 
-    it('prints only the delta, each station getting its own lines', async () => {
+    it('prints only the delta, each printer getting its own lines', async () => {
       const jobs = await queueService.enqueueKitchenChangeTicket(T, 'ord-200', {
         kind: 'AMENDED',
         voidedItemIds: ['l-1'],
@@ -725,7 +664,7 @@ describe('PrintingModule (Unit & Integration)', () => {
       expect(grill.reason).toBe('Order amended: Swapped main for dessert');
     });
 
-    it('tells every station holding live lines to stop when the order is cancelled', async () => {
+    it('tells every printer holding live lines to stop when the order is cancelled', async () => {
       const jobs = await queueService.enqueueKitchenChangeTicket(T, 'ord-200', { kind: 'CANCELLED' });
 
       expect(jobs.map((j) => j.printer_id).sort()).toEqual(['prn-bar', 'prn-fryer', 'prn-grill']);

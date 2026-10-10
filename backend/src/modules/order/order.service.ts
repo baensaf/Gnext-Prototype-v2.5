@@ -30,7 +30,6 @@ import { OrderSequenceService } from './order-sequence.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { OutboxWriter } from '../outbox/outbox-writer.service';
 import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-recorder.service';
-import { KdsService } from '../kds/kds.service';
 import { PrintQueueService } from '../printing/print-queue.service';
 import { SimulationService } from '../simulation/simulation.service';
 import { CatalogService, REFUSED_SALE_CODES } from '../catalog/catalog.service';
@@ -170,7 +169,6 @@ export class OrderService {
     private readonly refundService: RefundService,
     private readonly dataSource: DataSource,
     private readonly transitionRecorder: OrderTransitionRecorder,
-    @Optional() private readonly kdsService?: KdsService,
     @Optional() private readonly printQueueService?: PrintQueueService,
     @Optional() private readonly creditService?: CreditService,
     @Optional() @Inject(forwardRef(() => SimulationService)) private readonly simulationService?: SimulationService,
@@ -981,14 +979,6 @@ export class OrderService {
       });
     });
 
-    if (this.kdsService) {
-      try {
-        await this.kdsService.generateTicketsForOrder(tenantId, id, correlationId);
-      } catch (e) {
-        // KDS side effect error must not fail submit
-      }
-    }
-
     if (this.printQueueService) {
       try {
         await this.printQueueService.enqueueOrderPrintJobs(tenantId, id, 'KITCHEN_TICKET', false, undefined, userId);
@@ -1042,13 +1032,6 @@ export class OrderService {
     await this.orderRepo.save(order);
     await assignCallNumber(this.dataSource.manager, order);
 
-    if (this.kdsService) {
-      try {
-        await this.kdsService.generateTicketsForOrder(tenantId, orderId, correlationId);
-      } catch {
-        // A kitchen-screen failure must not undo a payment the guest has already made.
-      }
-    }
     if (this.printQueueService) {
       await this.printQueueService.enqueueOrderPrintJobs(tenantId, orderId, 'KITCHEN_TICKET', false);
     }
@@ -1383,27 +1366,6 @@ export class OrderService {
     } catch (err) {
       // The accept has already been sent to the kitchen; the board can be fixed up by hand.
       console.error(`Online order ${order.order_number} could not be put on the delivery board`, err);
-    }
-
-    if (this.kdsService && isAggregatorOrder(order)) {
-      try {
-        // The platform's support sent the order back changed after the kitchen had it. The
-        // lines it struck off come off the tickets before the new ones go on.
-        const struckOff = await this.itemRepo.find({ where: { tenant_id: tenantId, order_id: id, state: 'VOID' } });
-        for (const line of struckOff) {
-          await this.kdsService.cancelTicketItemsForOrderItem(tenantId, line.id, userId);
-        }
-      } catch (e) {
-        // Like the tickets below, a kitchen side effect must not fail the accept
-      }
-    }
-
-    if (this.kdsService) {
-      try {
-        await this.kdsService.generateTicketsForOrder(tenantId, id, correlationId);
-      } catch (e) {
-        // KDS side effect error must not fail the accept
-      }
     }
 
     if (this.printQueueService) {
@@ -2080,20 +2042,6 @@ export class OrderService {
   }
 
   /**
-   * Retract voided lines from the kitchen and fire any newly appended ones, on both
-   * the station screens and the kitchen printer.
-   *
-   * MUST be called after the edit transaction commits, never inside it. KdsService
-   * works through its own repositories on a separate connection, so a line added
-   * in an open transaction is invisible to it and would never reach a station.
-   *
-   * A kitchen that works from paper never sees the screens, so the change chit is
-   * printed regardless of whether the KDS call succeeded.
-   *
-   * Best effort: a KDS hiccup must not fail an otherwise valid edit, since the
-   * order and its money are already consistent by this point.
-   */
-  /**
    * The reason a cook reads on a change chit. The till sends a reason code more often than a
    * typed note, and a chit saying only "order cancelled" leaves the kitchen guessing.
    */
@@ -2108,6 +2056,10 @@ export class OrderService {
     }
   }
 
+  /**
+   * A change chit for the kitchen: voided lines struck off, appended ones added. Called after
+   * the edit transaction commits, so the print queue sees the new lines.
+   */
   private async syncKitchenAfterEdit(
     tenantId: string,
     orderId: string,
@@ -2116,19 +2068,6 @@ export class OrderService {
     reason?: string,
     userId?: string,
   ) {
-    if (this.kdsService) {
-      try {
-        for (const itemId of voidedItemIds) {
-          await this.kdsService.cancelTicketItemsForOrderItem(tenantId, itemId, userId);
-        }
-        if (addedItemIds.length > 0) {
-          await this.kdsService.generateTicketsForOrder(tenantId, orderId);
-        }
-      } catch (err) {
-        console.error(`KDS sync after edit of order ${orderId} failed`, err);
-      }
-    }
-
     if (this.printQueueService && (voidedItemIds.length > 0 || addedItemIds.length > 0)) {
       await this.printQueueService.enqueueKitchenChangeTicket(
         tenantId,
@@ -2152,10 +2091,9 @@ export class OrderService {
   }
 
   /**
-   * Stop the kitchen on an order that was cancelled after it was sent there: every
-   * line still on it comes off the station screens, and the printer gets a STOP chit.
-   * A draft never reached the kitchen, and an order out for delivery has already left
-   * it, so neither gets one.
+   * Stop the kitchen on an order that was cancelled after it was sent there: the printers
+   * get a STOP chit for every line still on it. A draft never reached the kitchen, and an
+   * order out for delivery has already left it, so neither gets one.
    */
   private async stopKitchenAfterCancel(
     tenantId: string,
@@ -2166,16 +2104,6 @@ export class OrderService {
     userId?: string,
   ) {
     if (!KITCHEN_HOLDS_ORDER_STATES.includes(stateBeforeCancel) || activeItemIds.length === 0) return;
-
-    if (this.kdsService) {
-      try {
-        for (const itemId of activeItemIds) {
-          await this.kdsService.cancelTicketItemsForOrderItem(tenantId, itemId, userId);
-        }
-      } catch (err) {
-        console.error(`KDS stop after cancel of order ${orderId} failed`, err);
-      }
-    }
 
     if (this.printQueueService) {
       await this.printQueueService.enqueueKitchenChangeTicket(tenantId, orderId, { kind: 'CANCELLED', reason }, userId);
@@ -2335,7 +2263,7 @@ export class OrderService {
       return { replacedItemId: item.id, replacementItemId: replacement?.id };
     });
 
-    // Outside the transaction so the replacement line is visible to KDS.
+    // Outside the transaction so the print queue sees the replacement line.
     await this.syncKitchenAfterEdit(
       tenantId,
       id,

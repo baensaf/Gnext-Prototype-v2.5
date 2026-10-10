@@ -23,7 +23,6 @@ const icon = (name: string) => (
 const ICONS = {
   dashboard: icon('ic-dashboard'),
   pos: icon('ic-cart'),
-  kds: icon('ic-kanban'),
   store: icon('ic-banking'),
   terminal: icon('ic-booking'),
   drawer: icon('ic-invoice'),
@@ -95,11 +94,6 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.dineIn', 'Dine-In Floor'),
           path: '/app/dine-in/floor',
           icon: ICONS.store,
-        },
-        {
-          title: t('nav.kds', 'Kitchen KDS'),
-          path: '/app/kds',
-          icon: ICONS.kds,
         },
         {
           title: t('nav.incomingOrders', 'Incoming Orders'),

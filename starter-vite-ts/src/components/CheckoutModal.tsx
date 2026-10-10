@@ -25,9 +25,9 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { newIdempotencyKey } from 'src/utils/idempotency';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
-import { kdsApi } from 'src/api/kdsApi';
 import { orderApi } from 'src/api/orderApi';
 import { paymentApi } from 'src/api/paymentApi';
+import { printingApi } from 'src/api/printingApi';
 import { settingsApi } from 'src/api/settingsApi';
 import { customerApi } from 'src/api/customerApi';
 
@@ -374,7 +374,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const handlePrintReceipt = async () => {
     if (!orderId) return;
     try {
-      const jobs = await kdsApi.reprintOrder(orderId, 'CUSTOMER_RECEIPT', t('pos.printReceipt', 'Print Receipt'));
+      const jobs = await printingApi.reprintOrder(orderId, 'CUSTOMER_RECEIPT', t('pos.printReceipt', 'Print Receipt'));
       if (!Array.isArray(jobs) || jobs.length === 0 || jobs.every((j) => j.status === 'FAILED')) {
         throw new Error(t('pos.receiptFailed', 'The receipt could not be sent to a printer'));
       }

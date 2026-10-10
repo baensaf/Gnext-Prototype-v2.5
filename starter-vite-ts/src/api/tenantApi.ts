@@ -51,7 +51,7 @@ export interface Terminal {
   branch_id: string;
   code: string;
   name: string;
-  terminal_type: 'CASHIER' | 'KIOSK' | 'KDS';
+  terminal_type: 'CASHIER' | 'KIOSK';
   is_active: boolean;
   last_seen_at?: string;
   /** A kiosk's card terminal, charged through the branch agent. */

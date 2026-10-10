@@ -125,46 +125,23 @@ export async function seedAdminDemo(
     console.log('Seeded Payment Device: کارتخوان سامان صندوق ۱ (ولیعصر)');
   }
 
-  // Valiasr's kitchen: a grill for burgers and sandwiches, a fryer for the fried food and
-  // sides, and one screen showing both. Its old stations were deleted in testing on 09-10.
-  const stationRepo = ds.getRepository('KitchenStation');
-  if (valiasr && !(await stationRepo.findOne({ where: { tenant_id: tenantId, branch_id: valiasr.id, deleted_at: IsNull() } }))) {
-    // Both print on the branch's kitchen printer, each chit headed with its station.
+  // Valiasr's kitchen printer prints the burgers, sandwiches, fried food and sides; anything
+  // else (drinks) falls to the branch's default kitchen printer, which is the same one.
+  const routeRepo = ds.getRepository('PrintRoute');
+  if (valiasr && !(await routeRepo.findOne({ where: { tenant_id: tenantId, branch_id: valiasr.id } }))) {
     const kitchenPrinter: any = await ds
       .getRepository('Printer')
       .findOne({ where: { tenant_id: tenantId, branch_id: valiasr.id, printer_type: 'KITCHEN_IMPACT', is_active: true } });
-    const printer_ids = kitchenPrinter ? [kitchenPrinter.id] : [];
-    const grill: any = await stationRepo.save(
-      stationRepo.create({ tenant_id: tenantId, branch_id: valiasr.id, code: 'VAL-GRILL', name: 'گریل', station_type: 'HOT_KITCHEN', target_minutes: 8, is_active: true, printer_ids }),
-    );
-    const fryer: any = await stationRepo.save(
-      stationRepo.create({ tenant_id: tenantId, branch_id: valiasr.id, code: 'VAL-FRY', name: 'سرخ‌کن', station_type: 'FRYER', target_minutes: 5, is_active: true, printer_ids }),
-    );
-    const ruleRepo = ds.getRepository('KdsRoutingRule');
-    const routes: Array<[string, any]> = [
-      ['IB-BURGER', grill],
-      ['IB-SANDWICH', grill],
-      ['IB-FRIED', fryer],
-      ['IB-SIDES', fryer],
-    ];
-    for (const [code, station] of routes) {
-      const category = categories.find((c) => c.code === code);
-      if (!category) continue;
-      await ruleRepo.save(
-        ruleRepo.create({ tenant_id: tenantId, branch_id: valiasr.id, station_id: station.id, category_id: category.id }),
-      );
+    if (kitchenPrinter) {
+      for (const code of ['IB-BURGER', 'IB-SANDWICH', 'IB-FRIED', 'IB-SIDES']) {
+        const category = categories.find((c) => c.code === code);
+        if (!category) continue;
+        await routeRepo.save(
+          routeRepo.create({ tenant_id: tenantId, branch_id: valiasr.id, printer_id: kitchenPrinter.id, category_id: category.id }),
+        );
+      }
+      console.log('Seeded Valiasr print routing');
     }
-    await ds.getRepository('KdsScreen').save(
-      ds.getRepository('KdsScreen').create({
-        tenant_id: tenantId,
-        branch_id: valiasr.id,
-        code: 'VAL-KDS-1',
-        name: 'نمایشگر آشپزخانه ولیعصر',
-        station_ids: [grill.id, fryer.id],
-        is_active: true,
-      }),
-    );
-    console.log('Seeded Valiasr kitchen: grill and fryer stations, routing and a screen');
   }
 
   // A second, farther Valiasr delivery zone with a higher fee.

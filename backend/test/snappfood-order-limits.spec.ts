@@ -24,7 +24,6 @@ import { ApprovalService } from '../src/modules/approval/approval.service';
 import { CatalogService } from '../src/modules/catalog/catalog.service';
 import { RefundService } from '../src/modules/refund/refund.service';
 import { PaymentService } from '../src/modules/payment/payment.service';
-import { KdsService } from '../src/modules/kds/kds.service';
 import { PrintQueueService } from '../src/modules/printing/print-queue.service';
 import { SimulationService } from '../src/modules/simulation/simulation.service';
 import { OrderTransitionRecorder } from '../src/modules/order-lifecycle/order-transition-recorder.service';
@@ -36,9 +35,7 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
   let service: OrderService;
   let orderRepo: any;
   let itemRepo: any;
-  let em: any;
-  let kdsService: any;
-  let simulationService: any;
+  let em: any;  let simulationService: any;
   let auditWriter: any;
   let printQueueService: any;
 
@@ -70,12 +67,7 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
       // A shift is open at the branch, so an accept goes through.
       find: jest.fn((entity) => Promise.resolve(entity === CashierShift ? [{ id: 'shift-1', state: 'OPEN' }] : [])),
       getRepository: jest.fn(),
-    };
-    kdsService = {
-      generateTicketsForOrder: jest.fn().mockResolvedValue([]),
-      cancelTicketItemsForOrderItem: jest.fn().mockResolvedValue(undefined),
-    };
-    simulationService = {
+    };    simulationService = {
       notifyAccepted: jest.fn().mockResolvedValue({ status: 204, statusCode: 42 }),
       notifyRejected: jest.fn().mockResolvedValue({ status: 204, statusCode: 51 }),
       getDeclineReasons: jest.fn().mockResolvedValue([
@@ -108,9 +100,7 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
         { provide: AuditWriter, useValue: auditWriter },
         { provide: OutboxWriter, useValue: { enqueueInTransaction: jest.fn(), enqueue: jest.fn() } },
         { provide: ApprovalService, useValue: {} },
-        { provide: DataSource, useValue: { transaction: jest.fn(async (cb) => await cb(em)) } },
-        { provide: KdsService, useValue: kdsService },
-        { provide: PrintQueueService, useValue: printQueueService },
+        { provide: DataSource, useValue: { transaction: jest.fn(async (cb) => await cb(em)) } },        { provide: PrintQueueService, useValue: printQueueService },
         { provide: SimulationService, useValue: simulationService },
         OrderTransitionRecorder,
       ],
@@ -138,7 +128,6 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
       expect(refused).toBeInstanceOf(BadRequestException);
       expect(refused.getResponse()).toEqual(expect.objectContaining({ code: 'PROMISE_OVER_PLATFORM_LIMIT', maxMinutes: 25 }));
       expect(em.save).not.toHaveBeenCalled();
-      expect(kdsService.generateTicketsForOrder).not.toHaveBeenCalled();
       expect(simulationService.notifyAccepted).not.toHaveBeenCalled();
     });
 
@@ -157,17 +146,6 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
 
       expect(maxPromiseMinutes(ownDelivery)).toBe(70);
     });
-
-    it('takes the lines Snappfood struck off the kitchen tickets before firing the new ones', async () => {
-      orderRepo.findOne.mockResolvedValue(snappfoodOrder({ state: 'PENDING_ACCEPTANCE', status: 'PENDING_ACCEPTANCE', accepted_at: null }));
-      itemRepo.find.mockResolvedValue([{ id: 'struck-off-1' }]);
-
-      await service.acceptIncomingOrder('t-1', 'order-1', { prepMinutes: 20 }, 'user-1');
-
-      expect(itemRepo.find).toHaveBeenCalledWith({ where: { tenant_id: 't-1', order_id: 'order-1', state: 'VOID' } });
-      expect(kdsService.cancelTicketItemsForOrderItem).toHaveBeenCalledWith('t-1', 'struck-off-1', 'user-1');
-      expect(kdsService.generateTicketsForOrder).toHaveBeenCalledTimes(1);
-    });
   });
 
   describe('reporting a problem after accepting', () => {
@@ -180,7 +158,6 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
       expect(reported.state).toBe('CONFIRMED');
       expect(reported.aggregator_issue_at).toBeInstanceOf(Date);
       expect(reported.aggregator_issue).toContain('Needs 20 more minutes');
-      expect(kdsService.cancelTicketItemsForOrderItem).not.toHaveBeenCalled();
       expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'ONLINE_ORDER_REPORTED', entityId: 'order-1' }));
     });
 
@@ -226,7 +203,6 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
 
       const result = await service.stopKitchenForPlatformCancel('t-1', order, 'CONFIRMED');
 
-      expect(kdsService.cancelTicketItemsForOrderItem).toHaveBeenCalledTimes(2);
       // With printed tickets the cook learns it from a STOP chit.
       expect(printQueueService.enqueueKitchenChangeTicket).toHaveBeenCalledWith('t-1', 'order-1', expect.objectContaining({ kind: 'CANCELLED' }), undefined);
       expect(result.online_alert).toBe('PLATFORM_CANCELLED');
@@ -238,7 +214,6 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
 
       const result = await service.stopKitchenForPlatformCancel('t-1', order, 'PENDING_ACCEPTANCE');
 
-      expect(kdsService.cancelTicketItemsForOrderItem).not.toHaveBeenCalled();
       expect(result.online_alert).toBeUndefined();
     });
   });

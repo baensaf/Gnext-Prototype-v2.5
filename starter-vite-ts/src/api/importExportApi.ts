@@ -96,7 +96,7 @@ export const importExportApi = {
       data: {
         resetTables: string[];
         seedProfile: string;
-        baseline: { orders: number; kdsTickets: number; deliveries: number; activeShifts: number };
+        baseline: { orders: number; deliveries: number; activeShifts: number };
       };
     }>('/api/v1/system/demo-reset', { pin });
     return res.data.data;

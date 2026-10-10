@@ -29,7 +29,6 @@ export const paths = {
     dineIn: {
       floor: `${ROOTS.APP}/dine-in/floor`,
     },
-    kds: `${ROOTS.APP}/kds`,
     delivery: {
       orders: `${ROOTS.APP}/delivery/orders`,
       couriers: `${ROOTS.APP}/delivery/couriers`,
@@ -82,7 +81,7 @@ export const paths = {
       branchDetail: (id: string) => `${ROOTS.APP}/operations/branches/${id}`,
       terminals: `${ROOTS.APP}/operations/terminals`,
       cardTerminals: `${ROOTS.APP}/operations/card-terminals`,
-      kdsConfiguration: `${ROOTS.APP}/operations/kds-configuration`,
+      printRouting: `${ROOTS.APP}/operations/print-routing`,
       printers: `${ROOTS.APP}/operations/printers`,
       printQueue: `${ROOTS.APP}/operations/print-queue`,
       monitoring: `${ROOTS.APP}/operations/monitoring`,
