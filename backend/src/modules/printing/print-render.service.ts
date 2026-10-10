@@ -25,6 +25,10 @@ export interface RenderDocOptions {
   calendar?: CalendarSystem;
   /** On a kitchen chit: the station it is for, e.g. "Grill (1/3)" when the order is split. */
   stationLabel?: string;
+  /** On a station's kitchen chit: the other stations the same order went to, so a cook knows to wait for them. */
+  otherStations?: string[];
+  /** A chit with every line of the order, for the pass that bags it. */
+  wholeOrder?: boolean;
   /**
    * Set on a kitchen ticket that amends one the kitchen already holds. The chit is
    * retitled so a cook cannot mistake it for a fresh order, and each line says whether
@@ -197,15 +201,26 @@ ${body}
 
   /**
    * What an Iranian kitchen chit is: the number the order is called by, very large, and this
-   * station's items. A change, a cancel or a copy still says so, since a cook acting on it
-   * as a fresh order makes the wrong food.
+   * station's items, with what HAMI's chit also carries: the time, the order's note, and the
+   * other stations it went to. A change, a cancel or a copy still says so, and why, since a cook
+   * acting on it as a fresh order makes the wrong food.
    */
   private compactKitchenChit(o: RenderDocOptions): string {
+    // How it leaves (salon, takeaway, Snappfood) decides the plate or the bag; the time says
+    // how long it has waited. One line, under the number.
+    const time = this.date(o).split(' ').pop();
+    const typeLine = [this.orderTypeLine(o), time].filter(Boolean).join(' · ');
+    const others = o.otherStations?.length ? `<hr/><div class="c small">بخش‌های دیگر: ${this.esc(o.otherStations.join('، '))}</div>` : '';
     return `${o.isReprint ? REPRINT_MARK : REPRINT_SLOT}
 ${this.changeBanner(o)}
+${o.wholeOrder ? '<div class="inv">کل سفارش</div>' : ''}
 <div class="huge">${this.fa(this.displayNumber(o))}</div>
+<div class="c title">${typeLine}</div>
+${o.changeReason ? `<div class="box">علت: ${this.esc(o.changeReason)}</div>` : ''}
 <hr/>
-<table>${this.kitchenLines(o)}</table>`;
+<table>${this.kitchenLines(o)}</table>
+${o.orderNotes ? `<hr/><div class="note">توضیحات سفارش: ${this.esc(o.orderNotes)}</div>` : ''}
+${others}`;
   }
 
   private kitchenChit(o: RenderDocOptions): string {
