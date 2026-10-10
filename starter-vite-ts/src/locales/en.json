@@ -107,7 +107,6 @@
     "outboxV5": "Outbox & Event Queue Monitor",
     "printQueueV5": "Thermal Print Queue Engine",
     "reportsSalesSummary": "Sales Summary",
-    "reportsBranchComparison": "Branch Comparison",
     "users": "Users & Roles",
     "userAccounts": "User Accounts",
     "cashierShifts": "Shifts & Drawer",
@@ -657,17 +656,7 @@
       },
       "paidWithoutDetail": "The order is marked paid, but no payment record was kept for it.",
       "orderTaken": "Order taken",
-      "reason": "Reason: {{reason}}",
-      "events": {
-        "ORDER_EDITED": "Lines edited",
-        "ORDER_UPDATED": "Order changed",
-        "ORDER_TYPE_CHANGED": "Type changed",
-        "DINING_TABLE_MOVED": "Moved to another table",
-        "DINING_ORDERS_MERGED": "Merged with another order",
-        "ORDER_SPLIT": "Order split",
-        "ORDER_DELIVERY_FAILED": "Not delivered",
-        "other": "Order changed"
-      }
+      "reason": "Reason: {{reason}}"
     },
     "errors": {
       "loadFailed": "Failed to load active orders",
@@ -2325,7 +2314,7 @@
     "exportXlsx": "Export Typed XLSX",
     "index": {
       "heading": "Reports & Analytics",
-      "subtitle": "Every report available to your account. Open one to set its date range, save a view, or export it.",
+      "subtitle": "Every report available to your account. Open one to set its date range or export it.",
       "searchPlaceholder": "Search reports",
       "noMatches": "No report matches “{{term}}”.",
       "loadFailed": "Could not load the report catalog. Try again.",
@@ -2336,11 +2325,9 @@
         "PROMOTION": "Discounts & Coupons",
         "CASH": "Cash & Shifts",
         "CREDIT": "Customer Credit",
-        "CUSTOMER": "Customers",
         "DELIVERY": "Delivery & Couriers",
         "TAX": "Tax & Compliance",
         "INTEGRATION": "Integrations",
-        "SIMULATION": "Simulation & Hardware",
         "V5_PREVIEW": "Preview"
       }
     }
@@ -3777,7 +3764,6 @@
       "users": "Hire, move and deactivate staff — and set their pin",
       "usersNote": "Anyone may change their own pin. Setting somebody else’s is head office’s.",
       "branches": "Open a branch, set its trading hours",
-      "compare": "Compare one branch against another",
       "fleetRollup": "See every branch’s couriers on one screen",
       "shiftRollup": "See every branch’s tills, and the drawers left open"
     }

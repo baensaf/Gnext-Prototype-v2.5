@@ -47,7 +47,6 @@ export function DashboardPage() {
     sales_today: '0.00',
     open_orders_count: 0,
     active_shifts_count: 0,
-    open_alerts_count: 0,
     branch_health_percentage: 100,
   });
 

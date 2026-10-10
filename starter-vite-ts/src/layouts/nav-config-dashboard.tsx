@@ -229,9 +229,8 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.reports', 'Reports & Analytics'),
           path: '/app/reports',
           icon: ICONS.dashboard,
-          // Twenty-five reports live behind the picker inside the viewer, so the index is
-          // the entry that makes them findable. The two named below are the ones people
-          // open by name — sales summary daily, the chain roll-up by an area manager.
+          // The reports live behind the picker inside the viewer, so the index is the entry
+          // that makes them findable. Sales summary is the one people open by name, daily.
           children: [
             {
               title: t('nav.reportsAll', 'All Reports'),
@@ -240,10 +239,6 @@ export function useNavData(): NavSectionProps['data'] {
             {
               title: t('nav.reportsSalesSummary', 'Sales Summary'),
               path: '/app/reports/sales-summary',
-            },
-            {
-              title: t('nav.reportsBranchComparison', 'Branch Comparison'),
-              path: '/app/reports/branch-comparison',
             },
           ],
         },

@@ -15,7 +15,6 @@ import {
   TableBody,
   TableCell,
   TableHead,
-  TextField,
   Typography,
   InputLabel,
   FormControl,
@@ -37,7 +36,6 @@ export function ReportViewerPage() {
   const [catalog, setCatalog] = useState<any[]>([]);
   const [selectedReportCode, setSelectedReportCode] = useState(reportCode || 'sales-summary');
   const [reportResult, setReportResult] = useState<any>(null);
-  const [savedViews, setSavedViews] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -49,7 +47,6 @@ export function ReportViewerPage() {
   // Filters
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [savedViewName, setSavedViewName] = useState('');
 
   const fetchCatalog = useCallback(async () => {
     try {
@@ -59,17 +56,6 @@ export function ReportViewerPage() {
       console.error('Failed to load report catalog:', err);
     }
   }, []);
-
-  const fetchSavedViews = useCallback(async () => {
-    try {
-      const res = await axios.get('/api/v1/reports/saved-views', {
-        params: { reportCode: selectedReportCode },
-      });
-      setSavedViews(res.data);
-    } catch (err) {
-      console.error('Failed to load saved views:', err);
-    }
-  }, [selectedReportCode]);
 
   const handleRunQuery = useCallback(async () => {
     setLoading(true);
@@ -85,21 +71,6 @@ export function ReportViewerPage() {
       setLoading(false);
     }
   }, [selectedReportCode, startDate, endDate]);
-
-  const handleSaveView = async () => {
-    if (!savedViewName) return;
-    try {
-      await axios.post('/api/v1/reports/saved-views', {
-        name: savedViewName,
-        reportCode: selectedReportCode,
-        filters: { startDate, endDate },
-      });
-      setSavedViewName('');
-      fetchSavedViews();
-    } catch {
-      alert('Failed to save view');
-    }
-  };
 
   const handleExport = async (format: 'CSV' | 'XLSX') => {
     try {
@@ -139,8 +110,7 @@ export function ReportViewerPage() {
 
   useEffect(() => {
     handleRunQuery();
-    fetchSavedViews();
-  }, [selectedReportCode, handleRunQuery, fetchSavedViews]);
+  }, [selectedReportCode, handleRunQuery]);
 
   const headers = reportResult?.rows?.length > 0 ? Object.keys(reportResult.rows[0]) : [];
 
@@ -168,7 +138,7 @@ export function ReportViewerPage() {
         </Stack>
       </Stack>
 
-      {/* Filter & Saved View Bar */}
+      {/* Filter bar */}
       <Card sx={{ p: 3, borderRadius: 3, mb: 3 }}>
         <Grid container spacing={2} sx={{ alignItems: 'center' }}>
           <Grid size={{ xs: 12, md: 4 }}>
@@ -221,23 +191,6 @@ export function ReportViewerPage() {
             </Button>
           </Grid>
         </Grid>
-
-        {/* Saved Report Views */}
-        <Stack direction="row" spacing={2} sx={{ mt: 2, alignItems: 'center' }}>
-          <TextField
-            label="Save Filter View Name"
-            size="small"
-            value={savedViewName}
-            onChange={(e) => setSavedViewName(e.target.value)}
-          />
-          <Button variant="outlined" size="small" onClick={handleSaveView} disabled={!savedViewName}>
-            Save View
-          </Button>
-          <VersionTag feature="reports.savedViews" />
-          {savedViews.length > 0 && (
-            <Chip label={`${savedViews.length} Saved Filter Views Available`} color="secondary" size="small" />
-          )}
-        </Stack>
       </Card>
 
       {/* Report Data Table */}

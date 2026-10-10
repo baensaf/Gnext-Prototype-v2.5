@@ -88,7 +88,6 @@ const CHAIN_ONLY_PATHS = [
   // Which PC may speak for a branch is decided centrally; a branch account could otherwise
   // enrol a machine for the shop next door.
   '/app/operations/agents',
-  '/app/reports/branch-comparison',
   // Reading every branch at once is head office's job by definition. A branch manager has
   // the live screens for their own site and no business reading the shop next door's
   // drawer variance, so the roll-ups are chain-only even though they only ever read.
