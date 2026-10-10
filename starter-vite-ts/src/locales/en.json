@@ -2763,26 +2763,15 @@
     },
     "generalPage": {
       "title": "General Settings & Currencies",
-      "subtitle": "Manage tenant profile, timezone, locale defaults, and system currencies",
       "tenantProfile": "Tenant Organization Profile",
       "tenantCode": "Tenant Code",
       "tenantName": "Tenant Name",
       "defaultLocale": "Default Locale",
       "timeZone": "Time Zone",
       "saveTenant": "Save Tenant Settings",
-      "supportedCurrencies": "Supported Currencies",
-      "oneCurrencyNotice": "One Currency per Order (AD-10)",
-      "colCode": "Code",
-      "colSymbol": "Symbol",
-      "colPrecision": "Precision",
-      "colIncrement": "Increment",
-      "colBase": "Base",
-      "colEnabled": "Enabled",
-      "baseBadge": "BASE",
       "saveSuccess": "Tenant settings updated successfully",
       "loadError": "Failed to load settings",
-      "updateError": "Failed to update settings",
-      "currencyStatusError": "Failed to update currency status"
+      "updateError": "Failed to update settings"
     },
     "paymentsPage": {
       "title": "Payment & Refund Methods",

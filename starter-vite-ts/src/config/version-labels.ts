@@ -127,7 +127,6 @@ export const FEATURE_LABELS = {
   // Reports
   'reports.savedViews': 'V4',
   // Settings. Money is shown in Toman in V1; the Omani rial and the US dollar come in V7.
-  'settings.currencies': 'F',
   'settings.reopenOrders': 'V2',
   'settings.incomingOrders': 'V3',
   'settings.refundMethods': 'V2',

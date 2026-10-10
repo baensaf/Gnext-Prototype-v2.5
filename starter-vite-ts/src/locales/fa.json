@@ -2763,26 +2763,15 @@
     },
     "generalPage": {
       "title": "تنظیمات عمومی و ارزها",
-      "subtitle": "مدیریت مشخصات مجموعه، منطقه زمانی، زبان پیش‌فرض و ارزهای سیستم",
       "tenantProfile": "مشخصات سازمان و مجموعه",
       "tenantCode": "شناسه سازمان",
       "tenantName": "نام مجموعه",
       "defaultLocale": "زبان پیش‌فرض سیستم",
       "timeZone": "منطقه زمانی",
       "saveTenant": "ذخیره تنظیمات مجموعه",
-      "supportedCurrencies": "ارزهای پشتیبانی‌شده",
-      "oneCurrencyNotice": "یک ارز برای هر سفارش (AD-10)",
-      "colCode": "کد ارز",
-      "colSymbol": "نماد",
-      "colPrecision": "دقت اعشار",
-      "colIncrement": "واحد گردکردن",
-      "colBase": "ارز پایه",
-      "colEnabled": "وضعیت فعال",
-      "baseBadge": "پایه",
       "saveSuccess": "تنظیمات مجموعه با موفقیت به‌روزرسانی شد.",
       "loadError": "خطا در بارگذاری تنظیمات",
-      "updateError": "خطا در به‌روزرسانی تنظیمات",
-      "currencyStatusError": "خطا در تغییر وضعیت ارز"
+      "updateError": "خطا در به‌روزرسانی تنظیمات"
     },
     "paymentsPage": {
       "title": "روش‌های پرداخت و مرجوعی",
