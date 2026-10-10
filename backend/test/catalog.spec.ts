@@ -292,18 +292,6 @@ describe('CatalogService (Unit)', () => {
     const at = (iso: string) => new Date(iso);
     const shift = (day: number, open: string, close: string) => ({ day_of_week: day, open_time: open, close_time: close, is_closed: false });
 
-    it('brings an item back at the next shift, later today or on the next open day', async () => {
-      // Wednesday lunch and dinner, Thursday lunch. 10:00Z Wednesday is 13:30 in Tehran.
-      hoursRepo.find.mockResolvedValue([shift(3, '12:00:00', '16:00:00'), shift(3, '19:00:00', '23:00:00'), shift(4, '12:00:00', '16:00:00')]);
-
-      expect((await service.nextShiftStart('t-1', 'b-1', at('2026-09-16T10:00:00Z'))).toISOString()).toBe('2026-09-16T15:30:00.000Z');
-      expect((await service.nextShiftStart('t-1', 'b-1', at('2026-09-16T20:00:00Z'))).toISOString()).toBe('2026-09-17T08:30:00.000Z');
-    });
-
-    it('falls back to the start of tomorrow when the branch has no hours', async () => {
-      expect((await service.nextShiftStart('t-1', 'b-1', at('2026-09-16T10:00:00Z'))).toISOString()).toBe('2026-09-16T20:30:00.000Z');
-    });
-
     it('takes one variant off sale and leaves the others', async () => {
       prodRepo.findOne.mockResolvedValue({ id: 'p-sandwich' });
       availRepo.find.mockResolvedValue([{ product_id: 'p-sandwich', variant_id: 'v-cold', is_suspended: true, suspended_until: null }]);

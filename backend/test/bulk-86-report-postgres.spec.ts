@@ -71,22 +71,20 @@ describe('Bulk 86 and the stop report (PostgreSQL)', () => {
   const off = async (productId: string, branchId: string) => (await catalog.getSuspension(tenantId, productId, branchId)).isSuspended;
 
   it("stops a whole category, sub-categories included, at the branch's own branch only", async () => {
-    await expect(controller.bulkStop({ categoryId: grill, reason: ' ' }, manager())).rejects.toThrow('Pick why');
-
     // A branch manager naming another branch still acts at their own.
-    const result = await controller.bulkStop({ categoryId: grill, branchIds: [branchB], until: 'NEXT_SHIFT', reason: 'Grill down' }, manager());
+    const result = await controller.bulkStop({ categoryId: grill, branchIds: [branchB] }, manager());
     expect(result).toEqual({ products: 2, branches: 1, stopped: 2 });
     expect([await off(burger, branchA), await off(kebab, branchA), await off(soda, branchA)]).toEqual([true, true, false]);
     expect(await off(burger, branchB)).toBe(false);
   });
 
   it('lets head office stop an item at the branches it names, or chain-wide with none', async () => {
-    expect(await controller.bulkStop({ productIds: [soda], branchIds: [branchA, branchB], reason: 'Supplier late' }, hq())).toEqual({ products: 1, branches: 2, stopped: 2 });
+    expect(await controller.bulkStop({ productIds: [soda], branchIds: [branchA, branchB] }, hq())).toEqual({ products: 1, branches: 2, stopped: 2 });
     expect([await off(soda, branchA), await off(soda, branchB)]).toEqual([true, true]);
     await controller.bulkResume({ productIds: [soda], branchIds: [branchA, branchB] }, hq());
     expect([await off(soda, branchA), await off(soda, branchB)]).toEqual([false, false]);
 
-    await expect(controller.bulkStop({ productIds: [soda], branchIds: ['00000000-0000-0000-0000-00000000dead'], reason: 'x' }, hq())).rejects.toThrow('Branch not found');
+    await expect(controller.bulkStop({ productIds: [soda], branchIds: ['00000000-0000-0000-0000-00000000dead'] }, hq())).rejects.toThrow('Branch not found');
   });
 
   it('logs a sale refused because the item was off', async () => {
@@ -100,7 +98,7 @@ describe('Bulk 86 and the stop report (PostgreSQL)', () => {
   });
 
   it("puts a category back, but a branch can't lift head office's chain-wide stop", async () => {
-    await controller.bulkStop({ productIds: [burger], reason: 'Recall' }, hq());
+    await controller.bulkStop({ productIds: [burger] }, hq());
     const back = await controller.bulkResume({ categoryId: grill }, manager());
     expect(back).toEqual({ resumed: 1, chain_wide: 1 });
     expect(await off(kebab, branchA)).toBe(false);
@@ -118,9 +116,9 @@ describe('Bulk 86 and the stop report (PostgreSQL)', () => {
     expect(report.totals.refused).toBe(1);
 
     const grillStop = report.stops.find((s: any) => s.item === 'KEBAB');
-    expect(grillStop).toMatchObject({ branch: 'Alpha', reason: 'Grill down', source: 'BULK', by: 'Mina Manager', ended: 'RESUMED', resumed_by: 'Mina Manager' });
+    expect(grillStop).toMatchObject({ branch: 'Alpha', source: 'BULK', by: 'Mina Manager', ended: 'RESUMED', resumed_by: 'Mina Manager' });
     const recall = report.stops.find((s: any) => s.item === 'BURGER' && s.chain_wide);
-    expect(recall).toMatchObject({ reason: 'Recall', by: 'Hadi HQ', ended: 'RESUMED', resumed_by: 'Hadi HQ' });
+    expect(recall).toMatchObject({ by: 'Hadi HQ', ended: 'RESUMED', resumed_by: 'Hadi HQ' });
 
     // Head office sees Beta's soda stop too; Alpha's manager doesn't see Beta's.
     const everywhere = await controller.stopReport(undefined as any, undefined as any, undefined as any, hq());

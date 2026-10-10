@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
 import {
-  Chip,
   Stack,
   Alert,
   Button,
@@ -24,8 +23,6 @@ import { catalogApi } from 'src/api/catalogApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
 import { VersionTag } from 'src/components/version-tag';
-
-import { STOP_REASONS } from '../pos/pos-stop-dialog';
 
 type Props = {
   open: boolean;
@@ -49,10 +46,6 @@ export function BulkStopDialog({ open, products, categories, onClose, onDone }: 
   const [categoryId, setCategoryId] = useState('');
   const [picked, setPicked] = useState<Product[]>([]);
   const [branchIds, setBranchIds] = useState<string[]>([]);
-  const [until, setUntil] = useState<'NEXT_SHIFT' | 'HOURS' | 'MANUAL'>('MANUAL');
-  const [hours, setHours] = useState('2');
-  const [reason, setReason] = useState<(typeof STOP_REASONS)[number] | ''>('');
-  const [otherText, setOtherText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,14 +55,9 @@ export function BulkStopDialog({ open, products, categories, onClose, onDone }: 
     setCategoryId('');
     setPicked([]);
     setBranchIds([]);
-    setUntil('MANUAL');
-    setHours('2');
-    setReason('');
-    setOtherText('');
     setError(null);
   }, [open]);
 
-  const reasonText = reason === 'OTHER' ? otherText.trim() : reason ? t(`pos.stop.reasons.${reason}`) : '';
   const targets = {
     ...(what === 'CATEGORY' ? { categoryId } : { productIds: picked.map((p) => p.id) }),
     // At chain level, the branches picked (none: every branch). Inside one branch, that branch:
@@ -84,12 +72,7 @@ export function BulkStopDialog({ open, products, categories, onClose, onDone }: 
     setError(null);
     try {
       if (action === 'STOP') {
-        const done = await catalogApi.bulkStop({
-          ...targets,
-          reason: reasonText,
-          until: until === 'NEXT_SHIFT' ? 'NEXT_SHIFT' : undefined,
-          hours: until === 'HOURS' ? Number(hours) || undefined : undefined,
-        });
+        const done = await catalogApi.bulkStop(targets);
         onDone(t('catalog.bulkStop.stopped', { count: done.products, branches: done.branches }));
       } else {
         const done = await catalogApi.bulkResume(targets);
@@ -171,48 +154,6 @@ export function BulkStopDialog({ open, products, categories, onClose, onDone }: 
             </Typography>
           )}
 
-          <ToggleButtonGroup size="small" exclusive value={until} onChange={(_, next) => next && setUntil(next)}>
-            <ToggleButton value="MANUAL">{t('catalog.bulkStop.untilFurtherNotice')}</ToggleButton>
-            <ToggleButton value="NEXT_SHIFT">
-              {t('catalog.bulkStop.untilNextShift')} <VersionTag feature="catalog.stopDuration" sx={{ ml: 1 }} />
-            </ToggleButton>
-            <ToggleButton value="HOURS">
-              {t('catalog.bulkStop.forHours')} <VersionTag feature="catalog.stopDuration" sx={{ ml: 1 }} />
-            </ToggleButton>
-          </ToggleButtonGroup>
-          {until === 'HOURS' && (
-            <TextField
-              size="small"
-              type="number"
-              label={t('catalog.bulkStop.hours')}
-              value={hours}
-              onChange={(e) => setHours(e.target.value)}
-              slotProps={{ htmlInput: { min: 1, step: 1 } }}
-              sx={{ maxWidth: 160 }}
-            />
-          )}
-
-          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
-            <VersionTag feature="catalog.stopReason" />
-            {STOP_REASONS.map((r) => (
-              <Chip
-                key={r}
-                label={t(`pos.stop.reasons.${r}`)}
-                color={reason === r ? 'primary' : 'default'}
-                variant={reason === r ? 'filled' : 'outlined'}
-                onClick={() => setReason(r)}
-              />
-            ))}
-          </Stack>
-          {reason === 'OTHER' && (
-            <TextField
-              size="small"
-              label={t('catalog.bulkStop.otherReason')}
-              value={otherText}
-              onChange={(e) => setOtherText(e.target.value)}
-              slotProps={{ htmlInput: { maxLength: 200 } }}
-            />
-          )}
         </Stack>
       </DialogContent>
       <DialogActions>
@@ -220,7 +161,7 @@ export function BulkStopDialog({ open, products, categories, onClose, onDone }: 
         <Button disabled={busy || !hasTargets} onClick={() => run('RESUME')}>
           {t('catalog.bulkStop.putBack')}
         </Button>
-        <Button variant="contained" color="error" disabled={busy || !hasTargets || !reasonText} onClick={() => run('STOP')}>
+        <Button variant="contained" color="error" disabled={busy || !hasTargets} onClick={() => run('STOP')}>
           {t('catalog.bulkStop.takeOff')}
         </Button>
       </DialogActions>

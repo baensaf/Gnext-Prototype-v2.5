@@ -2,7 +2,6 @@ import { Controller, Get, Post, Patch, Put, Delete, Param, Query, Body, Req, Bad
 import { Request } from 'express';
 import { CatalogService } from './catalog.service';
 import { PriceListService } from './price-lists.service';
-import { ApprovalService } from '../approval/approval.service';
 import { PriceChangeInput, PriceChangeService } from './price-changes.service';
 import { StopReportService } from './stop-report.service';
 import { NoteTemplateService } from './note-template.service';
@@ -24,7 +23,6 @@ export class CatalogController {
   constructor(
     private readonly catalogService: CatalogService,
     private readonly priceLists: PriceListService,
-    private readonly approvals: ApprovalService,
     private readonly priceChanges: PriceChangeService,
     private readonly stopReports: StopReportService,
     private readonly noteTemplates: NoteTemplateService,
@@ -401,14 +399,12 @@ export class CatalogController {
     return await this.catalogService.deleteSchedule((req as any).tenantId, id, (req as any).correlationId);
   }
 
-  // `hours` absent or 0 means "off the menu here until somebody puts it back" —
-  // the branch does not carry it. A number of hours is today's 86, and the item
-  // returns by itself; `until: 'NEXT_SHIFT'` brings it back when the branch next opens.
+  // An item stays off until somebody puts it back: no reason and no time limit (2026-10-10).
   // The stop is on the product, or on one variant of it, or on an add-on item.
   @Roles(...MANAGER_AND_ABOVE)
   @Post('availability/suspend')
   async suspendProduct(
-    @Body() body: { productId?: string; variantId?: string; optionItemId?: string; branchId?: string; hours?: number; until?: 'NEXT_SHIFT'; reason?: string; channel?: string },
+    @Body() body: { productId?: string; variantId?: string; optionItemId?: string; branchId?: string; channel?: string },
     @Req() req: Request,
   ) {
     const tenantId = (req as any).tenantId;
@@ -417,10 +413,8 @@ export class CatalogController {
       tenantId,
       body.productId,
       effectiveBranchId((req as any).userBranchId, body.branchId),
-      body.hours,
-      body.reason,
       correlationId,
-      { variantId: body.variantId, optionItemId: body.optionItemId, untilNextShift: body.until === 'NEXT_SHIFT', channel: body.channel || null },
+      { variantId: body.variantId, optionItemId: body.optionItemId, channel: body.channel || null },
       { userId: (req as any).userId, source: 'ADMIN' },
     );
   }
@@ -445,15 +439,13 @@ export class CatalogController {
   @Roles(...MANAGER_AND_ABOVE)
   @Post('availability/bulk-stop')
   async bulkStop(
-    @Body() body: { categoryId?: string; productIds?: string[]; branchIds?: string[]; hours?: number; until?: 'NEXT_SHIFT'; reason: string; channel?: string },
+    @Body() body: { categoryId?: string; productIds?: string[]; branchIds?: string[]; channel?: string },
     @Req() req: Request,
   ) {
-    const reason = (body.reason || '').trim();
-    if (!reason) throw new BadRequestException({ statusCode: 400, code: 'REASON_REQUIRED', message: 'Pick why the items are off' });
     return await this.catalogService.bulkStop(
       (req as any).tenantId,
       { categoryId: body.categoryId, productIds: body.productIds, branchIds: this.stopBranches(req, body.branchIds) },
-      { hours: body.hours, untilNextShift: body.until === 'NEXT_SHIFT', reason, channel: body.channel || null },
+      { channel: body.channel || null },
       (req as any).correlationId,
       { userId: (req as any).userId, source: 'BULK' },
     );
@@ -486,45 +478,32 @@ export class CatalogController {
     return await this.stopReports.report((req as any).tenantId, { from, to, branchId: effectiveBranchId((req as any).userBranchId, branchId) });
   }
 
-  // 86 from the register's tile. Any register user can take an item off until the next shift,
-  // with a reason. Until further notice, and putting an item back, need an approver: someone
-  // whose role can approve, or anyone with an approver's pin. The branch is the session's
+  // 86 from the register's tile: any register user takes an item off, until somebody puts it
+  // back. No reason, no time limit and no approver (2026-10-10). The branch is the session's
   // (or, for head office at a register, the one it is working in).
   @Post('availability/pos-stop')
-  async posStop(
-    @Body() body: { productId: string; variantId?: string; until: 'NEXT_SHIFT' | 'FURTHER_NOTICE'; reason: string; branchId?: string; approverPin?: string },
-    @Req() req: Request,
-  ) {
+  async posStop(@Body() body: { productId: string; variantId?: string; branchId?: string }, @Req() req: Request) {
     const branchId = this.registerBranch(req, body.branchId);
-    const reason = (body.reason || '').trim();
-    if (!reason) throw new BadRequestException({ statusCode: 400, code: 'REASON_REQUIRED', message: 'Pick why the item is off' });
-    if (reason.length > 200) throw new BadRequestException('A reason is at most 200 characters');
-    if (body.until !== 'NEXT_SHIFT' && body.until !== 'FURTHER_NOTICE') throw new BadRequestException('Stop it until the next shift or until further notice');
-    const approverId =
-      body.until === 'FURTHER_NOTICE' ? await this.authorizeStop(req, 'ITEM_STOP_UNTIL_FURTHER_NOTICE', body.approverPin) : null;
     return await this.catalogService.suspendProduct(
       (req as any).tenantId,
       body.productId,
       branchId,
-      undefined,
-      reason,
       (req as any).correlationId,
-      { variantId: body.variantId, untilNextShift: body.until === 'NEXT_SHIFT' },
-      { userId: (req as any).userId, approverId, source: 'POS' },
+      { variantId: body.variantId },
+      { userId: (req as any).userId, source: 'POS' },
     );
   }
 
   @Post('availability/pos-resume')
-  async posResume(@Body() body: { productId: string; variantId?: string; branchId?: string; approverPin?: string }, @Req() req: Request) {
+  async posResume(@Body() body: { productId: string; variantId?: string; branchId?: string }, @Req() req: Request) {
     const branchId = this.registerBranch(req, body.branchId);
-    const approverId = await this.authorizeStop(req, 'ITEM_RESUME', body.approverPin);
     return await this.catalogService.resumeProduct(
       (req as any).tenantId,
       body.productId,
       branchId,
       (req as any).correlationId,
       { variantId: body.variantId },
-      { userId: (req as any).userId, approverId, source: 'POS' },
+      { userId: (req as any).userId, source: 'POS' },
     );
   }
 
@@ -532,22 +511,6 @@ export class CatalogController {
     const branchId = effectiveBranchId((req as any).userBranchId, requested);
     if (!branchId) throw new BadRequestException({ statusCode: 400, code: 'BRANCH_REQUIRED', message: 'Pick the branch this register is in' });
     return branchId;
-  }
-
-  /** An approver acts alone; anyone else needs an approver's pin. Answers whose pin it was. */
-  private authorizeStop(req: Request, action: string, pin?: string) {
-    return this.approvals.authorizeMoneyOut(
-      (req as any).tenantId,
-      action,
-      { id: (req as any).userId, role: (req as any).userRole, branchId: (req as any).userBranchId ?? null },
-      pin,
-    );
-  }
-
-  @Get('availability/next-shift')
-  async getNextShift(@Query('branchId') branchId: string, @Req() req: Request) {
-    const at = await this.catalogService.nextShiftStart((req as any).tenantId, effectiveBranchId((req as any).userBranchId, branchId));
-    return { next_shift_start: at };
   }
 
   // Today's stock: a branch's own count, like the 86, so branch managers set it.

@@ -29,7 +29,6 @@ import {
   Button,
   Dialog,
   TableRow,
-  MenuItem,
   TableBody,
   TableCell,
   TableHead,
@@ -66,7 +65,7 @@ type StopTarget =
   | { kind: 'variant'; product: Product; variant: ProductVariant }
   | { kind: 'addon'; group: OptionGroup; itemId: string; name: string };
 
-type StopMode = 'AVAILABLE' | 'NEXT_SHIFT' | 'MANUAL' | 'HOURS';
+type StopMode = 'AVAILABLE' | 'MANUAL';
 
 const isLive = (a: ProductAvailability) =>
   a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date());
@@ -76,9 +75,8 @@ const isLive = (a: ProductAvailability) =>
  *
  * Head office decides what the item is; this decides whether this shop can serve it,
  * the way Snappfood's vendor panel does: an item (or one variant of it, or an add-on)
- * is available, off until the next shift — it comes back by itself when the branch
- * next opens — or off until further notice, which only a person undoes. A set number
- * of hours is kept as a third way for the odd case. The scope is the header switcher's.
+ * is available, or off until further notice, which only a person undoes. There is no
+ * reason and no time limit (2026-10-10). The scope is the header switcher's.
  */
 export function AvailabilityPage() {
   const currency = useCurrencyLabel();
@@ -90,7 +88,6 @@ export function AvailabilityPage() {
   const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
   const [availabilities, setAvailabilities] = useState<ProductAvailability[]>([]);
   const [stock, setStock] = useState<DailyStockLine[]>([]);
-  const [nextShift, setNextShift] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -100,8 +97,6 @@ export function AvailabilityPage() {
 
   const [target, setTarget] = useState<StopTarget | null>(null);
   const [mode, setMode] = useState<StopMode>('MANUAL');
-  const [hours, setHours] = useState('2');
-  const [reason, setReason] = useState('');
   // Where the change applies: everywhere (''), or Snappfood only while the counter keeps selling.
   const [channel, setChannel] = useState<'' | 'SNAPPFOOD'>('');
   const [saving, setSaving] = useState(false);
@@ -115,20 +110,18 @@ export function AvailabilityPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [pList, aList, cList, gList, sList, next] = await Promise.all([
+      const [pList, aList, cList, gList, sList] = await Promise.all([
         catalogApi.getProducts(),
         catalogApi.getAvailabilities(branchParam),
         catalogApi.getCategories().catch(() => [] as Category[]),
         catalogApi.getOptionGroups().catch(() => [] as OptionGroup[]),
         catalogApi.getDailyStock(branchParam).catch(() => [] as DailyStockLine[]),
-        catalogApi.getNextShift(branchParam).catch(() => null),
       ]);
       setProducts(pList);
       setCategories(cList);
       setAvailabilities(aList);
       setOptionGroups(gList);
       setStock(sList);
-      setNextShift(next?.next_shift_start || null);
       setError(null);
     } catch (err: any) {
       setError(err.detail || t('catalog.availabilityPage.errors.loadFailed'));
@@ -185,11 +178,8 @@ export function AvailabilityPage() {
   }, [products, search, categoryTab]);
 
   const showStop = (tg: StopTarget, ch: '' | 'SNAPPFOOD') => {
-    const current = stopFor(tg, ch);
     setChannel(ch);
-    setMode(current ? (current.suspended_until ? 'NEXT_SHIFT' : 'MANUAL') : 'MANUAL');
-    setHours('2');
-    setReason(current?.reason || '');
+    setMode('MANUAL');
   };
 
   const openDialog = (tg: StopTarget) => {
@@ -214,9 +204,6 @@ export function AvailabilityPage() {
           ...targetKey(target),
           branchId: branchParam,
           channel: channel || undefined,
-          until: mode,
-          hours: parseFloat(hours),
-          reason: reason || t('catalog.availabilityPage.reasons.outOfStock'),
         });
       }
       setTarget(null);
@@ -329,14 +316,6 @@ export function AvailabilityPage() {
             'Head office owns the menu — names, recipes and prices are set once for the whole chain. What you decide here is what {{scope}} can actually serve.',
           scope: scopeName,
         })}
-        {nextShift && (
-          <Box component="span" sx={{ display: 'block', mt: 0.5 }}>
-            {t('catalog.availabilityPage.nextShiftNotice', {
-              defaultValue: 'The next shift starts {{time}}; items off until the next shift come back then.',
-              time: fDateTime(nextShift),
-            })}
-          </Box>
-        )}
       </Alert>
 
       {error && (
@@ -382,7 +361,6 @@ export function AvailabilityPage() {
               <TableCell>{t('catalog.availabilityPage.productName')}</TableCell>
               <TableCell>{t('catalog.productsPage.basePrice')}</TableCell>
               <TableCell>{t('catalog.availabilityPage.status')}</TableCell>
-              <TableCell>{t('catalog.availabilityPage.reason')}</TableCell>
               <TableCell align="right">{t('catalog.availabilityPage.actions')}</TableCell>
             </TableRow>
           </TableHead>
@@ -408,7 +386,6 @@ export function AvailabilityPage() {
                         {snappfoodChip({ kind: 'product', product: p })}
                       </Stack>
                     </TableCell>
-                    <TableCell>{productStop?.reason || '-'}</TableCell>
                     <TableCell align="right">{changeButton({ kind: 'product', product: p })}</TableCell>
                   </TableRow>
                   {(p.variants || []).map((v) => {
@@ -431,7 +408,6 @@ export function AvailabilityPage() {
                             {snappfoodChip({ kind: 'variant', product: p, variant: v })}
                           </Stack>
                         </TableCell>
-                        <TableCell>{variantStop?.reason || '-'}</TableCell>
                         <TableCell align="right">
                           {!productStop && changeButton({ kind: 'variant', product: p, variant: v })}
                         </TableCell>
@@ -530,24 +506,6 @@ export function AvailabilityPage() {
                 label={t('catalog.availabilityPage.modeAvailable', 'Available')}
               />
               <FormControlLabel
-                value="NEXT_SHIFT"
-                control={<Radio />}
-                label={
-                  <Box>
-                    <Typography variant="body2">
-                      {t('catalog.availabilityPage.modeNextShift', 'Unavailable until the next shift')}{' '}
-                      <VersionTag feature="catalog.stopDuration" />
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {t(
-                        'catalog.availabilityPage.modeNextShiftHelp',
-                        'Comes back on sale by itself when the branch next opens.'
-                      )}
-                    </Typography>
-                  </Box>
-                }
-              />
-              <FormControlLabel
                 value="MANUAL"
                 control={<Radio />}
                 label={
@@ -561,45 +519,8 @@ export function AvailabilityPage() {
                   </Box>
                 }
               />
-              <FormControlLabel
-                value="HOURS"
-                control={<Radio />}
-                label={
-                  <>
-                    {t('catalog.availabilityPage.modeHours', 'Unavailable for a set time')}{' '}
-                    <VersionTag feature="catalog.stopDuration" />
-                  </>
-                }
-              />
             </RadioGroup>
 
-            {mode === 'HOURS' && (
-              <TextField
-                select
-                label={t('catalog.availabilityPage.durationHours')}
-                value={hours}
-                onChange={(e) => setHours(e.target.value)}
-                fullWidth
-              >
-                <MenuItem value="1">{t('catalog.availabilityPage.hours1')}</MenuItem>
-                <MenuItem value="2">{t('catalog.availabilityPage.hours2')}</MenuItem>
-                <MenuItem value="4">{t('catalog.availabilityPage.hours4')}</MenuItem>
-                <MenuItem value="8">{t('catalog.availabilityPage.hours8')}</MenuItem>
-                <MenuItem value="24">{t('catalog.availabilityPage.hours24')}</MenuItem>
-                <MenuItem value="72">{t('catalog.availabilityPage.hours72')}</MenuItem>
-                <MenuItem value="168">{t('catalog.availabilityPage.hours168')}</MenuItem>
-              </TextField>
-            )}
-
-            {mode !== 'AVAILABLE' && (
-              <TextField
-                label={t('catalog.availabilityPage.reasonLabel')}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                helperText={<VersionTag feature="catalog.stopReason" />}
-                fullWidth
-              />
-            )}
           </Stack>
         </DialogContent>
         <DialogActions>

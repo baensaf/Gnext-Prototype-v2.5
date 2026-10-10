@@ -11,13 +11,11 @@ import { CategoryOptionGroup } from '../../entities/CategoryOptionGroup.entity';
 import { ProductAvailability } from '../../entities/ProductAvailability.entity';
 import { AvailabilitySchedule } from '../../entities/AvailabilitySchedule.entity';
 import { Branch } from '../../entities/Branch.entity';
-import { BranchOperatingHour } from '../../entities/BranchOperatingHour.entity';
 import { DailyStock } from '../../entities/DailyStock.entity';
 import { FileAsset } from '../../entities/FileAsset.entity';
 import { assetUrl } from '../../common/utils/asset-url.util';
 import { MoneyUtil } from '../../common/utils/money.util';
-import { describeWindows, isOnSchedule, isValidTime, localClock, parseDays } from '../../common/utils/availability-schedule.util';
-import { BUSINESS_TIME_ZONE, BusinessDateUtil } from '../../common/utils/business-date.util';
+import { describeWindows, isOnSchedule, isValidTime, parseDays } from '../../common/utils/availability-schedule.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { addDays } from '../../common/utils/business-day';
 import { AuditWriter } from '../audit/audit-writer.service';
@@ -29,12 +27,10 @@ import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { CHANNEL_PRICING_KEY, applyChannelRule, readChannelRule, displayDiscountFor, beforeDiscountPrice } from '../../common/utils/channel-price.util';
 import { inStorePrice } from '../../common/utils/price-list.util';
 
-/** What besides a whole product a stop can be on, and how long it lasts. */
+/** What besides a whole product a stop can be on. */
 export interface StopTarget {
   variantId?: string;
   optionItemId?: string;
-  /** Back on sale when the branch next opens, rather than after a number of hours. */
-  untilNextShift?: boolean;
   /**
    * Off on one sales channel only (e.g. SNAPPFOOD: stopped on Snappfood, still sold in
    * store). Empty means off everywhere.
@@ -93,7 +89,6 @@ export class CatalogService {
     @InjectRepository(ProductAvailability) private readonly availRepo: Repository<ProductAvailability>,
     @InjectRepository(AvailabilitySchedule) private readonly scheduleRepo: Repository<AvailabilitySchedule>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
-    @InjectRepository(BranchOperatingHour) private readonly hoursRepo: Repository<BranchOperatingHour>,
     @InjectRepository(DailyStock) private readonly stockRepo: Repository<DailyStock>,
     private readonly auditWriter: AuditWriter,
     private readonly priceLists: PriceListService,
@@ -1090,44 +1085,32 @@ export class CatalogService {
   }
 
   /**
-   * Take an item off sale. `hours` is how long for: omit it (or pass 0) and the
-   * item stays off until somebody puts it back, which is how a branch says it
-   * does not carry the item at all. Anything else is today's 86 and expires on
-   * its own, because nobody remembers to un-86 the fish at closing time.
+   * Take an item off sale until somebody puts it back. There is no reason and no time limit
+   * (2026-10-10); `suspended_until` stays empty.
    */
   async suspendProduct(
     tenantId: string,
     productId: string | undefined,
     branchId?: string,
-    hours?: number,
-    reason?: string,
     correlationId?: string,
     target: StopTarget = {},
     by: StopActor = {},
   ) {
     const key = this.stopKey(productId, target);
     let avail = await this.availRepo.findOne({ where: this.stopWhere(tenantId, key, branchId) });
-    // Snappfood's two ways off: "until the next shift" comes back when the branch next
-    // opens, "until further notice" (no hours) only when someone puts it back.
-    const suspendedUntil = target.untilNextShift
-      ? await this.nextShiftStart(tenantId, branchId)
-      : hours && hours > 0
-        ? new Date(Date.now() + hours * 3600 * 1000)
-        : null;
-
     if (!avail) {
       avail = this.availRepo.create({
         tenant_id: tenantId,
         ...key,
         branch_id: branchId || null,
         is_suspended: true,
-        suspended_until: suspendedUntil,
-        reason: reason || 'Temporary item suspension',
+        suspended_until: null,
+        reason: null,
       });
     } else {
       avail.is_suspended = true;
-      avail.suspended_until = suspendedUntil;
-      avail.reason = reason || 'Temporary item suspension';
+      avail.suspended_until = null;
+      avail.reason = null;
     }
 
     const saved = await this.availRepo.save(avail);
@@ -1139,7 +1122,7 @@ export class CatalogService {
       action: 'PRODUCT_SUSPENDED',
       branchId,
       correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
-      details: { ...key, branchId, hours, untilNextShift: !!target.untilNextShift, reason, suspendedUntil, approverId: by.approverId || null, source: by.source || 'ADMIN' },
+      details: { ...key, branchId, source: by.source || 'ADMIN' },
     });
 
     return saved;
@@ -1205,14 +1188,14 @@ export class CatalogService {
   async bulkStop(
     tenantId: string,
     targets: BulkStopTargets,
-    stop: { hours?: number; untilNextShift?: boolean; reason: string; channel?: string | null },
+    stop: { channel?: string | null },
     correlationId: string,
     by: StopActor = {},
   ) {
     const { products, branchIds } = await this.bulkProducts(tenantId, targets);
     for (const branchId of branchIds) {
       for (const product of products) {
-        await this.suspendProduct(tenantId, product.id, branchId || undefined, stop.hours, stop.reason, correlationId, { untilNextShift: stop.untilNextShift, channel: stop.channel || null }, by);
+        await this.suspendProduct(tenantId, product.id, branchId || undefined, correlationId, { channel: stop.channel || null }, by);
       }
     }
     return { products: products.length, branches: branchIds.length, stopped: products.length * branchIds.length };
@@ -1298,34 +1281,6 @@ export class CatalogService {
     const rows = await this.availRepo.find({ where: { tenant_id: tenantId, option_item_id: optionItemId } });
     const active = rows.find((row) => this.stopIsLive(row, branchId, at));
     return { isSuspended: !!active, reason: active?.reason || null, suspendedUntil: active?.suspended_until || null };
-  }
-
-  /**
-   * When the branch next opens after `at`: the next shift's start in its weekly hours, on
-   * the business clock. A branch with no hours set (or a chain-wide stop) comes back at the
-   * start of tomorrow, which is what Snappfood does when no date is given.
-   */
-  async nextShiftStart(tenantId: string, branchId?: string, at: Date = new Date()): Promise<Date> {
-    const today = BusinessDateUtil.today(at);
-    const dayStart = (offset: number) => {
-      const [y, m, d] = today.split('-').map(Number);
-      return BusinessDateUtil.startOfDay(new Date(Date.UTC(y, m - 1, d + offset)).toISOString());
-    };
-    const hours = branchId ? await this.hoursRepo.find({ where: { tenant_id: tenantId, branch_id: branchId } }) : [];
-    const { day } = localClock(at, BUSINESS_TIME_ZONE);
-    for (let offset = 0; offset <= 7; offset++) {
-      const weekday = (day + offset) % 7;
-      const starts = hours
-        .filter((h) => h.day_of_week === weekday && !h.is_closed)
-        .map((h) => {
-          const [hh, mm] = String(h.open_time).split(':').map(Number);
-          return new Date(dayStart(offset).getTime() + (hh * 60 + mm) * 60000);
-        })
-        .filter((start) => start > at)
-        .sort((a, b) => a.getTime() - b.getTime());
-      if (starts.length) return starts[0];
-    }
-    return dayStart(1);
   }
 
   // Add-on groups: editing what the group and its items are
