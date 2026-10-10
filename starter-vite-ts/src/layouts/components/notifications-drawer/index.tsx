@@ -105,7 +105,7 @@ export function NotificationsDrawer({ data = [], sx, ...other }: NotificationsDr
 
   const handleViewAll = () => {
     onClose();
-    router.push(paths.app.operations.monitoring || paths.app.audit || '/app/dashboard');
+    router.push(paths.app.operations.monitoring || '/app/dashboard');
   };
 
   const filteredAlerts = alerts.filter((item) => {

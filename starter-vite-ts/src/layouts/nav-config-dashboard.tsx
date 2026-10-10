@@ -256,16 +256,6 @@ export function useNavData(): NavSectionProps['data'] {
           ],
         },
         {
-          title: t('nav.audit', 'Audit Explorer'),
-          path: '/app/audit',
-          icon: ICONS.reasons,
-        },
-        {
-          title: t('nav.moadian', 'Moadian e-invoices'),
-          path: '/app/moadian',
-          icon: ICONS.drawer,
-        },
-        {
           title: t('nav.monitoring', 'Operational Monitoring'),
           path: '/app/operations/monitoring',
           icon: ICONS.dashboard,

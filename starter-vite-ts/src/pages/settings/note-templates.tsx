@@ -50,7 +50,7 @@ const SCOPES: NoteTemplateScope[] = ['ITEM', 'ORDER'];
 export function NoteTemplatesPage() {
   const { t } = useTranslation();
   const { selectedBranch, isHeadOffice: atHeadOffice } = useBranchContext();
-  // As Moadian: a head-office account, with the header at head office. Inside a branch this
+  // Only a head-office account, with the header at head office. Inside a branch this
   // is that branch's read of the chain's list, which the hub now labels as such.
   const isHeadOffice = useIsHeadOffice() && atHeadOffice;
 

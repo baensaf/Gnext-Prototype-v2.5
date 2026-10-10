@@ -25,7 +25,7 @@ const WEEK_DAYS = [6, 0, 1, 2, 3, 4, 5];
  */
 export function CalendarSettingsPage() {
   const { t } = useTranslation();
-  // Changed only by a head-office account with the header at head office, as Moadian is:
+  // Changed only by a head-office account with the header at head office:
   // inside a branch the screen is that branch's view of a chain setting.
   const atHeadOffice = useBranchContextOptional()?.isHeadOffice ?? true;
   const isHeadOffice = useAuthStore((state) => state.user?.isHeadOffice) !== false && atHeadOffice;

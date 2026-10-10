@@ -34,8 +34,6 @@ import { ReportsModule } from './modules/reports/reports.module';
 import { ImportExportModule } from './modules/import-export/import-export.module';
 import { UsersModule } from './modules/users/users.module';
 import { ProfilesModule } from './modules/profiles/profiles.module';
-import { MoadianModule } from './modules/moadian/moadian.module';
-import { TaxInvoice } from './entities/TaxInvoice.entity';
 import { Agent } from './entities/Agent.entity';
 import { AgentEnrolmentCode } from './entities/AgentEnrolmentCode.entity';
 import { AgentCommand } from './entities/AgentCommand.entity';
@@ -180,7 +178,6 @@ import { ReportExportJob } from './entities/ReportExportJob.entity';
           IntegrationLog,
           ImportJob, ImportRow,
           OperationalAlert, SavedReportView, ReportExportJob,
-          TaxInvoice,
           Agent, AgentEnrolmentCode, AgentCommand, AgentRelease,
           DailyStock, NoteTemplate,
         ],
@@ -208,7 +205,6 @@ import { ReportExportJob } from './entities/ReportExportJob.entity';
     KioskModule,
     SimulationModule,
     ReportsModule,
-    MoadianModule,
     ImportExportModule,
     UsersModule,
     ProfilesModule,

@@ -74,9 +74,7 @@ import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { PrintRoutingPage } from 'src/pages/operations/print-routing';
 import { CustomerFieldsPage } from 'src/pages/settings/customer-fields';
 import { CardTerminalsPage } from 'src/pages/operations/card-terminals';
-import { AuditExplorerPage } from 'src/pages/operations/audit-explorer';
 import { CourierDetailPage } from 'src/pages/operations/courier-detail';
-import { MoadianInvoicesPage } from 'src/pages/moadian/moadian-invoices';
 import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 import { BranchOverridesPage } from 'src/pages/settings/branch-overrides';
 import { ShiftPolicySettingsPage } from 'src/pages/settings/shift-policy';
@@ -272,8 +270,6 @@ export const routesSection: RouteObject[] = [
       { path: 'simulation/logs', element: <SimulationLogsPage /> },
       { path: 'reports', element: <ReportsIndexPage /> },
       { path: 'reports/:reportCode', element: <ReportViewerPage /> },
-      { path: 'audit', element: <AuditExplorerPage /> },
-      { path: 'moadian', element: <MoadianInvoicesPage /> },
       { path: 'settings', element: <SettingsHubPage /> },
       { path: 'settings/users', element: <UsersPage /> },
       { path: 'settings/users/:id', element: <UserProfilePage /> },
