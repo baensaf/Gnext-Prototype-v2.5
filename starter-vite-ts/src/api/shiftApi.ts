@@ -5,7 +5,6 @@ export interface CashMovement {
   shift_id: string;
   type: 'OPENING_FLOAT' | 'CASH_PAYMENT' | 'CASH_REFUND' | 'PAID_IN' | 'PAID_OUT' | 'CLOSE_ADJUSTMENT';
   amount: string;
-  currency_code: string;
   payment_id?: string;
   refund_id?: string;
   reason_code_id?: string;
@@ -20,17 +19,13 @@ export interface CashierShift {
   terminal_id: string;
   shift_number: string;
   state: 'OPEN' | 'CLOSED';
-  status: string; // legacy alias
-  currency_code: string;
   business_date: string;
   opened_at: string;
   closed_at?: string;
   opening_cash: string;
-  opening_float?: string;
   expected_cash?: string;
   actual_cash?: string;
   short_over?: string;
-  over_short_amount?: string;
   movements?: CashMovement[];
 }
 
@@ -40,7 +35,6 @@ export interface ShiftStatement {
   branchId: string;
   terminalId: string;
   state: string;
-  currencyCode: string;
   businessDate: string;
   openedAt: string;
   closedAt?: string;
@@ -63,19 +57,21 @@ export interface ShiftPolicy {
   defaultOpeningFloat: string;
 }
 
+/** A business day the system closed once it ended and its shifts were counted. */
 export interface BusinessDayClose {
   id: string;
   branch_id: string;
   business_date: string;
-  currency_code: string;
-  status: 'CLOSED' | 'REOPENED';
-  totals: any;
+  totals: {
+    totalSales?: string;
+    orderCount?: number;
+    autoCompletedOrders?: number;
+    carriedOverOrders?: number;
+  } | null;
   closed_at: string;
-  reopened_at?: string;
-  approval_request_id?: string;
 }
 
-/** An order still open when its branch's day is being closed. */
+/** An order a till left open at its shift close. */
 export interface DayCloseOpenOrder {
   id: string;
   orderNumber: string;
@@ -87,13 +83,6 @@ export interface DayCloseOpenOrder {
   grandTotal: string;
   outstandingTotal: string;
   issue?: 'UNPAID' | 'NOT_SUBMITTED' | 'AWAITING_ACCEPTANCE' | 'DELIVERY_NOT_FINISHED';
-}
-
-export interface DayCloseOpenOrders {
-  /** Paid orders the close completes. */
-  toComplete: DayCloseOpenOrder[];
-  /** Orders that block the close unless they are carried over with a reason. */
-  needsDecision: DayCloseOpenOrder[];
 }
 
 /** A cash payment begun at a drawer and never taken or cancelled. */
@@ -112,16 +101,10 @@ export interface ShiftCloseCheck {
   shiftId: string;
   branchId: string;
   businessDate: string;
-  currencyCode: string;
   /** This till's held, unpaid or unaccepted orders. Closing leaves them open; nothing blocks. */
   openOrders: DayCloseOpenOrder[];
-  /** Open orders an earlier shift already left open; not asked about again. */
-  carriedOrders?: DayCloseOpenOrder[];
   /** Cash payments on this drawer that must be finished or cancelled first. */
   pendingCash: PendingCashPayment[];
-  /** Other drawers still open at the branch on this business day. */
-  otherOpenTills: number;
-  dayClosed: boolean;
 }
 
 /** One register's shift at a glance. */
@@ -186,7 +169,6 @@ export const shiftApi = {
 
   openShift: async (data: {
     terminalId: string;
-    currencyCode?: string;
     openingCash?: string;
     businessDate?: string;
   }): Promise<CashierShift> => {
@@ -243,7 +225,7 @@ export const shiftApi = {
     return res.data;
   },
 
-  /** Open orders, unfinished cash and other open tills, read before and after the close. */
+  /** Open orders and unfinished cash, read before the close. */
   getCloseCheck: async (shiftId: string): Promise<ShiftCloseCheck> => {
     const res = await httpClient.get(`/api/v1/shifts/${shiftId}/close-check`);
     return res.data;
@@ -254,35 +236,6 @@ export const shiftApi = {
     if (Array.isArray(res.data)) {
       return { data: res.data, total: res.data.length };
     }
-    return res.data;
-  },
-
-  /** The branch's open orders closing this day would complete, and those it waits on. */
-  getDayCloseOpenOrders: async (params: {
-    branchId: string;
-    businessDate: string;
-    currencyCode?: string;
-  }): Promise<DayCloseOpenOrders> => {
-    const res = await httpClient.get('/api/v1/business-days/open-orders', { params });
-    return res.data;
-  },
-
-  closeBusinessDay: async (data: {
-    branchId: string;
-    businessDate: string;
-    currencyCode?: string;
-    /** Closes the day with its unpaid or unfinished orders left open for the next one. */
-    carryOverReason?: string;
-  }): Promise<BusinessDayClose> => {
-    const res = await httpClient.post('/api/v1/business-days/close', data);
-    return res.data;
-  },
-
-  reopenBusinessDay: async (
-    id: string,
-    data: { reason: string },
-  ): Promise<BusinessDayClose> => {
-    const res = await httpClient.post(`/api/v1/business-days/${id}/reopen`, data);
     return res.data;
   },
 };

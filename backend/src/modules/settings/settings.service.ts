@@ -14,10 +14,6 @@ import {
 } from '../../common/utils/setting-scope.util';
 import { canActOnBranch, isHeadOfficeUser, UserScope } from '../../common/utils/user-scope.util';
 import { BUSINESS_DAY_SETTING_KEY, businessDaySettingProblem } from '../../common/utils/business-day';
-import { trackBusinessDayChange } from '../../common/utils/business-clock';
-
-/** A change to the business day is recorded on each branch's timeline; nothing else needs it. */
-const tracksBusinessDay = (key: string) => key.toUpperCase() === BUSINESS_DAY_SETTING_KEY;
 
 @Injectable()
 export class SettingsService {
@@ -190,9 +186,7 @@ export class SettingsService {
       throw new NotFoundException(`No branch override for setting ${key}`);
     }
 
-    const remove = () => this.settingRepo.remove(override);
-    if (tracksBusinessDay(key)) await trackBusinessDayChange(this.settingRepo.manager, tenantId, remove);
-    else await remove();
+    await this.settingRepo.remove(override);
 
     await this.auditWriter.write({
       tenantId,
@@ -254,8 +248,7 @@ export class SettingsService {
       setting.value = value;
     }
 
-    const save = () => this.settingRepo.save(setting!);
-    const saved = tracksBusinessDay(key) ? await trackBusinessDayChange(this.settingRepo.manager, tenantId, save) : await save();
+    const saved = await this.settingRepo.save(setting);
 
     await this.auditWriter.write({
       tenantId,

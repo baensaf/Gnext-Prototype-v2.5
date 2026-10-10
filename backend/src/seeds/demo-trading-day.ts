@@ -189,14 +189,11 @@ export async function seedDemoTradingDay(
       terminal_id: terminal.id,
       shift_number: `SHF-${businessDate.replace(/-/g, '')}-DEMO`,
       state: 'CLOSED',
-      status: 'CLOSED',
-      currency_code: 'IRR',
       business_date: businessDate,
       opened_by: userId || null,
       closed_by: userId || null,
       closed_at: placedAt,
       opening_cash: OPENING_FLOAT,
-      opening_float: OPENING_FLOAT,
     }),
   );
 
@@ -206,7 +203,6 @@ export async function seedDemoTradingDay(
       shift_id: shift.id,
       type: 'OPENING_FLOAT',
       amount: OPENING_FLOAT,
-      currency_code: 'IRR',
       posted_by: userId || null,
       reference: 'Opening Float',
     }),
@@ -350,7 +346,6 @@ export async function seedDemoTradingDay(
           shift_id: shift.id,
           type: 'CASH_PAYMENT',
           amount: spec.total,
-          currency_code: 'IRR',
           payment_id: payment.id,
           posted_by: userId || null,
           reference: `Cash Payment ${order.order_number}`,
@@ -398,7 +393,6 @@ export async function seedDemoTradingDay(
   shift.expected_cash = expectedCash;
   shift.actual_cash = expectedCash;
   shift.short_over = '0.0000';
-  shift.over_short_amount = '0.0000';
   await em.save(CashierShift, shift);
 
   await em.save(
@@ -406,9 +400,6 @@ export async function seedDemoTradingDay(
       tenant_id: tenantId,
       branch_id: branch.id,
       business_date: businessDate,
-      currency_code: 'IRR',
-      status: 'CLOSED',
-      closed_by: userId || null,
       closed_at: placedAt,
       totals: { totalSales, orderCount: revenueOrderCount },
     }),

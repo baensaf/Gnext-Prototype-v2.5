@@ -13,10 +13,6 @@ export class ShiftOpenDto {
   terminalId: string;
 
   @IsOptional()
-  @IsString()
-  currencyCode?: string;
-
-  @IsOptional()
   @IsNumberString()
   openingCash?: string;
 
@@ -69,45 +65,6 @@ export class ShiftCloseDto {
   @IsOptional()
   @IsNumberString()
   leftInDrawer?: string;
-
-  @IsOptional()
-  @IsInt()
-  version?: number;
-}
-
-export class BusinessDayCloseDto {
-  @IsUUID()
-  branchId: string;
-
-  @IsString()
-  businessDate: string;
-
-  @IsOptional()
-  @IsString()
-  currencyCode?: string;
-
-  /**
-   * Closes the day although some open orders are unpaid or unfinished. They stay open and
-   * come up again at the next close; the reason is kept with the day's totals and in audit.
-   */
-  @IsOptional()
-  @IsString()
-  carryOverReason?: string;
-}
-
-export class BusinessDayReopenDto {
-  @IsString()
-  @IsNotEmpty()
-  reason: string;
-
-  /**
-   * Was required, and the screen sent the literal `appr-auto` in it. Reopening is a
-   * manager's act now (the route says so), recorded with their reason; kept optional so an
-   * older client naming a real request still gets it stored.
-   */
-  @IsOptional()
-  @IsUUID()
-  approvalRequestId?: string;
 
   @IsOptional()
   @IsInt()

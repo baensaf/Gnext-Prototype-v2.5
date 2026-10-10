@@ -1,5 +1,6 @@
 import type {
   ShiftPolicy,
+  CashMovement,
   ShiftStatement,
   ShiftCloseCheck,
   ShiftSalesSummary,
@@ -28,7 +29,6 @@ import {
   CircularProgress,
 } from '@mui/material';
 
-import { fDate } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 import { serverText } from 'src/utils/server-text';
 import { useCurrencyLabel } from 'src/utils/currency';
@@ -36,11 +36,10 @@ import { amountText, amountFromText } from 'src/utils/amount-input';
 
 import { shiftApi } from 'src/api/shiftApi';
 import { paymentApi } from 'src/api/paymentApi';
-import { useAuthStore } from 'src/store/useAuthStore';
-import { isApproverRole } from 'src/config/role-access';
 
 import { ShiftReport } from 'src/components/shift/shift-summary';
-import { OpenOrderLine } from 'src/components/shift/day-close-orders';
+import { CashMovements } from 'src/components/shift/cash-movements';
+import { OpenOrderLine } from 'src/components/shift/open-order-line';
 
 // ----------------------------------------------------------------------
 
@@ -88,10 +87,10 @@ function Row({ label, value, color, strong }: { label: string; value: string; co
 }
 
 /**
- * Ending a shift, on one page: what the register did on the left, and on the right the steps
- * in the order they are done, each turning green. Toast's shift review works the same way. The
- * steps never move. While the shift runs the page is its report; after the close it shows the
- * result.
+ * A shift's one page: what the register did and every cash movement on the left, and on the
+ * right the steps to end it, in the order they are done, each turning green. Toast's shift
+ * review works the same way. While the shift runs the page is its report; after the close it is
+ * the shift's statement, read-only.
  *
  * The cashier counts the cash and closes: the report already shows what the drawer should hold,
  * and the difference is stored as a number, with no reason and no manager. Orders the till left
@@ -104,11 +103,11 @@ export function EndShiftPage() {
   const currency = useCurrencyLabel();
   const navigate = useNavigate();
   const { shiftId = '' } = useParams();
-  const approver = isApproverRole(useAuthStore((state) => state.user?.role));
 
   const [summary, setSummary] = useState<ShiftSalesSummary | null>(null);
   const [check, setCheck] = useState<ShiftCloseCheck | null>(null);
   const [policy, setPolicy] = useState<ShiftPolicy | null>(null);
+  const [movements, setMovements] = useState<CashMovement[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [counted, setCounted] = useState('');
@@ -121,11 +120,11 @@ export function EndShiftPage() {
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const s = await shiftApi.getSummary(shiftId);
+      const [s, statement] = await Promise.all([shiftApi.getSummary(shiftId), shiftApi.getShiftStatement(shiftId)]);
       setSummary(s);
+      setMovements(statement.movements);
       if (!s.closed) {
-        const [c, statement] = await Promise.all([shiftApi.getCloseCheck(shiftId), shiftApi.getShiftStatement(shiftId)]);
-        setCheck(c);
+        setCheck(await shiftApi.getCloseCheck(shiftId));
         setPolicy(await shiftApi.getPolicy(statement.branchId).catch(() => null));
       }
     } catch (err: any) {
@@ -139,7 +138,6 @@ export function EndShiftPage() {
 
   const closed = !!result || !!summary?.closed;
   const openOrders = check?.openOrders ?? [];
-  const carriedOrders = check?.carriedOrders ?? [];
   const pendingCash = check?.pendingCash ?? [];
   const cashDone = !!check && pendingCash.length === 0;
 
@@ -181,9 +179,8 @@ export function EndShiftPage() {
         leftInDrawer: leftRials,
       });
       setResult(statement);
-      const [s, c] = await Promise.all([shiftApi.getSummary(shiftId), shiftApi.getCloseCheck(shiftId).catch(() => null)]);
-      setSummary(s);
-      setCheck(c);
+      setMovements(statement.movements);
+      setSummary(await shiftApi.getSummary(shiftId));
     } catch (err: any) {
       setError(serverText(errorText(err, t('shift.close.error', 'Could not close the shift')), t));
       if (err.code === 'SHIFT_HAS_PENDING_CASH') {
@@ -197,8 +194,6 @@ export function EndShiftPage() {
   const varianceColor = (value?: string | null) =>
     !value || MoneyUtil.isZero(value) ? undefined : MoneyUtil.greaterThan(value, '0') ? 'info.main' : 'error.main';
   const money = (rials?: string | null) => `${MoneyUtil.formatCurrency(rials || '0')} ${currency}`;
-
-  const lastTill = closed && !!check && check.otherOpenTills === 0 && !check.dayClosed;
 
   const renderSteps = () => (
     <Stack spacing={2.5} divider={<Divider flexItem />}>
@@ -223,11 +218,6 @@ export function EndShiftPage() {
               </Button>
             </Stack>
           </>
-        )}
-        {carriedOrders.length > 0 && (
-          <Alert severity="info" sx={{ mt: 1 }}>
-            {t('shift.close.carriedOrders', { count: carriedOrders.length })}
-          </Alert>
         )}
       </Step>
 
@@ -348,24 +338,13 @@ export function EndShiftPage() {
             <Row label={t('shift.end.leftInDrawer', 'Left in the drawer')} value={money(kept)} />
           </Stack>
         )}
-        {lastTill && (
-          <Alert severity="info">
-            {approver
-              ? t('shift.close.lastTillManager', 'This was the last drawer open at the branch. You can close the business day now:')
-              : t('shift.close.lastTillCashier', 'This was the last drawer open at the branch. A manager can now close the business day:')}{' '}
-            {check && <span dir="ltr">{fDate(check.businessDate)}</span>}
-          </Alert>
-        )}
-        <Stack direction="row" spacing={1}>
-          <Button variant="contained" onClick={() => navigate('/app/pos')}>
-            {t('shift.end.backToRegister', 'Back to the register')}
-          </Button>
-          {lastTill && approver && (
-            <Button variant="outlined" onClick={() => navigate('/app/cashier/business-days')}>
-              {t('shift.close.reviewDay', 'Close the day')}
+        {result && (
+          <Stack direction="row" spacing={1}>
+            <Button variant="contained" onClick={() => navigate('/app/pos')}>
+              {t('shift.end.backToRegister', 'Back to the register')}
             </Button>
-          )}
-        </Stack>
+          </Stack>
+        )}
       </Stack>
     );
   };
@@ -394,9 +373,12 @@ export function EndShiftPage() {
       {summary && (
         <Grid container spacing={3}>
           <Grid size={{ xs: 12, md: 7 }}>
-            <Card sx={{ p: 3, borderRadius: 2 }}>
-              <ShiftReport summary={summary} />
-            </Card>
+            <Stack spacing={3}>
+              <Card sx={{ p: 3, borderRadius: 2 }}>
+                <ShiftReport summary={summary} />
+              </Card>
+              <CashMovements movements={movements} />
+            </Stack>
           </Grid>
           <Grid size={{ xs: 12, md: 5 }}>
             <Card sx={{ p: 3, borderRadius: 2, position: { md: 'sticky' }, top: { md: 88 } }}>

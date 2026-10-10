@@ -375,7 +375,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
       {
         terminalId,
         openingCash: '500000.0000',
-        currencyCode: 'IRR',
       },
       cashierUserId,
       correlationId,
@@ -527,7 +526,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
       {
         terminalId,
         openingCash: '500000.0000',
-        currencyCode: 'IRR',
       },
       cashierUserId,
       correlationId,
@@ -711,7 +709,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
       {
         terminalId,
         openingCash: '200000.0000',
-        currencyCode: 'IRR',
       },
       cashierUserId,
       correlationId,

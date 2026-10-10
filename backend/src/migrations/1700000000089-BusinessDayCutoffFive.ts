@@ -1,5 +1,4 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
-import { trackBusinessDayChange } from '../common/utils/business-clock';
 import { BUSINESS_DAY_SETTING_KEY } from '../common/utils/business-day';
 
 /**
@@ -7,8 +6,8 @@ import { BUSINESS_DAY_SETTING_KEY } from '../common/utils/business-day';
  * 2026-10-03): it should fall after the latest closing time, and Iran Burger closes at 04:00.
  *
  * A chain whose head-office setting still holds the old default moves to the new one. Branch
- * overrides are someone's choice and stay. The change goes through the branches' timelines like
- * any cutoff change, so it applies from now on and nothing already dated moves.
+ * overrides are someone's choice and stay. (It went through the branches' rule history then;
+ * migration 117 removed that history, so it is a plain update now.)
  */
 export class BusinessDayCutoffFive1700000000089 implements MigrationInterface {
   name = 'BusinessDayCutoffFive1700000000089';
@@ -20,17 +19,15 @@ export class BusinessDayCutoffFive1700000000089 implements MigrationInterface {
       [BUSINESS_DAY_SETTING_KEY],
     );
     for (const { tenant_id } of rows) {
-      await trackBusinessDayChange(queryRunner.manager, tenant_id, () =>
-        queryRunner.query(
-          `UPDATE "tenant_setting" SET "value" = jsonb_set("value", '{cutoff}', '"05:00"')
-            WHERE "tenant_id" = $1 AND "key" = $2 AND "branch_id" IS NULL`,
-          [tenant_id, BUSINESS_DAY_SETTING_KEY],
-        ),
+      await queryRunner.query(
+        `UPDATE "tenant_setting" SET "value" = jsonb_set("value", '{cutoff}', '"05:00"')
+          WHERE "tenant_id" = $1 AND "key" = $2 AND "branch_id" IS NULL`,
+        [tenant_id, BUSINESS_DAY_SETTING_KEY],
       );
     }
   }
 
   public async down(): Promise<void> {
-    // A cutoff change is recorded on each branch's timeline; it is not undone.
+    // Not undone.
   }
 }

@@ -12,7 +12,6 @@ import { AdminUser } from '../../entities/AdminUser.entity';
 import { Agent } from '../../entities/Agent.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
-import { trackBusinessDayChange } from '../../common/utils/business-clock';
 import { isHhMm, isTimeZone } from '../../common/utils/business-day';
 import { hoursProblem } from '../../common/utils/opening-hours';
 import { OPEN_STATUSES } from '../order/order-list';
@@ -85,7 +84,7 @@ export class TenantService {
       tenant.time_zone = data.time_zone;
     }
     // A branch with no zone of its own keeps the chain's clock, so its business day moves with it.
-    const updated = await trackBusinessDayChange(this.tenantRepo.manager, tenantId, () => this.tenantRepo.save(tenant));
+    const updated = await this.tenantRepo.save(tenant);
 
     await this.auditWriter.write({
       tenantId,
@@ -246,9 +245,9 @@ export class TenantService {
               message: `Close the ${openShifts} open cash shift(s) at ${branch.name} before changing its time zone`,
             });
           }
-          return await trackBusinessDayChange(em, tenantId, () => em.save(branch));
+          return await em.save(branch);
         })
-      : await trackBusinessDayChange(this.branchRepo.manager, tenantId, () => this.branchRepo.save(branch));
+      : await this.branchRepo.save(branch);
 
     await this.auditWriter.write({
       tenantId,

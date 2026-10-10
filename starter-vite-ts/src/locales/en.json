@@ -1022,27 +1022,10 @@
     "branch": "Branch",
     "businessDate": "Business Date",
     "businessDays": "Business Days",
-    "businessDaysSubtitle": "Closing a branch’s day once every drawer is counted, and reopening one with a reason.",
-    "closeBusinessDayTitle": "Close business day",
     "closedAt": "Closed at",
     "closeDay": "Close business day",
-    "closeDayWarning": "Every drawer at the branch must be counted down first. Closing the day fixes the branch’s sales for that date.",
-    "closedDays": "Closed days",
-    "confirmClose": "Close day",
-    "confirmReopen": "Reopen day",
     "openOrders": {
-      "checking": "Checking open orders…",
-      "noneOpen": "No orders are left open for this day.",
-      "pickBranch": "Pick a branch in the header to close its day.",
-      "toComplete": "{{count}} paid order(s) will be marked completed",
-      "needsDecision": "{{count}} order(s) need a decision before the day closes",
-      "needsDecisionHelp": "Take the payment, cancel, or finish the delivery for each, or carry them over to the next day with a reason.",
-      "carryOver": "Close anyway and carry these orders over",
-      "carryOverReason": "Why they are carried over",
-      "closeAndCarryOver": "Close day and carry over",
       "carriedOver": "Carried over",
-      "alreadyClosed": "This day is already closed at this branch. Pick another date, or reopen it from the list.",
-      "loadFailed": "Could not check the open orders",
       "issue": {
         "UNPAID": "Unpaid",
         "NOT_SUBMITTED": "Draft, never sent",
@@ -1052,27 +1035,13 @@
     },
     "noBusinessDays": "No business day has been closed yet",
     "noMovements": "No cash movements recorded in this shift yet.",
-    "reason": "Reason",
-    "reopen": "Reopen",
-    "reopenBusinessDayTitle": "Reopen business day",
-    "reopened": "Reopened",
-    "reopenedAt": "Reopened at",
-    "reopenedDays": "Reopened days",
-    "reopenWarningManager": "Only a manager can reopen a closed day, and the reason is kept in the audit log.",
-    "shiftNotFound": "Shift not found",
-    "totalDays": "Days recorded",
     "totals": "Day summary",
     "ordersCount": "Orders",
     "sales": "Sales",
-    "dayClosed": "Business day {{date}} closed",
-    "dayReopened": "Business day {{date}} reopened",
-    "closeDayEarly": "Close a day now",
-    "closeDayOptional": "You do not need to do this for the date to move on or to open the next shift.",
-    "autoClosed": "Auto",
     "currentDay": "Business day now: {{date}} · turns over at {{cutoff}}",
-    "autoCloseOn": "The date moves on at the cutoff by itself and new shifts open on the new day. Each day closes on its own once every shift on it is counted; close one here only to finish it early.",
-    "autoCloseOff": "The date moves on at the cutoff by itself and new shifts open on the new day. Automatic closing is off for this branch, so close each day here once its drawers are counted.",
-    "dateReview": {}
+    "dateReview": {},
+    "autoCompleted": "Completed at close",
+    "daysCloseThemselves": "The date moves on at the cutoff and new shifts open on the new day. Each day closes by itself once every shift on it is counted: paid orders still open are completed, the rest are carried over to the next day."
   },
   "shift": {
     "register": "Register",
@@ -1121,17 +1090,12 @@
       "openOrders": "{{count}} order(s) from this till are still open",
       "openOrdersManager": "Settle them, or close anyway and leave them open for the next shift.",
       "recheck": "Check again",
-      "lastTillManager": "This was the last drawer open at the branch. You can close the business day now:",
-      "lastTillCashier": "This was the last drawer open at the branch. A manager can now close the business day:",
-      "reviewDay": "Close the day",
       "dayHelp": "Every drawer at the branch is counted. Closing the day fixes its sales for",
       "skipDay": "Not now",
       "dayClosedDone": "Business day closed.",
-      "dayFailed": "Could not close the business day",
-      "carriedOrders": "{{count}} order(s) were left open by an earlier shift. They stay open; the day close settles them."
+      "dayFailed": "Could not close the business day"
     },
     "summary": {
-      "open": "Shift summary",
       "title": "Shift summary",
       "loadError": "Could not load the shift summary",
       "openedAt": "Opened {{time}}",
@@ -1184,7 +1148,7 @@
       "thisDevice": "This device",
       "noShift": "No shift open.",
       "openAtRegister": "A shift is opened at the register itself, where the float goes into the drawer.",
-      "stale": "Left open since {{date}}. Count it down before closing the day.",
+      "stale": "Left open since {{date}}. Count it down so the day can close.",
       "statement": "Statement"
     },
     "history": {
@@ -1213,14 +1177,6 @@
       "CLOSE_ADJUSTMENT": "Difference at count"
     },
     "detail": {
-      "title": "Shift statement",
-      "loadError": "Failed to load the shift",
-      "cash": "Drawer cash",
-      "shift": "Shift",
-      "notCounted": "Not counted yet",
-      "openedAt": "Opened",
-      "closedAt": "Closed",
-      "orders": "Orders rung up",
       "movements": "Cash movements",
       "time": "Time",
       "movement": "Movement",
@@ -2745,7 +2701,7 @@
         },
         "businessDay": {
           "title": "Business Day",
-          "description": "When the business day turns over (04:00 by default), the shop’s hours, and closing the day automatically."
+          "description": "When the business day turns over for the whole chain (05:00 by default). Each day closes by itself."
         },
         "printRouting": {
           "title": "Print routing",
@@ -2872,13 +2828,12 @@
       "cardTitle": "When the day turns over",
       "cutoffLabel": "Business day cutoff",
       "cutoffHelp": "The new business day starts here, on the branch’s own clock. Set it after the latest closing time: with 05:00, a sale at 01:30 belongs to the day before and one at 05:00 to the new day. Orders, payments, refunds, call numbers and reports all follow it. Opening hours are set on each branch.",
-      "autoCloseLabel": "Close the day automatically",
-      "autoCloseHelp": "After the cutoff, the previous business day closes by itself once every shift on it has been counted and closed. Nobody has to close it for the date to move on or for the next shift to open.",
-      "changeNote": "A change applies from the moment it is saved. Nothing already recorded is re-dated, and the day in progress never moves back to yesterday.",
+      "changeNote": "A change applies from the moment it is saved and nothing already recorded is re-dated. Change it while the shops are closed.",
       "now": "Now: business day {{date}}, which ends at {{ends}} ({{zone}}).",
-      "saveSuccess": "Business day saved for every branch that follows head office.",
+      "saveSuccess": "Business day saved for every branch.",
       "loadError": "Failed to load the business day settings",
-      "saveError": "Failed to save the business day settings"
+      "saveError": "Failed to save the business day settings",
+      "autoCloseNote": "After the cutoff, the previous business day closes by itself once every shift on it has been counted and closed."
     },
     "customerFields": {
       "title": "Customer fields",

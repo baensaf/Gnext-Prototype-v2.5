@@ -188,7 +188,7 @@ export async function seedAdminDemo(
   }
 
   // Valiasr's closed business days, one for each day of the seeded history except the last
-  // two: yesterday is left for the manager to close in the demo, and today is still trading.
+  // two: yesterday is left for auto-close to close, and today is still trading.
   const closeRepo = ds.getRepository('BusinessDayClose');
   if (valiasr && !(await closeRepo.findOne({ where: { tenant_id: tenantId, branch_id: valiasr.id } }))) {
     const days: Array<{ business_date: string; total: string; orders: string }> = await ds.query(
@@ -205,12 +205,9 @@ export async function seedAdminDemo(
           tenant_id: tenantId,
           branch_id: valiasr.id,
           business_date: date,
-          currency_code: 'IRR',
-          status: 'CLOSED',
           totals: { totalSales: MoneyUtil.format(d.total), orderCount: Number(d.orders), autoCompletedOrders: 0, carriedOverOrders: 0 },
           // A quarter to midnight on the business clock.
           closed_at: new Date(BusinessDateUtil.endOfDay(date).getTime() - 15 * 60_000),
-          closed_by: managerId,
         }),
       );
     }
