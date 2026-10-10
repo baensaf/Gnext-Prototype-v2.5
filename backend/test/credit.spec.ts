@@ -18,7 +18,7 @@ describe('Customer Credit Subledger Suite (R14)', () => {
 
   beforeEach(async () => {
     accountRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), find: jest.fn().mockResolvedValue([]), createQueryBuilder: jest.fn() };
-    entryRepo = { find: jest.fn().mockResolvedValue([]), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() };
+    entryRepo = { find: jest.fn().mockResolvedValue([]) };
     customerRepo = { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) };
     auditWriter = { write: jest.fn() };
 
@@ -44,7 +44,6 @@ describe('Customer Credit Subledger Suite (R14)', () => {
       providers: [
         CreditService,
         { provide: getRepositoryToken(CustomerCreditAccount), useValue: accountRepo },
-        { provide: getRepositoryToken(CreditEntry), useValue: entryRepo },
         { provide: getRepositoryToken(Customer), useValue: customerRepo },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: DataSource, useValue: dataSource },
@@ -77,7 +76,7 @@ describe('Customer Credit Subledger Suite (R14)', () => {
 
   describe('Signed Postings & Credit Limit Enforcement (R14)', () => {
     it('should post purchase as a negative signed CreditEntry and update running balance', async () => {
-      const acc = { id: 'acc-1', tenant_id: 't-1', currency_code: 'IRR', mode: 'FINITE', credit_limit: '100000.0000', current_balance: '0.0000', status: 'ACTIVE', is_blocked: false };
+      const acc = { id: 'acc-1', tenant_id: 't-1', currency_code: 'IRR', mode: 'FINITE', credit_limit: '100000.0000', current_balance: '0.0000' };
       accountRepo.findOne.mockResolvedValue(acc);
 
       const entry = await service.postPurchase('t-1', 'acc-1', { orderId: 'ord-1', amount: '40000.0000' });
@@ -86,8 +85,8 @@ describe('Customer Credit Subledger Suite (R14)', () => {
       expect(acc.current_balance).toBe('-40000.0000');
     });
 
-    it('should throw ForbiddenException CREDIT_LIMIT_EXCEEDED if purchase exceeds available credit without approval', async () => {
-      const acc = { id: 'acc-1', tenant_id: 't-1', currency_code: 'IRR', mode: 'FINITE', credit_limit: '50000.0000', current_balance: '-20000.0000', status: 'ACTIVE', is_blocked: false };
+    it('should throw ForbiddenException CREDIT_LIMIT_EXCEEDED if purchase exceeds available credit', async () => {
+      const acc = { id: 'acc-1', tenant_id: 't-1', currency_code: 'IRR', mode: 'FINITE', credit_limit: '50000.0000', current_balance: '-20000.0000' };
       accountRepo.findOne.mockResolvedValue(acc);
 
       // Available = 30,000. Attempting purchase of 40,000
@@ -97,7 +96,7 @@ describe('Customer Credit Subledger Suite (R14)', () => {
     });
 
     it('should post repayment as positive signed CreditEntry and increase running balance', async () => {
-      const acc = { id: 'acc-1', tenant_id: 't-1', currency_code: 'IRR', mode: 'FINITE', credit_limit: '100000.0000', current_balance: '-40000.0000', status: 'ACTIVE' };
+      const acc = { id: 'acc-1', tenant_id: 't-1', currency_code: 'IRR', mode: 'FINITE', credit_limit: '100000.0000', current_balance: '-40000.0000' };
       accountRepo.findOne.mockResolvedValue(acc);
 
       const res = await service.postRepayment('t-1', 'acc-1', { amount: '40000.0000' });
@@ -106,65 +105,41 @@ describe('Customer Credit Subledger Suite (R14)', () => {
     });
   });
 
-  describe('FIFO Aging & Account Statements (R14)', () => {
-    it('should calculate FIFO aging buckets for active credit accounts', async () => {
-      accountRepo.find.mockResolvedValue([
-        { id: 'acc-1', customer_id: 'cust-1', current_balance: '-50000.0000', status: 'ACTIVE' },
-      ]);
-      entryRepo.find.mockResolvedValue([
-        { id: 'e-1', amount: '-50000.0000', posted_at: new Date() },
-      ]);
+  describe('Repayments', () => {
+    it('should refuse a repayment bigger than what the customer owes', async () => {
+      const acc = { id: 'acc-1', tenant_id: 't-1', currency_code: 'IRR', mode: 'FINITE', credit_limit: '100000.0000', current_balance: '-40000.0000' };
+      accountRepo.findOne.mockResolvedValue(acc);
 
-      const aging = await service.getCreditAging('t-1', {});
-      expect(aging.totals.totalOutstanding).toBe('50000.0000');
-      expect(aging.totals.current).toBe('50000.0000');
-      expect(aging.customers.length).toBe(1);
+      await expect(service.postRepayment('t-1', 'acc-1', { amount: '50000.0000' })).rejects.toThrow(BadRequestException);
+      expect(acc.current_balance).toBe('-40000.0000');
+    });
+
+    it('should refuse a repayment on an account that owes nothing', async () => {
+      const acc = { id: 'acc-1', tenant_id: 't-1', currency_code: 'IRR', mode: 'FINITE', credit_limit: '100000.0000', current_balance: '0.0000' };
+      accountRepo.findOne.mockResolvedValue(acc);
+
+      await expect(service.postRepayment('t-1', 'acc-1', { amount: '10000.0000' })).rejects.toThrow(BadRequestException);
     });
   });
 
-  describe('BUG-02: Customer Credit Ledger Popup (postCreditTransaction)', () => {
-    it('should post CHARGE transaction as positive adjustment to credit account', async () => {
-      const acc = { id: 'acc-1', tenant_id: 't-1', customer_id: 'c-1', currency_code: 'IRR', mode: 'FINITE', credit_limit: '100000.0000', current_balance: '10000.0000', status: 'ACTIVE' };
-      accountRepo.findOne.mockResolvedValue(acc);
-
-      const res = await service.postCreditTransaction('t-1', 'c-1', {
-        transaction_type: 'CHARGE',
-        amount: '50000.0000',
-        note: 'Wallet top-up',
+  describe('Account with its transactions', () => {
+    it('should list the transactions newest first', async () => {
+      accountRepo.findOne.mockResolvedValue({
+        id: 'acc-1',
+        customer_id: 'c-1',
+        mode: 'FINITE',
+        credit_limit: '100000.0000',
+        current_balance: '-30000.0000',
+        entries: [
+          { id: 'e-1', posted_at: new Date('2026-10-01T10:00:00Z') },
+          { id: 'e-2', posted_at: new Date('2026-10-02T10:00:00Z') },
+        ],
       });
+      customerRepo.findOne.mockResolvedValue({ id: 'c-1', code: 'C1', first_name: 'Ali', last_name: 'Rezai' });
 
-      expect(res.transaction).toBeDefined();
-      expect(res.transaction.amount).toBe('50000.0000');
-      expect(res.newBalance).toBe('60000.0000');
-      expect(res.transaction.transaction_type).toBe('CHARGE');
-    });
-
-    it('should post DEBIT transaction as negative adjustment to credit account', async () => {
-      const acc = { id: 'acc-1', tenant_id: 't-1', customer_id: 'c-1', currency_code: 'IRR', mode: 'FINITE', credit_limit: '100000.0000', current_balance: '60000.0000', status: 'ACTIVE' };
-      accountRepo.findOne.mockResolvedValue(acc);
-
-      const res = await service.postCreditTransaction('t-1', 'c-1', {
-        transaction_type: 'DEBIT',
-        amount: '20000.0000',
-        note: 'Manual debit',
-      });
-
-      expect(res.transaction).toBeDefined();
-      expect(res.transaction.amount).toBe('-20000.0000');
-      expect(res.newBalance).toBe('40000.0000');
-    });
-
-    it('should auto-create credit account if customer exists and account does not exist yet', async () => {
-      accountRepo.findOne.mockResolvedValue(null);
-      customerRepo.findOne.mockResolvedValue({ id: 'c-new', tenant_id: 't-1', credit_limit: '50000.0000' });
-
-      const res = await service.postCreditTransaction('t-1', 'c-new', {
-        transaction_type: 'CHARGE',
-        amount: '15000.0000',
-      });
-
-      expect(res.account).toBeDefined();
-      expect(res.newBalance).toBe('15000.0000');
+      const acc = await service.getAccountById('t-1', 'acc-1');
+      expect(acc.entries.map((e: any) => e.id)).toEqual(['e-2', 'e-1']);
+      expect(acc.availableCredit).toBe('70000.0000');
     });
   });
 });

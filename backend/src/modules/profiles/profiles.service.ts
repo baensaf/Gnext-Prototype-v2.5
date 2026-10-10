@@ -41,14 +41,7 @@ export class ProfilesService {
     const customer: any = await this.customerService.getCustomerById(tenantId, id);
     const account = customer.credit_account;
 
-    const tagIds = (customer.tags || []).map((link: any) => link.tag_id);
-    const [tags, summary, entries, audit] = await Promise.all([
-      tagIds.length
-        ? this.dataSource.query(
-            `SELECT id, name, color FROM customer_tag WHERE tenant_id = $1 AND id = ANY($2::uuid[]) ORDER BY name`,
-            [tenantId, tagIds],
-          )
-        : [],
+    const [summary, entries, audit] = await Promise.all([
       this.orderSummary(tenantId, 'o.customer_id = $2', [id]),
       account
         ? this.dataSource.query(
@@ -60,13 +53,7 @@ export class ProfilesService {
             [tenantId, account.id],
           )
         : [],
-      this.auditTrail(
-        tenantId,
-        `a.entity_id::text IN ($2, $3)
-         OR a.details->>'targetCustomerId' = $2
-         OR a.details->>'sourceCustomerId' = $2`,
-        [id, account?.id ?? id],
-      ),
+      this.auditTrail(tenantId, `a.entity_id::text IN ($2, $3)`, [id, account?.id ?? id]),
     ]);
 
     return {
@@ -84,8 +71,6 @@ export class ProfilesService {
       },
       phones: customer.phones || [],
       addresses: customer.addresses || [],
-      consents: customer.consents || [],
-      tags,
       stats: summary.stats,
       orders: summary.orders,
       credit: account ? { account, entries } : null,

@@ -50,7 +50,7 @@ describe('Phase 1 Customer Club & Discounts Workflows (Spec)', () => {
     approvalRequestRepo = { findOne: jest.fn().mockResolvedValue(null) };
 
     creditAccountRepo = {
-      findOne: jest.fn().mockResolvedValue({ id: 'acc-1', customer_id: customerA, current_balance: '0.0000', currency_code: 'IRR', status: 'ACTIVE' }),
+      findOne: jest.fn().mockResolvedValue({ id: 'acc-1', customer_id: customerA, current_balance: '0.0000', currency_code: 'IRR' }),
       save: jest.fn().mockImplementation((acc) => Promise.resolve(acc)),
     };
 

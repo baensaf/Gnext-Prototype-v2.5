@@ -7,11 +7,6 @@ import { CustomerCreditAccount } from '../../entities/CustomerCreditAccount.enti
 import { CreditEntry } from '../../entities/CreditEntry.entity';
 import { CustomFieldDefinition } from '../../entities/CustomFieldDefinition.entity';
 import { CustomerCustomValue } from '../../entities/CustomerCustomValue.entity';
-import { CustomerTag } from '../../entities/CustomerTag.entity';
-import { CustomerTagLink } from '../../entities/CustomerTagLink.entity';
-import { CustomerSegment } from '../../entities/CustomerSegment.entity';
-import { CustomerConsent } from '../../entities/CustomerConsent.entity';
-import { CustomerMerge } from '../../entities/CustomerMerge.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { CustomerService } from './customer.service';
 import { CreditService } from './credit.service';
@@ -30,11 +25,6 @@ import { CustomFieldsService } from './custom-fields.service';
       CreditEntry,
       CustomFieldDefinition,
       CustomerCustomValue,
-      CustomerTag,
-      CustomerTagLink,
-      CustomerSegment,
-      CustomerConsent,
-      CustomerMerge,
       OrderHeader,
     ]),
     AuditModule,

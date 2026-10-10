@@ -8,16 +8,13 @@ import {
   VersionColumn,
   OneToMany,
   Unique,
-  Index,
 } from 'typeorm';
 import { CreditEntry } from './CreditEntry.entity';
 
 export type CreditMode = 'FINITE' | 'UNLIMITED' | 'POLICY';
-export type CreditAccountStatus = 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
 
 @Entity('credit_account')
 @Unique(['tenant_id', 'customer_id', 'currency_code'])
-@Index(['tenant_id', 'customer_id', 'status'])
 export class CustomerCreditAccount {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -39,12 +36,6 @@ export class CustomerCreditAccount {
 
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   current_balance: string;
-
-  @Column({ type: 'varchar', length: 16, default: 'ACTIVE' })
-  status: CreditAccountStatus;
-
-  @Column({ type: 'boolean', default: false })
-  is_blocked: boolean;
 
   @Column({ type: 'text', nullable: true })
   policy_note: string;

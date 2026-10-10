@@ -93,11 +93,6 @@ import { CustomerCreditAccount } from './entities/CustomerCreditAccount.entity';
 import { CreditEntry } from './entities/CreditEntry.entity';
 import { CustomFieldDefinition } from './entities/CustomFieldDefinition.entity';
 import { CustomerCustomValue } from './entities/CustomerCustomValue.entity';
-import { CustomerTag } from './entities/CustomerTag.entity';
-import { CustomerTagLink } from './entities/CustomerTagLink.entity';
-import { CustomerSegment } from './entities/CustomerSegment.entity';
-import { CustomerConsent } from './entities/CustomerConsent.entity';
-import { CustomerMerge } from './entities/CustomerMerge.entity';
 import { OrderHeader } from './entities/OrderHeader.entity';
 import { OrderItem } from './entities/OrderItem.entity';
 import { OrderItemOption } from './entities/OrderItemOption.entity';
@@ -151,8 +146,7 @@ import { IntegrationLog } from './entities/IntegrationLog.entity';
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
           CustomerDiscount, ItemDiscount,
           Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CreditEntry,
-          CustomFieldDefinition, CustomerCustomValue, CustomerTag, CustomerTagLink, CustomerSegment,
-          CustomerConsent, CustomerMerge,
+          CustomFieldDefinition, CustomerCustomValue,
           OrderHeader, OrderItem, OrderItemOption, OrderAdjustment, OrderNote, OrderLink, OrderStateEvent, OrderSequence,
           Payment, SettlementAccount, PaymentDevice, PaymentAllocation, PaymentAttempt,
           RefundAllocation, Refund,

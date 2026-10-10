@@ -6,12 +6,8 @@ import { OrderService } from '../src/modules/order/order.service';
 import { IncomingOrderPolicyService } from '../src/modules/order/incoming-order-policy.service';
 import { OnlineOrdersService } from '../src/modules/order/online-orders.service';
 import { OrderUpdateDto } from '../src/modules/order/dtos/order.dto';
-import { CustomerController } from '../src/modules/customer/customer.controller';
-import { CreditController } from '../src/modules/customer/credit.controller';
-import { CustomerService } from '../src/modules/customer/customer.service';
-import { CreditService } from '../src/modules/customer/credit.service';
 
-describe('BUG-01 & BUG-02 Verification Suite', () => {
+describe('BUG-01 Verification Suite', () => {
   describe('BUG-01: POS Held Order Updates (PATCH /api/v1/orders/:id)', () => {
     let ordersController: OrdersController;
     let orderService: any;
@@ -90,95 +86,6 @@ describe('BUG-01 & BUG-02 Verification Suite', () => {
       );
       expect(result.branch_id).toBe('11111111-1111-1111-1111-111111111111');
       expect(result.order_type).toBe('TAKEAWAY');
-    });
-  });
-
-  describe('BUG-02: Customer Credit Ledger Popup (POST transactions endpoints)', () => {
-    let customerController: CustomerController;
-    let creditController: CreditController;
-    let creditService: any;
-    let customerService: any;
-
-    beforeEach(async () => {
-      creditService = {
-        postCreditTransaction: jest.fn().mockImplementation((tenantId, customerId, body, userId) =>
-          Promise.resolve({
-            account: { id: 'acc-1', customer_id: customerId, current_balance: '50000.0000' },
-            transaction: {
-              id: 'tx-1',
-              transaction_type: body.transaction_type || 'CHARGE',
-              amount: String(body.amount),
-              recorded_at: new Date().toISOString(),
-              note: body.note,
-            },
-            entry: {
-              id: 'tx-1',
-              entry_type: 'ADJUSTMENT',
-              amount: String(body.amount),
-            },
-            newBalance: '50000.0000',
-            availableCredit: '150000.0000',
-          }),
-        ),
-        getAccountByCustomer: jest.fn().mockResolvedValue({
-          id: 'acc-1',
-          customer_id: 'cust-1',
-          current_balance: '50000.0000',
-        }),
-        getAccountStatement: jest.fn().mockResolvedValue({
-          entries: [
-            {
-              id: 'tx-1',
-              entry_type: 'ADJUSTMENT',
-              amount: '50000.0000',
-              posted_at: new Date(),
-              reason_text: 'Top up',
-            },
-          ],
-        }),
-      };
-
-      customerService = {};
-
-      const module: TestingModule = await Test.createTestingModule({
-        controllers: [CustomerController, CreditController],
-        providers: [
-          { provide: CreditService, useValue: creditService },
-          { provide: CustomerService, useValue: customerService },
-        ],
-      }).compile();
-
-      customerController = module.get<CustomerController>(CustomerController);
-      creditController = module.get<CreditController>(CreditController);
-    });
-
-    it('CustomerController: should handle postCustomerCreditTransaction and return account & transaction', async () => {
-      const mockReq: any = { tenantId: 't-test', user: { id: 'u-1' }, correlationId: 'c-1' };
-      const body = { transaction_type: 'CHARGE', amount: '50000', note: 'Top-up deposit' };
-
-      const res = await customerController.postCustomerCreditTransaction('cust-1', body, mockReq);
-      expect(creditService.postCreditTransaction).toHaveBeenCalledWith(
-        't-test',
-        'cust-1',
-        body,
-        'u-1',
-        'c-1',
-      );
-      expect(res.account).toBeDefined();
-      expect(res.transaction).toBeDefined();
-      expect(res.transaction.transaction_type).toBe('CHARGE');
-      expect(res.transaction.amount).toBe('50000');
-    });
-
-    it('CustomerController.getCustomerCreditAccount: should return mapped transactions with transaction_type, recorded_at, note', async () => {
-      const mockReq: any = { tenantId: 't-test' };
-      const res = await customerController.getCustomerCreditAccount('cust-1', mockReq);
-      expect(res.account).toBeDefined();
-      expect(res.transactions).toBeDefined();
-      expect(res.transactions.length).toBe(1);
-      expect(res.transactions[0].transaction_type).toBe('ADJUSTMENT');
-      expect(res.transactions[0].recorded_at).toBeDefined();
-      expect(res.transactions[0].note).toBe('Top up');
     });
   });
 });

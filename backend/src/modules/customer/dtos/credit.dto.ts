@@ -1,9 +1,7 @@
 import {
   IsString,
-  IsNotEmpty,
   IsOptional,
   IsUUID,
-  IsInt,
   IsNumberString,
   IsIn,
 } from 'class-validator';
@@ -40,27 +38,6 @@ export class CreditAccountUpdateDto {
   @IsOptional()
   @IsString()
   policyNote?: string;
-
-  @IsOptional()
-  @IsString()
-  approvalRequestId?: string;
-
-  @IsOptional()
-  @IsInt()
-  version?: number;
-}
-
-export class CreditAccountStatusDto {
-  @IsString()
-  reason: string;
-
-  @IsOptional()
-  @IsString()
-  approvalRequestId?: string;
-
-  @IsOptional()
-  @IsInt()
-  version?: number;
 }
 
 export class CreditRepaymentDto {
@@ -69,13 +46,10 @@ export class CreditRepaymentDto {
 
   /**
    * Set by the refund service, never by a client (the validation pipe refuses unknown fields):
-   * a refund to store credit was already released by a manager or a manager's PIN.
+   * a refund to store credit was already released by a manager or a manager's PIN, and may
+   * leave the balance above what was owed.
    */
   preApproved?: boolean;
-
-  @IsOptional()
-  @IsString()
-  methodId?: string;
 
   @IsOptional()
   @IsString()
@@ -84,37 +58,6 @@ export class CreditRepaymentDto {
   @IsOptional()
   @IsString()
   reason?: string;
-
-  @IsOptional()
-  @IsString()
-  approvalRequestId?: string;
-
-  @IsOptional()
-  @IsInt()
-  version?: number;
-}
-
-export class CreditAdjustmentDto {
-  @IsNumberString()
-  amountSigned: string;
-
-  @IsOptional()
-  @IsString()
-  reasonCodeId?: string;
-
-  @IsString()
-  reason: string;
-
-  @IsOptional()
-  @IsString()
-  reference?: string;
-
-  @IsString()
-  approvalRequestId: string;
-
-  @IsOptional()
-  @IsInt()
-  version?: number;
 }
 
 export class CreditPurchaseDto {
@@ -127,10 +70,6 @@ export class CreditPurchaseDto {
   @IsOptional()
   @IsUUID()
   paymentId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  approvalRequestId?: string;
 
   @IsOptional()
   @IsString()
