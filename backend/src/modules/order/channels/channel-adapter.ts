@@ -30,8 +30,6 @@ export type ChannelCapabilities = {
   reportWindowMinutes: number | null;
   /** The platform has a call to change the promised time directly. */
   adjustTime: boolean;
-  /** The platform hears when the food is ready. */
-  notifiesReady: boolean;
   /** The platform hears when the order leaves the store. */
   notifiesHandover: boolean;
   /** The platform sends its rider's name and progress. */
@@ -63,7 +61,6 @@ export interface ChannelAdapter {
   rejectedUnanswered(tenantId: string, order: OrderHeader, comment: string): Promise<void>;
   /** Returns the text kept on the order while the platform deals with it. */
   reported(tenantId: string, order: OrderHeader, notice: ReportNotice): Promise<string>;
-  ready(tenantId: string, order: OrderHeader): Promise<void>;
   handedOver(tenantId: string, order: OrderHeader): Promise<void>;
   /** Stop (until a time) or restart (null) taking orders for one branch. */
   pause(tenantId: string, branchId: string, until: Date | null): Promise<void>;

@@ -42,29 +42,6 @@ describe('a platform order after the store accepts it', () => {
     service = new OnlineOrdersService(orderRepo as any, {} as any, {} as any, {} as any, orderService, {} as any);
   });
 
-  describe('Ready', () => {
-    it('moves an accepted order through preparing to ready', async () => {
-      const result = await service.markReady('t-1', 'order-1');
-
-      expect(transitions).toEqual(['START_PREPARATION', 'MARK_READY']);
-      expect(result.state).toBe('READY');
-    });
-
-    it('leaves an order that is already ready alone', async () => {
-      saved = snappfood({ state: 'READY' });
-
-      await service.markReady('t-1', 'order-1');
-
-      expect(transitions).toEqual([]);
-    });
-
-    it('refuses an order the kitchen no longer has', async () => {
-      saved = snappfood({ state: 'CANCELLED' });
-
-      await expect(service.markReady('t-1', 'order-1')).rejects.toBeInstanceOf(ConflictException);
-    });
-  });
-
   describe('Handed over', () => {
     it("completes an order a platform rider took", async () => {
       saved = snappfood({ state: 'READY' });

@@ -87,8 +87,8 @@ describe('the Online board', () => {
 
     expect(board.cards.map((c) => [c.displayCode, c.lane])).toEqual([
       ['NEW1', 'NEW'],
-      ['COOK1', 'PREPARING'],
-      ['READY1', 'READY'],
+      ['COOK1', 'ACCEPTED'],
+      ['READY1', 'ACCEPTED'],
     ]);
     expect(board.doneToday).toBe(7);
     expect(board.shiftOpen).toBe(true);

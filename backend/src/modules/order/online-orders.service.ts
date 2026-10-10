@@ -23,7 +23,7 @@ import {
 } from './channels';
 
 /** Where an order sits on the till's Online panel. */
-export type OnlineLane = 'NEW' | 'PREPARING' | 'READY' | 'ISSUE';
+export type OnlineLane = 'NEW' | 'ACCEPTED' | 'ISSUE';
 
 /** Why an order is in the Issues lane. */
 export type OnlineIssue = 'PLATFORM_CANCELLED' | 'TIMED_OUT' | 'WITH_SUPPORT';
@@ -193,8 +193,7 @@ export class OnlineOrdersService {
     let lane: OnlineLane;
     if (issue) lane = 'ISSUE';
     else if (order.state === 'PENDING_ACCEPTANCE') lane = 'NEW';
-    else if (order.state === 'READY') lane = 'READY';
-    else lane = 'PREPARING';
+    else lane = 'ACCEPTED';
 
     const windowMinutes = channel.capabilities.reportWindowMinutes;
     const reportEnds =
@@ -297,24 +296,6 @@ export class OnlineOrdersService {
       // Only a courtesy to the platform; the order is answered either way.
     }
     return { ok: true };
-  }
-
-  /**
-   * The food is bagged. With printed tickets nothing else moves an order to Ready, and the
-   * Ready lane is how the counter sees what waits for a rider or a customer.
-   */
-  async markReady(tenantId: string, id: string, userId?: string, correlationId?: string) {
-    const { order, channel } = await this.platformOrder(tenantId, id);
-    if (order.state === 'READY') return order;
-    if (!PREPARING_STATES.includes(order.state)) {
-      throw new ConflictException({ code: 'ORDER_NOT_IN_KITCHEN', message: `Order ${order.order_number} is ${order.state}, not in the kitchen` });
-    }
-    let current = order;
-    if (current.state === 'SUBMITTED') current = await this.orderService.transitionState(tenantId, id, 'CONFIRM', {}, userId, correlationId);
-    if (current.state === 'CONFIRMED') current = await this.orderService.transitionState(tenantId, id, 'START_PREPARATION', {}, userId, correlationId);
-    current = await this.orderService.transitionState(tenantId, id, 'MARK_READY', {}, userId, correlationId);
-    if (channel.capabilities.notifiesReady) await this.tellPlatform(current, 'ready', () => channel.ready(tenantId, current));
-    return current;
   }
 
   /**

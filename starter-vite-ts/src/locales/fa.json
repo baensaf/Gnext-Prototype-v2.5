@@ -4378,14 +4378,12 @@
     },
     "lane": {
       "NEW": "جدید",
-      "PREPARING": "در آشپزخانه",
-      "READY": "آماده",
-      "ISSUE": "نیاز به توجه"
+      "ISSUE": "نیاز به توجه",
+      "ACCEPTED": "پذیرفته‌شده"
     },
     "laneEmpty": {
       "NEW": "سفارش جدیدی نیست",
-      "PREPARING": "چیزی در آشپزخانه نیست",
-      "READY": "چیزی منتظر نیست"
+      "ACCEPTED": "سفارش پذیرفته‌شده‌ای منتظر ارسال نیست"
     },
     "fulfilment": {
       "PLATFORM_RIDER": "پیک {{platform}}",
@@ -4406,7 +4404,6 @@
     "accept": "تأیید · {{count}} دقیقه",
     "reject": "رد",
     "details": "جزئیات",
-    "ready": "آماده شد",
     "handedToRider": "به پیک تحویل شد",
     "collected": "مشتری تحویل گرفت",
     "collectAndHandOver": "دریافت {{amount}} و تحویل",
@@ -4503,7 +4500,6 @@
       },
       "accepted": "سفارش {{code}} تأیید و به آشپزخانه فرستاده شد",
       "rejected": "سفارش {{code}} رد شد",
-      "readyDone": "سفارش {{code}} آماده است",
       "handedOver": "سفارش {{code}} تحویل شد",
       "reported": "سفارش {{code}} نزد پشتیبانی {{platform}} است",
       "seen": "سفارش {{code}} از فهرست برداشته شد",

@@ -1746,6 +1746,7 @@ export function PosOrderPage() {
                   </ToggleButton>
                   <ToggleButton value="online" sx={{ px: 1.5, gap: 1 }}>
                     {t('online.tabOnline')}
+                    <VersionTag feature="pos.onlineTab" />
                     {onlineAttention > 0 && (
                       <Chip size="small" color="error" label={onlineAttention} sx={{ height: 20, fontWeight: 700 }} />
                     )}

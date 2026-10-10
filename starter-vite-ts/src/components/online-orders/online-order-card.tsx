@@ -31,7 +31,6 @@ export type CardActions = {
   accept: (card: OnlineCard, minutes: number) => void;
   reject: (card: OnlineCard) => void;
   details: (card: OnlineCard) => void;
-  ready: (card: OnlineCard) => void;
   handOver: (card: OnlineCard) => void;
   sendOut: (card: OnlineCard) => void;
   report: (card: OnlineCard) => void;
@@ -71,7 +70,7 @@ export function OnlineOrderCard({ card, now, defaultPrepMinutes, shiftOpen, busy
 
   const FulfilmentIcon = FULFILMENT_ICON[card.fulfilment];
   const isIssue = card.lane === 'ISSUE';
-  const tone = isIssue ? 'error.main' : card.late ? 'error.main' : card.lane === 'NEW' ? 'primary.main' : card.lane === 'READY' ? 'success.main' : 'divider';
+  const tone = isIssue ? 'error.main' : card.late ? 'error.main' : card.lane === 'NEW' ? 'primary.main' : 'divider';
 
   const timer = (() => {
     if (card.lane === 'NEW') {
@@ -158,13 +157,7 @@ export function OnlineOrderCard({ card, now, defaultPrepMinutes, shiftOpen, busy
             </Stack>
           </Stack>
         );
-      case 'PREPARING':
-        return (
-          <Button fullWidth variant="contained" color="primary" disabled={busy} onClick={() => actions.ready(card)}>
-            {t('online.ready')}
-          </Button>
-        );
-      case 'READY':
+      case 'ACCEPTED':
         if (card.fulfilment === 'OWN_COURIER') {
           return (
             <Button fullWidth variant="contained" color="success" disabled={busy} onClick={() => actions.sendOut(card)}>
@@ -196,8 +189,6 @@ export function OnlineOrderCard({ card, now, defaultPrepMinutes, shiftOpen, busy
   })();
 
   const canReport = card.reportReasons.length > 0;
-  // A rider order can also go straight from the kitchen; an own-courier one goes out from Dispatch.
-  const canHandOverNow = card.lane === 'PREPARING' && card.fulfilment !== 'OWN_COURIER';
 
   return (
     <Card
@@ -265,16 +256,6 @@ export function OnlineOrderCard({ card, now, defaultPrepMinutes, shiftOpen, busy
       {primary && <Box sx={{ mt: 1.25 }}>{primary}</Box>}
 
       <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={() => setMenuAnchor(null)}>
-        {canHandOverNow && (
-          <MenuItem
-            onClick={() => {
-              setMenuAnchor(null);
-              actions.handOver(card);
-            }}
-          >
-            {card.fulfilment === 'PICKUP' ? t('online.collected') : t('online.handedToRider')}
-          </MenuItem>
-        )}
         {canReport && (
           <MenuItem
             onClick={() => {

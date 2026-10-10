@@ -280,10 +280,6 @@ export const orderApi = {
     return res.data;
   },
 
-  markReady: async (id: string, data?: any): Promise<OrderHeader> => {
-    const res = await httpClient.post(`/api/v1/orders/${id}/mark-ready`, data || {});
-    return res.data;
-  },
 
   dispatchOrder: async (id: string, data?: any): Promise<OrderHeader> => {
     const res = await httpClient.post(`/api/v1/orders/${id}/dispatch`, data || {});
