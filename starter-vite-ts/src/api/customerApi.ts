@@ -71,6 +71,7 @@ export interface CustomerCreditAccount {
   customer_id: string;
   credit_limit: string;
   current_balance: string;
+  mode?: 'FINITE' | 'UNLIMITED' | 'POLICY';
 }
 
 export interface CustomerPage {

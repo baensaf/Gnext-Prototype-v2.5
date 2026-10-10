@@ -44,13 +44,6 @@ export class CreditRepaymentDto {
   @IsNumberString()
   amount: string;
 
-  /**
-   * Set by the refund service, never by a client (the validation pipe refuses unknown fields):
-   * a refund to store credit was already released by a manager or a manager's PIN, and may
-   * leave the balance above what was owed.
-   */
-  preApproved?: boolean;
-
   @IsOptional()
   @IsString()
   reference?: string;
