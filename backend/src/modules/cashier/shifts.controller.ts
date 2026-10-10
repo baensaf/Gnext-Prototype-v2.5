@@ -2,16 +2,9 @@ import { Controller, Get, Post, Param, Body, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { ShiftService } from './shift.service';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
-import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { CashierShift } from '../../entities/CashierShift.entity';
-import {
-  ShiftOpenDto,
-  CashMovementDto,
-  ShiftBeginCloseDto,
-  ShiftReturnToOpenDto,
-  ShiftCloseDto,
-} from './dtos/shift.dto';
+import { ShiftOpenDto, CashMovementDto, ShiftCloseDto } from './dtos/shift.dto';
 
 /**
  * Every route that names a shift by id is held to the caller's own branch by
@@ -57,15 +50,14 @@ export class ShiftsController {
     // the screen would have offered to close somebody else's till. A branch account is
     // held to its own shop; head office working inside a branch names it, because with no
     // branch at all the answer was the newest drawer open anywhere in the chain.
-    const shift = await this.shiftService.getCurrentShift(
+    return await this.shiftService.getCurrentShift(
       tenantId,
       terminalId,
       effectiveBranchId((req as any).userBranchId, branchId),
     );
-    return await this.shiftService.redactForBlindCount(tenantId, shift, this.viewer(req));
   }
 
-  /** The drawer rules in force where the caller is working: the float offered, blind count. */
+  /** The drawer rules in force where the caller is working: the float offered. */
   @Get('policy')
   async getPolicy(@Query('branchId') branchId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -73,23 +65,9 @@ export class ShiftsController {
   }
 
   /**
-   * Head office only. A branch has its own drawer screen; this one answers about the tills
-   * in everybody else's shops, and it reads without touching anything.
-   *
-   * Declared above `@Get(':id')` because Nest matches routes in declaration order, and a
-   * shift id is a path segment like any other — put below, `rollup` would be looked up as
-   * a shift and 404.
-   */
-  @HeadOfficeOnly()
-  @Get('rollup')
-  async getShiftRollup(@Query('businessDate') businessDate: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.shiftService.getShiftRollup(tenantId, businessDate);
-  }
-
-  /**
    * The float a new shift on a register is offered: what the last close left in its drawer.
-   * Above `@Get(':id')` for the same reason as `rollup`.
+   * Above `@Get(':id')` because Nest matches routes in declaration order, and a shift id is a
+   * path segment like any other — put below, `next-float` would be looked up as a shift.
    */
   @Get('next-float')
   async getNextFloat(@Query('terminalId') terminalId: string, @Req() req: Request) {
@@ -100,8 +78,7 @@ export class ShiftsController {
   @Get(':id')
   async getShiftById(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const shift = await this.shiftService.getShiftById(tenantId, id);
-    return await this.shiftService.redactForBlindCount(tenantId, shift, this.viewer(req));
+    return await this.shiftService.getShiftById(tenantId, id);
   }
 
   @Post(':id/movements')
@@ -112,29 +89,12 @@ export class ShiftsController {
     return await this.shiftService.recordMovement(tenantId, id, body, userId, correlationId);
   }
 
-  @Post(':id/begin-close')
-  async beginClose(@Param('id') id: string, @Body() body: ShiftBeginCloseDto, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-    const preview = await this.shiftService.beginClose(tenantId, id, userId, correlationId);
-    return await this.shiftService.redactForBlindCount(tenantId, preview, this.viewer(req));
-  }
-
-  @Post(':id/return-to-open')
-  async returnToOpen(@Param('id') id: string, @Body() body: ShiftReturnToOpenDto, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-    return await this.shiftService.returnToOpen(tenantId, id, body, userId, correlationId);
-  }
-
   @Post(':id/close')
   async closeShift(@Param('id') id: string, @Body() body: ShiftCloseDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
-    return await this.shiftService.closeShift(tenantId, id, body, userId, correlationId, this.viewer(req));
+    return await this.shiftService.closeShift(tenantId, id, body, userId, correlationId);
   }
 
   /** What closing this shift would leave behind: open orders, unfinished cash, other tills. */
@@ -147,22 +107,16 @@ export class ShiftsController {
   @Get(':id/statement')
   async getShiftStatement(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const statement = await this.shiftService.getShiftStatement(tenantId, id);
-    return await this.shiftService.redactForBlindCount(tenantId, statement, this.viewer(req));
+    return await this.shiftService.getShiftStatement(tenantId, id);
   }
 
   /**
    * What the register did in this shift: orders by type, payments by kind, refunds, the drawer.
-   * The cashier reads it before closing to check the card terminal against; blind-count rules
-   * as for the statement.
+   * The cashier reads it before closing to check the card terminal against.
    */
   @Get(':id/summary')
   async getSalesSummary(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    return await this.shiftService.getSalesSummary(tenantId, id, this.viewer(req));
-  }
-
-  private viewer(req: Request) {
-    return { role: (req as any).userRole ?? null };
+    return await this.shiftService.getSalesSummary(tenantId, id);
   }
 }

@@ -31,8 +31,8 @@ export class ShiftOpenDto {
 
 export class CashMovementDto {
   @IsString()
-  @IsIn(['PAID_IN', 'PAID_OUT', 'SAFE_DROP'])
-  type: 'PAID_IN' | 'PAID_OUT' | 'SAFE_DROP';
+  @IsIn(['PAID_IN', 'PAID_OUT'])
+  type: 'PAID_IN' | 'PAID_OUT';
 
   @IsNumberString()
   amount: string;
@@ -58,22 +58,6 @@ export class CashMovementDto {
   version?: number;
 }
 
-export class ShiftBeginCloseDto {
-  @IsOptional()
-  @IsInt()
-  version?: number;
-}
-
-export class ShiftReturnToOpenDto {
-  @IsOptional()
-  @IsString()
-  reason?: string;
-
-  @IsOptional()
-  @IsInt()
-  version?: number;
-}
-
 export class ShiftCloseDto {
   @IsNumberString()
   actualCash: string;
@@ -85,32 +69,6 @@ export class ShiftCloseDto {
   @IsOptional()
   @IsNumberString()
   leftInDrawer?: string;
-
-  @IsOptional()
-  @IsUUID()
-  reasonCodeId?: string;
-
-  @IsOptional()
-  @IsString()
-  reason?: string;
-
-  @IsOptional()
-  @IsUUID()
-  approvalRequestId?: string;
-
-  @IsOptional()
-  @IsString()
-  previewVersion?: string;
-
-  /** An approver's pin, when the count is further out than the branch's tolerance. */
-  @IsOptional()
-  @IsString()
-  pin?: string;
-
-  /** An approver's pin, when orders this till rang up are left open at the close. */
-  @IsOptional()
-  @IsString()
-  openOrdersPin?: string;
 
   @IsOptional()
   @IsInt()

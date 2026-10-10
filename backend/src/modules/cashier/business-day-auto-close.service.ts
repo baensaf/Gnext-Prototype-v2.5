@@ -58,7 +58,7 @@ export class BusinessDayAutoCloseService implements OnApplicationBootstrap, OnMo
         if (closed) continue;
 
         const openShifts = await em.count(CashierShift, {
-          where: { tenant_id: tenantId, branch_id: branchId, business_date: date, currency_code: currencyCode, state: In(['OPEN', 'CLOSING_REVIEW']) },
+          where: { tenant_id: tenantId, branch_id: branchId, business_date: date, currency_code: currencyCode, state: 'OPEN' },
         });
         if (openShifts > 0) {
           outcomes.push({ businessDate: date, currencyCode, outcome: 'WAITING_FOR_SHIFTS', detail: `${openShifts} shift(s) not yet closed` });

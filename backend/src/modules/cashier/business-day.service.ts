@@ -144,12 +144,9 @@ export class BusinessDayService {
     return await this.dataSource.transaction(async (em) => {
       const currencyCode = dto.currencyCode || 'IRR';
 
-      // Verify no open/closing shifts exist for this branch/date/currency
+      // Verify no open shifts exist for this branch/date/currency
       const activeShifts = await em.find(CashierShift, {
-        where: [
-          { tenant_id: tenantId, branch_id: dto.branchId, business_date: dto.businessDate, currency_code: currencyCode, state: 'OPEN' },
-          { tenant_id: tenantId, branch_id: dto.branchId, business_date: dto.businessDate, currency_code: currencyCode, state: 'CLOSING_REVIEW' },
-        ],
+        where: { tenant_id: tenantId, branch_id: dto.branchId, business_date: dto.businessDate, currency_code: currencyCode, state: 'OPEN' },
       });
 
       if (activeShifts.length > 0) {
