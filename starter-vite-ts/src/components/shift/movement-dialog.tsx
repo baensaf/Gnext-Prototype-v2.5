@@ -21,11 +21,9 @@ import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 import { shiftApi } from 'src/api/shiftApi';
 import { settingsApi } from 'src/api/settingsApi';
 
-import { VersionTag } from 'src/components/version-tag';
-
 // ----------------------------------------------------------------------
 
-export type MovementType = 'PAID_IN' | 'PAID_OUT' | 'SAFE_DROP';
+export type MovementType = 'PAID_IN' | 'PAID_OUT';
 
 type Props = {
   open: boolean;
@@ -37,8 +35,7 @@ type Props = {
 
 /**
  * Cash in or out of a drawer between sales. A pay-out is money spent and needs a reason; a
- * safe drop only lifts cash into the safe, so the drawer holds less without anything being
- * spent; a pay-in tops the drawer up.
+ * pay-in tops the drawer up.
  */
 export function MovementDialog({ open, onClose, shiftId, type, onPosted }: Props) {
   const currencyLabel = useCurrencyLabel();
@@ -91,20 +88,16 @@ export function MovementDialog({ open, onClose, shiftId, type, onPosted }: Props
   const title = {
     PAID_IN: t('shift.movement.paidIn', 'Pay in'),
     PAID_OUT: t('shift.movement.paidOut', 'Pay out'),
-    SAFE_DROP: t('shift.movement.safeDrop', 'Safe drop'),
   }[type];
 
   const help = {
     PAID_IN: t('shift.movement.paidInHelp', 'Cash put into the drawer that is not a sale, such as extra change.'),
     PAID_OUT: t('shift.movement.paidOutHelp', 'Cash taken from the drawer and spent. Say what on.'),
-    SAFE_DROP: t('shift.movement.safeDropHelp', 'Cash lifted from the drawer into the safe to keep the drawer light.'),
   }[type];
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ fontWeight: 'bold' }}>
-        {title} {type === 'SAFE_DROP' && <VersionTag feature="shift.safeDrop" />}
-      </DialogTitle>
+      <DialogTitle sx={{ fontWeight: 'bold' }}>{title}</DialogTitle>
       <Box component="form" onSubmit={submit}>
         <DialogContent>
           <Stack spacing={2}>

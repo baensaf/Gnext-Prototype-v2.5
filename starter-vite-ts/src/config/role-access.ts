@@ -92,7 +92,6 @@ const CHAIN_ONLY_PATHS = [
   // the live screens for their own site and no business reading the shop next door's
   // drawer variance, so the roll-ups are chain-only even though they only ever read.
   '/app/delivery/rollup',
-  '/app/cashier/rollup',
   '/app/catalog/import-export',
   '/app/settings/data-reset',
   // The menu is the chain's. A branch does not invent products, rename categories,

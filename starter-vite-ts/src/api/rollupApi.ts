@@ -43,47 +43,9 @@ export interface FleetRollup {
   };
 }
 
-export interface ShiftRollupRow {
-  branch_id: string;
-  branch: string;
-  branch_code: string;
-  open: number;
-  closing_review: number;
-  closed: number;
-  /** Drawers still open on a day that has already ended. */
-  stale_open: number;
-  expected_cash: string;
-  counted_cash: string;
-  variance: string;
-  worst_variance: string;
-  last_closed_at: string | null;
-}
-
-export interface ShiftRollup {
-  business_date: string;
-  generated_at: string;
-  rows: ShiftRollupRow[];
-  totals: {
-    branch_count: number;
-    branches_not_trading: number;
-    open: number;
-    closing_review: number;
-    closed: number;
-    stale_open: number;
-    expected_cash: string;
-    counted_cash: string;
-    variance: string;
-  };
-}
-
 export const rollupApi = {
   getFleetRollup: async (): Promise<FleetRollup> => {
     const res = await httpClient.get('/api/v1/delivery/rollup');
-    return res.data;
-  },
-
-  getShiftRollup: async (businessDate?: string): Promise<ShiftRollup> => {
-    const res = await httpClient.get('/api/v1/shifts/rollup', { params: { businessDate } });
     return res.data;
   },
 };

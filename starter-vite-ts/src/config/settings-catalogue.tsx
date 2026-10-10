@@ -248,11 +248,11 @@ export function useSettingsCatalogue(): SettingCategory[] {
           title: t('settings.hub.items.shiftPolicy.title', 'Shift & Drawer Policy'),
           description: t(
             'settings.hub.items.shiftPolicy.description',
-            'Default opening float, how far a drawer may be out before a manager signs off, and blind counting at close.'
+            'The opening float a new shift is offered.'
           ),
           path: '/app/settings/shift-policy',
           icon: <PointOfSaleIcon sx={{ color: 'success.main' }} />,
-          tags: ['shift', 'drawer', 'float', 'variance', 'blind count', 'cash', 'شیفت', 'صندوق', 'کشو', 'مغایرت'],
+          tags: ['shift', 'drawer', 'float', 'cash', 'شیفت', 'صندوق', 'کشو'],
         },
         {
           id: 'businessDay',

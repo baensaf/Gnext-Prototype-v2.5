@@ -3,7 +3,7 @@ import { httpClient } from './httpClient';
 export interface CashMovement {
   id: string;
   shift_id: string;
-  type: 'OPENING_FLOAT' | 'CASH_PAYMENT' | 'CASH_REFUND' | 'PAID_IN' | 'PAID_OUT' | 'SAFE_DROP' | 'CLOSE_ADJUSTMENT';
+  type: 'OPENING_FLOAT' | 'CASH_PAYMENT' | 'CASH_REFUND' | 'PAID_IN' | 'PAID_OUT' | 'CLOSE_ADJUSTMENT';
   amount: string;
   currency_code: string;
   payment_id?: string;
@@ -19,7 +19,7 @@ export interface CashierShift {
   branch_id: string;
   terminal_id: string;
   shift_number: string;
-  state: 'OPEN' | 'CLOSING_REVIEW' | 'CLOSED';
+  state: 'OPEN' | 'CLOSED';
   status: string; // legacy alias
   currency_code: string;
   business_date: string;
@@ -31,8 +31,6 @@ export interface CashierShift {
   actual_cash?: string;
   short_over?: string;
   over_short_amount?: string;
-  closing_note?: string;
-  preview_version?: string;
   movements?: CashMovement[];
 }
 
@@ -51,35 +49,18 @@ export interface ShiftStatement {
   cashRefunds: string;
   paidIn: string;
   paidOut: string;
-  safeDrops: string;
-  /** Null while the shift is open and the viewer is counting blind. */
-  expectedCash: string | null;
+  expectedCash: string;
   actualCash?: string;
   shortOver?: string | null;
   /** What the close kept in the drawer for the next shift; the rest was handed over. */
   leftInDrawer?: string | null;
   handedOver?: string | null;
-  previewVersion?: string;
   orderCount: number;
   movements: CashMovement[];
-  /** True when sales, refunds and the expected total were withheld for a blind count. */
-  blind?: boolean;
 }
 
 export interface ShiftPolicy {
   defaultOpeningFloat: string;
-  varianceTolerance: string;
-  blindClose: boolean;
-}
-
-/** What a close refused with `SHIFT_COUNT_NEEDS_SIGNOFF` hands back. */
-export interface ShiftCountSignoff {
-  expectedCash: string;
-  actualCash: string;
-  shortOver: string;
-  varianceTolerance: string;
-  needsReason: boolean;
-  needsApproval: boolean;
 }
 
 export interface BusinessDayClose {
@@ -132,9 +113,9 @@ export interface ShiftCloseCheck {
   branchId: string;
   businessDate: string;
   currencyCode: string;
-  /** This till's held, unpaid or unaccepted orders; leaving them open takes a manager PIN. */
+  /** This till's held, unpaid or unaccepted orders. Closing leaves them open; nothing blocks. */
   openOrders: DayCloseOpenOrder[];
-  /** Open orders an earlier shift already left open on a manager's PIN; not asked about again. */
+  /** Open orders an earlier shift already left open; not asked about again. */
   carriedOrders?: DayCloseOpenOrder[];
   /** Cash payments on this drawer that must be finished or cancelled first. */
   pendingCash: PendingCashPayment[];
@@ -143,7 +124,7 @@ export interface ShiftCloseCheck {
   dayClosed: boolean;
 }
 
-/** One register's shift at a glance. A null amount waits for the blind count. */
+/** One register's shift at a glance. */
 export interface ShiftSalesSummary {
   shiftId: string;
   shiftNumber: string;
@@ -152,27 +133,25 @@ export interface ShiftSalesSummary {
   openedAt: string;
   closedAt: string | null;
   closed: boolean;
-  blind: boolean;
   orderCount: number;
   cancelledCount: number;
-  salesTotal: string | null;
-  discountTotal: string | null;
-  deliveryFeeTotal: string | null;
-  unpaidTotal: string | null;
-  byType: Array<{ type: string; count: number; total: string | null }>;
+  salesTotal: string;
+  discountTotal: string;
+  deliveryFeeTotal: string;
+  unpaidTotal: string;
+  byType: Array<{ type: string; count: number; total: string }>;
   tenders: Array<{ kind: string; count: number; amount: string }>;
   refundCount: number;
-  refundTotal: string | null;
-  /** Refunds by how the money went back. Cash is null under a blind count. */
-  refunds?: Array<{ kind: string; count: number; amount: string | null }>;
+  refundTotal: string;
+  /** Refunds by how the money went back. */
+  refunds?: Array<{ kind: string; count: number; amount: string }>;
   cash: {
     openingFloat: string;
-    cashSales: string | null;
-    cashRefunds: string | null;
+    cashSales: string;
+    cashRefunds: string;
     paidIn: string;
     paidOut: string;
-    safeDrops: string;
-    expectedCash: string | null;
+    expectedCash: string;
     actualCash: string | null;
     shortOver: string | null;
     leftInDrawer?: string | null;
@@ -218,7 +197,7 @@ export const shiftApi = {
   recordMovement: async (
     shiftId: string,
     data: {
-      type: 'PAID_IN' | 'PAID_OUT' | 'SAFE_DROP';
+      type: 'PAID_IN' | 'PAID_OUT';
       amount: string;
       reasonCodeId?: string;
       reason?: string;
@@ -229,28 +208,10 @@ export const shiftApi = {
     return res.data;
   },
 
-  beginClose: async (shiftId: string): Promise<ShiftStatement> => {
-    const res = await httpClient.post(`/api/v1/shifts/${shiftId}/begin-close`, {});
-    return res.data;
-  },
-
-  returnToOpen: async (shiftId: string, reason?: string): Promise<CashierShift> => {
-    const res = await httpClient.post(`/api/v1/shifts/${shiftId}/return-to-open`, { reason });
-    return res.data;
-  },
-
   closeShift: async (
     shiftId: string,
     data: {
       actualCash: string;
-      reasonCodeId?: string;
-      reason?: string;
-      approvalRequestId?: string;
-      previewVersion?: string;
-      /** An approver's pin, when the count is further out than the branch allows. */
-      pin?: string;
-      /** An approver's pin, when orders this till rang up are left open. */
-      openOrdersPin?: string;
       /** Of the count, what stays in the drawer for the next shift; left out, it is emptied. */
       leftInDrawer?: string;
     },
@@ -265,7 +226,7 @@ export const shiftApi = {
     return res.data;
   },
 
-  /** The drawer rules where the caller is working: float offered, tolerance, blind count. */
+  /** The drawer rules where the caller is working: the float offered. */
   getPolicy: async (branchId?: string): Promise<ShiftPolicy> => {
     const res = await httpClient.get('/api/v1/shifts/policy', { params: { branchId: branchId || undefined } });
     return res.data;
@@ -276,10 +237,7 @@ export const shiftApi = {
     return res.data;
   },
 
-  /**
-   * What the register did in the shift. While it is open and the branch counts blind, a
-   * cashier gets no cash figure and no sales total (they come back null).
-   */
+  /** What the register did in the shift. */
   getSummary: async (shiftId: string): Promise<ShiftSalesSummary> => {
     const res = await httpClient.get(`/api/v1/shifts/${shiftId}/summary`);
     return res.data;

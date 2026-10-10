@@ -179,12 +179,6 @@ const GROUPS: { titleKey: string; title: string; rows: Capability[] }[] = [
         label: 'See every branch’s couriers on one screen',
         write: { CASHIER: 'NONE', MANAGER: 'NONE', HEAD_OFFICE: 'READ' },
       },
-      {
-        path: '/app/cashier/rollup',
-        labelKey: 'rolesPage.caps.shiftRollup',
-        label: 'See every branch’s tills, and the drawers left open',
-        write: { CASHIER: 'NONE', MANAGER: 'NONE', HEAD_OFFICE: 'READ' },
-      },
     ],
   },
 ];
