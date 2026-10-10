@@ -239,21 +239,8 @@ export function useNavData(): NavSectionProps['data'] {
           ],
         },
         {
-          title: t('nav.monitoring', 'Operational Monitoring'),
-          path: '/app/operations/monitoring',
-          icon: ICONS.dashboard,
-        },
-        {
           title: t('nav.branchAgents', 'Branch Agents'),
           path: '/app/operations/agents',
-          icon: ICONS.terminal,
-        },
-        // Head office reads the branches; the branches run themselves. This is the read-only
-        // half of a screen that stays operational at the shop — a fleet you can see but not
-        // dispatch.
-        {
-          title: t('nav.fleetRollup', 'Fleet Across Branches'),
-          path: '/app/delivery/rollup',
           icon: ICONS.terminal,
         },
       ],

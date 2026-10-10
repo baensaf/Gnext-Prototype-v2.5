@@ -82,65 +82,6 @@ export interface CustomerProfile {
   audit: ProfileAuditEvent[];
 }
 
-export interface CourierProfile {
-  courier: {
-    id: string;
-    code: string;
-    name: string;
-    phone: string | null;
-    vehicle_type: string;
-    status: string;
-    is_active: boolean;
-    branch_id: string | null;
-    branch_name: string | null;
-    currency_code: string;
-    created_at: string;
-    attendance?: { status: string; availability_status: string; checked_in_at?: string };
-    active_terminal?: { terminal_id: string; terminal_name?: string; assigned_at: string } | null;
-    active_delivery_count?: number;
-  };
-  stats: ProfileOrderStats & {
-    delivery_count: number;
-    delivered_count: number;
-    failed_count: number;
-    active_count: number;
-    last_delivered_at: string | null;
-    unsettled_count: number;
-    unsettled_fees: string;
-  };
-  orders: ProfileOrder[];
-  settlements: {
-    id: string;
-    settlement_number: string;
-    status: string;
-    settlement_date: string;
-    expected_cash_amount: string;
-    actual_cash_amount: string;
-    cash_discrepancy_amount: string;
-    net_settlement_amount: string;
-    closed_at: string | null;
-  }[];
-  attendance: {
-    id: string;
-    date: string;
-    status: string;
-    availability_status: string;
-    checked_in_at: string | null;
-    checked_out_at: string | null;
-    branch_name: string | null;
-  }[];
-  terminals: {
-    id: string;
-    terminal_id: string;
-    terminal_name: string | null;
-    terminal_code: string | null;
-    assigned_at: string;
-    unassigned_at: string | null;
-    is_active: boolean;
-  }[];
-  audit: ProfileAuditEvent[];
-}
-
 export interface UserProfile {
   user: {
     id: string;
@@ -189,10 +130,6 @@ export interface UserProfile {
 export const profilesApi = {
   customer: async (id: string): Promise<CustomerProfile> => {
     const res = await httpClient.get(`/api/v1/customers/${id}/profile`);
-    return res.data;
-  },
-  courier: async (id: string): Promise<CourierProfile> => {
-    const res = await httpClient.get(`/api/v1/delivery/couriers/${id}/profile`);
     return res.data;
   },
   user: async (id: string): Promise<UserProfile> => {

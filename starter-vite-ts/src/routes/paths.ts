@@ -29,11 +29,9 @@ export const paths = {
     delivery: {
       orders: `${ROOTS.APP}/delivery/orders`,
       couriers: `${ROOTS.APP}/delivery/couriers`,
-      courierDetail: (id: string) => `${ROOTS.APP}/delivery/couriers/${id}`,
       settlements: `${ROOTS.APP}/delivery/settlements`,
       settlementDetail: (id: string) => `${ROOTS.APP}/delivery/settlements/${id}`,
       zones: `${ROOTS.APP}/delivery/zones`,
-      rollup: `${ROOTS.APP}/delivery/rollup`,
     },
     cashier: {
       shifts: `${ROOTS.APP}/cashier/shifts`,
@@ -76,7 +74,6 @@ export const paths = {
       printRouting: `${ROOTS.APP}/operations/print-routing`,
       printers: `${ROOTS.APP}/operations/printers`,
       printQueue: `${ROOTS.APP}/operations/print-queue`,
-      monitoring: `${ROOTS.APP}/operations/monitoring`,
       agents: `${ROOTS.APP}/operations/agents`,
     },
     simulation: {

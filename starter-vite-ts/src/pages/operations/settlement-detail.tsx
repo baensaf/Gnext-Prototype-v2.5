@@ -33,8 +33,6 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
 import { useCurrencyLabel } from 'src/utils/currency';
 
-import { VersionTag } from 'src/components/version-tag';
-
 import { deliveryApi } from '../../api/deliveryApi';
 
 export function SettlementDetailPage() {
@@ -66,17 +64,6 @@ export function SettlementDetailPage() {
   useEffect(() => {
     fetchSettlement();
   }, [fetchSettlement]);
-
-  const handleReview = async () => {
-    if (!id) return;
-    try {
-      await deliveryApi.reviewSettlement(id);
-      setActionMessage(t('settlements.alerts.movedToReview'));
-      fetchSettlement();
-    } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || t('settlements.errors.reviewFailed'));
-    }
-  };
 
   const handleClose = async () => {
     if (!id) return;
@@ -117,9 +104,7 @@ export function SettlementDetailPage() {
     switch (status) {
       case 'CLOSED':
         return 'success';
-      case 'REVIEWED':
       case 'PENDING':
-      case 'UNDER_REVIEW':
         return 'warning';
       case 'DRAFT':
         return 'info';
@@ -135,12 +120,8 @@ export function SettlementDetailPage() {
     switch (status) {
       case 'CLOSED':
         return t('settlements.statuses.closed');
-      case 'REVIEWED':
-        return t('settlements.statuses.reviewed');
       case 'PENDING':
         return t('settlements.statuses.pending');
-      case 'UNDER_REVIEW':
-        return t('settlements.statuses.underReview');
       case 'REVERSED':
         return t('settlements.statuses.reversed');
       default:
@@ -277,17 +258,6 @@ export function SettlementDetailPage() {
               </Typography>
               <Stack spacing={1.5}>
                 {settlement.status === 'DRAFT' && (
-                  <Button
-                    variant="contained"
-                    color="warning"
-                    fullWidth
-                    onClick={handleReview}
-                  >
-                    {t('settlements.review', 'Mark as Reviewed')}
-                    <VersionTag feature="delivery.settlementReview" sx={{ ml: 1 }} />
-                  </Button>
-                )}
-                {(settlement.status === 'DRAFT' || settlement.status === 'REVIEWED') && (
                   <Button
                     variant="contained"
                     color="success"

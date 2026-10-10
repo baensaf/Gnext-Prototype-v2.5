@@ -50,7 +50,6 @@ import { BranchNewPage } from 'src/pages/operations/branch-new';
 import { GeneralSettingsPage } from 'src/pages/settings/general';
 import { ImportWizardPage } from 'src/pages/tools/import-wizard';
 import { ShiftDetailPage } from 'src/pages/cashier/shift-detail';
-import { MonitoringPage } from 'src/pages/operations/monitoring';
 import { AvailabilityPage } from 'src/pages/catalog/availability';
 import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
 import { PrintQueuePage } from 'src/pages/operations/print-queue';
@@ -61,7 +60,6 @@ import { PriceChangesPage } from 'src/pages/catalog/price-changes';
 import { BusinessDaysPage } from 'src/pages/cashier/business-days';
 import { ReportViewerPage } from 'src/pages/reports/report-viewer';
 import { CalendarSettingsPage } from 'src/pages/settings/calendar';
-import { FleetRollupPage } from 'src/pages/operations/fleet-rollup';
 import { ItemDiscountsPage } from 'src/pages/catalog/item-discounts';
 import { ChannelPricesPage } from 'src/pages/catalog/channel-prices';
 import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
@@ -71,7 +69,6 @@ import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { PrintRoutingPage } from 'src/pages/operations/print-routing';
 import { CustomerFieldsPage } from 'src/pages/settings/customer-fields';
 import { CardTerminalsPage } from 'src/pages/operations/card-terminals';
-import { CourierDetailPage } from 'src/pages/operations/courier-detail';
 import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 import { BranchOverridesPage } from 'src/pages/settings/branch-overrides';
 import { ShiftPolicySettingsPage } from 'src/pages/settings/shift-policy';
@@ -206,13 +203,11 @@ export const routesSection: RouteObject[] = [
       { path: 'orders/incoming', element: <RequiresBranch><IncomingOrdersPage /></RequiresBranch> },
       { path: 'orders/:id', element: <OrderRedirect /> },
       { path: 'delivery', element: <Navigate to="/app/delivery/orders" replace /> },
-      { path: 'delivery/orders', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
-      { path: 'delivery/couriers', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
-      { path: 'delivery/couriers/:courierId', element: <CourierDetailPage /> },
-      { path: 'delivery/settlements', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
+      { path: 'delivery/orders', element: <RequiresBranch><DeliveryPage /></RequiresBranch> },
+      { path: 'delivery/couriers', element: <RequiresBranch><DeliveryPage /></RequiresBranch> },
+      { path: 'delivery/settlements', element: <RequiresBranch><DeliveryPage /></RequiresBranch> },
       { path: 'delivery/settlements/:settlementId', element: <SettlementDetailPage /> },
-      { path: 'delivery/zones', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
-      { path: 'delivery/rollup', element: <FleetRollupPage /> },
+      { path: 'delivery/zones', element: <RequiresBranch><DeliveryPage /></RequiresBranch> },
       { path: 'cashier/shifts', element: <RequiresBranch><CashDrawerPage /></RequiresBranch> },
       { path: 'cashier/shifts/:shiftId', element: <ShiftDetailPage /> },
       { path: 'cashier/shifts/:shiftId/end', element: <EndShiftPage /> },
@@ -254,7 +249,6 @@ export const routesSection: RouteObject[] = [
       { path: 'operations/printers', element: <RequiresBranch><PrintersPage /></RequiresBranch> },
       { path: 'operations/print-queue', element: <RequiresBranch><PrintQueuePage /></RequiresBranch> },
       { path: 'print-queue', element: <Navigate to="/app/operations/print-queue" replace /> },
-      { path: 'operations/monitoring', element: <MonitoringPage /> },
       { path: 'operations/agents', element: <AgentsPage /> },
       { path: 'simulation', element: <SimulationCenterPage /> },
       { path: 'simulation/snappfood', element: <SimulationSnappfoodPage /> },

@@ -167,7 +167,6 @@ const AUDIT_EVENT_KEYS = [
   'DINING_TABLE_MOVED',
   'DINING_ORDERS_MERGED',
   'ORDER_SPLIT',
-  'ORDER_DELIVERY_FAILED',
 ];
 
 // Which columns each role starts without. Every column stays in the grid's Columns picker.

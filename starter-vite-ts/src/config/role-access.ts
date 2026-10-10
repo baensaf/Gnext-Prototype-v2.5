@@ -91,7 +91,6 @@ const CHAIN_ONLY_PATHS = [
   // Reading every branch at once is head office's job by definition. A branch manager has
   // the live screens for their own site and no business reading the shop next door's
   // drawer variance, so the roll-ups are chain-only even though they only ever read.
-  '/app/delivery/rollup',
   '/app/catalog/import-export',
   '/app/settings/data-reset',
   // The menu is the chain's. A branch does not invent products, rename categories,
@@ -243,7 +242,7 @@ export function fitsWorkspace(pathname: string, scope?: WorkspaceScope | null): 
   if (!scope) return true;
   const listed = (prefixes: string[]) => prefixes.some((prefix) => matches(pathname, prefix));
   // Checked first: the chain's roll-ups sit under the same prefixes as the live screens
-  // they summarise, /app/delivery/rollup under /app/delivery.
+  // they summarise, /app/cashier/rollup under /app/cashier.
   if (isChainOnlyPath(pathname)) return scope.isHeadOffice;
   if (scope.isHeadOffice) return !listed(SITE_ONLY_PATHS) && !listed(SHOP_FLOOR_PATHS);
   return scope.branchType === 'RESTAURANT' || (!listed(SHOP_FLOOR_PATHS) && !listed(SELLING_SITE_PATHS));

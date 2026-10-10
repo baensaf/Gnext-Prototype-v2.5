@@ -1,4 +1,4 @@
-import type { Courier, Delivery, DeliveryZone, CourierOnFile } from 'src/api/deliveryApi';
+import type { Courier, Delivery, DeliveryZone } from 'src/api/deliveryApi';
 
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
@@ -7,10 +7,8 @@ import React, { lazy, useRef, useState, Suspense, useEffect, useCallback } from 
 import AddIcon from '@mui/icons-material/Add';
 import MapIcon from '@mui/icons-material/Map';
 import EditIcon from '@mui/icons-material/Edit';
-import CheckIcon from '@mui/icons-material/Check';
 import PersonIcon from '@mui/icons-material/Person';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
-import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import {
   Box,
@@ -19,7 +17,6 @@ import {
   Tabs,
   Chip,
   Grid,
-  Link,
   Table,
   Stack,
   Alert,
@@ -47,21 +44,16 @@ import {
   CircularProgress,
 } from '@mui/material';
 
-import { paths } from 'src/routes/paths';
-
 import { localMobile } from 'src/utils/phone';
 import { MoneyUtil } from 'src/utils/money.util';
 import { useLiveRefresh } from 'src/utils/use-live-refresh';
 import { orderRefOf, useShowsOrderCode } from 'src/utils/order-ref';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
-import { tenantApi } from 'src/api/tenantApi';
 import { deliveryApi } from 'src/api/deliveryApi';
 import { canReachPath } from 'src/config/role-access';
 import { useBranchContext } from 'src/contexts/branch-context';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
-
-import { VersionTag } from 'src/components/version-tag';
 
 import { CourierSettlementsPage } from './settlements';
 
@@ -213,10 +205,7 @@ export function DeliveryPage() {
   const currency = useCurrencyLabel();
   const { t } = useTranslation();
   const showOrderCode = useShowsOrderCode();
-  // A cashier checks couriers in and out at the counter; taking one onto the roster is the
-  // manager's (the API refuses a register account).
   const role = useAuthStore((state) => state.user?.role);
-  const isCashier = role?.toUpperCase() === 'CASHIER';
   const isHeadOfficeAccount = useIsHeadOffice();
   // The same table the router applies: a cashier was offered Zones, and clicking
   // it swapped the whole page for "Not available for your role".
@@ -244,7 +233,6 @@ export function DeliveryPage() {
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [zones, setZones] = useState<DeliveryZone[]>([]);
-  const [terminals, setTerminals] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -255,8 +243,6 @@ export function DeliveryPage() {
     return () => clearInterval(timer);
   }, []);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [courierOnFile, setCourierOnFile] = useState<CourierOnFile | null>(null);
 
   // Dialogs
   const [assignCourierModalOpen, setAssignCourierModalOpen] = useState(false);
@@ -265,10 +251,6 @@ export function DeliveryPage() {
 
   const [completeModalOpen, setCompleteModalOpen] = useState(false);
   const [selectedDeliveryForComplete, setSelectedDeliveryForComplete] = useState<Delivery | null>(null);
-
-  const [failModalOpen, setFailModalOpen] = useState(false);
-  const [selectedDeliveryForFail, setSelectedDeliveryForFail] = useState<Delivery | null>(null);
-  const [failReason, setFailReason] = useState('');
 
   const [courierModalOpen, setCourierModalOpen] = useState(false);
   // Couriers are on a salary, so a new one carries no pay of their own (FLAT at zero).
@@ -287,26 +269,20 @@ export function DeliveryPage() {
   } | null>(null);
   const [zoneRemoveAsked, setZoneRemoveAsked] = useState(false);
 
-  const [terminalAssignModalOpen, setTerminalAssignModalOpen] = useState(false);
-  const [selectedCourierForTerminal, setSelectedCourierForTerminal] = useState<Courier | null>(null);
-  const [selectedTerminalId, setSelectedTerminalId] = useState('');
-
   // `quiet` is for pushed refreshes: the board updates in place instead of flashing a loading state.
   const loadData = useCallback(async (quiet = false) => {
     if (!quiet) setLoading(true);
     try {
-      const [delList, courList, znList, termList] = await Promise.all([
+      const [delList, courList, znList] = await Promise.all([
         deliveryApi.getDeliveries(branchId),
         deliveryApi.getCouriers(branchId),
         deliveryApi.getZones(branchId),
-        tenantApi.getTerminals(branchId).catch(() => []),
       ]);
       // A poll that left before the header switched branch must not repaint the new one.
       if (branchRef.current !== branchId) return;
       setDeliveries(delList);
       setCouriers(courList);
       setZones(znList);
-      setTerminals(termList);
       setError(null);
     } catch (err: any) {
       setError(err.detail || err.message || t('delivery.errors.loadFailed'));
@@ -320,10 +296,6 @@ export function DeliveryPage() {
   }, [loadData]);
 
   useLiveRefresh(['delivery'], () => loadData(true), branchId);
-
-  useEffect(() => {
-    setNotice(null);
-  }, [branchId]);
 
   const openAddCourier = () => {
     setCourierForm(emptyCourierForm());
@@ -420,44 +392,6 @@ export function DeliveryPage() {
     }
   };
 
-  const handleOpenFailModal = (del: Delivery) => {
-    setSelectedDeliveryForFail(del);
-    setFailReason('');
-    setFailModalOpen(true);
-  };
-
-  const handleFailDelivery = async () => {
-    if (!selectedDeliveryForFail || !failReason) return;
-    try {
-      setPendingAction(`fail:${selectedDeliveryForFail.id}`);
-      await deliveryApi.failDelivery(selectedDeliveryForFail.id, failReason);
-      setFailModalOpen(false);
-      await loadData();
-    } catch (err: any) {
-      setError(err.detail || t('delivery.errors.failFailed'));
-    } finally {
-      setPendingAction(null);
-    }
-  };
-
-  const handleRecordAttendance = async (courierId: string, status: 'CHECKED_IN' | 'CHECKED_OUT' | 'PAUSED') => {
-    try {
-      const targetBranchId = branchId;
-      if (!targetBranchId) {
-        setError(t('delivery.errors.noBranch'));
-        return;
-      }
-      await deliveryApi.recordAttendance({
-        courier_id: courierId,
-        branch_id: targetBranchId,
-        status,
-      });
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || t('delivery.errors.attendanceFailed'));
-    }
-  };
-
   const handleCreateCourier = async () => {
     try {
       const targetBranchId = branchId;
@@ -470,31 +404,7 @@ export function DeliveryPage() {
       setCourierForm(emptyCourierForm());
       loadData();
     } catch (err: any) {
-      // Somebody already on file — here archived, or at another branch. Offer the move
-      // rather than a second record for the same person.
-      if (err?.code === 'COURIER_EXISTS' && err?.context?.courier) {
-        setCourierModalOpen(false);
-        setCourierOnFile(err.context.courier as CourierOnFile);
-        return;
-      }
       setError(err.detail || t('delivery.errors.createCourierFailed'));
-    }
-  };
-
-  const handleMoveCourier = async () => {
-    if (!courierOnFile) return;
-    try {
-      setPendingAction(`move:${courierOnFile.id}`);
-      await deliveryApi.moveCourier(courierOnFile.id, branchId);
-      setNotice(t('delivery.modals.moveCourier.moved', { name: courierOnFile.name }));
-      setCourierOnFile(null);
-      setCourierForm(emptyCourierForm());
-      await loadData();
-    } catch (err: any) {
-      setCourierOnFile(null);
-      setError(err.detail || t('delivery.errors.moveCourierFailed'));
-    } finally {
-      setPendingAction(null);
     }
   };
 
@@ -518,38 +428,13 @@ export function DeliveryPage() {
     }
   };
 
-  const handleAssignTerminal = async () => {
-    if (!selectedCourierForTerminal || !selectedTerminalId) return;
-    try {
-      await deliveryApi.assignTerminal(selectedCourierForTerminal.id, selectedTerminalId);
-      setTerminalAssignModalOpen(false);
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || t('delivery.errors.assignTerminalFailed'));
-    }
-  };
-
-  const handleUnassignTerminal = async (courierId: string) => {
-    try {
-      await deliveryApi.unassignTerminal(courierId);
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || t('delivery.errors.unassignTerminalFailed'));
-    }
-  };
-
-  // The board holds open deliveries only: a failed ride goes back to waiting by itself, and
-  // finished ones live in Orders and settlements, so a history column here never filled.
+  // The board holds open deliveries only: finished ones live in Orders and settlements, so a
+  // history column here never filled.
   const unassigned = deliveries.filter((d) => d.state === 'UNASSIGNED');
   const enRoute = deliveries.filter((d) => d.state === 'ASSIGNED' || d.state === 'PICKED_UP' || d.state === 'EN_ROUTE');
 
-  const eligibleCouriers = couriers.filter(
-    (c) => c.attendance?.status === 'CHECKED_IN' && c.id !== selectedDeliveryForAssign?.courier_id
-  );
-  // The same dialog sends an order out and, once it is out with a rider, swaps that rider.
-  const changingCourier = Boolean(
-    selectedDeliveryForAssign && selectedDeliveryForAssign.state !== 'UNASSIGNED' && selectedDeliveryForAssign.courier_id
-  );
+  // Any active courier of the branch can take an order.
+  const eligibleCouriers = couriers;
 
   return (
     <Box sx={{ p: 3 }} aria-busy={loading || Boolean(pendingAction)}>
@@ -560,7 +445,6 @@ export function DeliveryPage() {
       </Typography>
 
       {error && <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>{error}</Alert>}
-      {notice && <Alert severity="success" sx={{ mb: 3 }} onClose={() => setNotice(null)}>{notice}</Alert>}
       {(loading || pendingAction) && <LinearProgress sx={{ mb: 2 }} />}
 
       <Paper sx={{ mb: 3, borderRadius: 2 }}>
@@ -627,37 +511,14 @@ export function DeliveryPage() {
                         {pendingAction === `depart:${del.id}` ? t('delivery.card.departing') : t('delivery.card.depart')}
                       </Button>
                     ) : (
-                      <>
-                        <Button
-                          variant="contained"
-                          color="success"
-                          size="small"
-                          disabled={Boolean(pendingAction)}
-                          onClick={() => handleOpenCompleteModal(del)}
-                        >
-                          {t('delivery.card.complete')}
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          color="error"
-                          size="small"
-                          disabled={Boolean(pendingAction)}
-                          onClick={() => handleOpenFailModal(del)}
-                        >
-                          {t('delivery.card.failed')}
-                          <VersionTag feature="delivery.failRide" sx={{ ml: 0.5 }} />
-                        </Button>
-                      </>
-                    )}
-                    {del.courier_id && (
                       <Button
+                        variant="contained"
+                        color="success"
                         size="small"
                         disabled={Boolean(pendingAction)}
-                        onClick={() => handleOpenAssignModal(del)}
-                        sx={{ ml: 'auto' }}
+                        onClick={() => handleOpenCompleteModal(del)}
                       >
-                        {t('delivery.card.reassign')}
-                        <VersionTag feature="delivery.swapRider" sx={{ ml: 0.5 }} />
+                        {t('delivery.card.complete')}
                       </Button>
                     )}
                   </DeliveryCard>
@@ -684,65 +545,18 @@ export function DeliveryPage() {
               <TableRow>
                 <TableCell>{t('delivery.couriers.code')}</TableCell>
                 <TableCell>{t('delivery.couriers.nameAndPhone')}</TableCell>
-                <TableCell>
-                  {t('delivery.couriers.mobilePosAssignment')} <VersionTag feature="delivery.mobilePos" />
-                </TableCell>
-                <TableCell align="right">{t('delivery.couriers.actions')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {couriers.map((c) => {
-                const isCheckedIn = c.attendance?.status === 'CHECKED_IN';
-                return (
-                  <TableRow key={c.id}>
-                    <TableCell><strong>{c.code}</strong></TableCell>
-                    <TableCell>
-                      <Link
-                        component="button"
-                        variant="subtitle2"
-                        onClick={() => navigate(paths.app.delivery.courierDetail(c.id))}
-                        sx={{ fontWeight: 'bold', display: 'block' }}
-                      >
-                        {c.name}
-                      </Link>
-                      <Typography variant="caption" color="text.secondary">{c.phone || t('delivery.card.noPhone')}</Typography>
-                    </TableCell>
-                    <TableCell>
-                      {c.active_terminal ? (
-                        <Chip
-                          icon={<PhoneAndroidIcon />}
-                          label={c.active_terminal.terminal_name}
-                          color="secondary"
-                          size="small"
-                          onDelete={() => handleUnassignTerminal(c.id)}
-                        />
-                      ) : (
-                        <Button size="small" variant="outlined" onClick={() => { setSelectedCourierForTerminal(c); setTerminalAssignModalOpen(true); }}>
-                          {t('delivery.couriers.assignPos')}
-                        </Button>
-                      )}
-                    </TableCell>
-                    <TableCell align="right">
-                      <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
-                        {/* The one switch for a courier: green, they are working today and take
-                            deliveries; grey, they are not. Tapping it changes it. */}
-                        <Button
-                          size="small"
-                          variant={isCheckedIn ? 'contained' : 'outlined'}
-                          color={isCheckedIn ? 'success' : 'inherit'}
-                          aria-pressed={isCheckedIn}
-                          startIcon={isCheckedIn ? <CheckIcon /> : undefined}
-                          onClick={() => handleRecordAttendance(c.id, isCheckedIn ? 'CHECKED_OUT' : 'CHECKED_IN')}
-                          sx={isCheckedIn ? undefined : { color: 'text.secondary' }}
-                        >
-                          {t('delivery.couriers.checkIn')}
-                          <VersionTag feature="delivery.checkIn" sx={{ ml: 0.5 }} />
-                        </Button>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {couriers.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell><strong>{c.code}</strong></TableCell>
+                  <TableCell>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{c.name}</Typography>
+                    <Typography variant="caption" color="text.secondary">{c.phone || t('delivery.card.noPhone')}</Typography>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </Card>
@@ -824,10 +638,10 @@ export function DeliveryPage() {
 
       {/* Assign Courier Modal */}
       <Dialog open={assignCourierModalOpen} onClose={() => setAssignCourierModalOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>{changingCourier ? t('delivery.card.reassign') : t('delivery.modals.assignCourier.title')}</DialogTitle>
+        <DialogTitle>{t('delivery.modals.assignCourier.title')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ mb: 2 }}>
-            {t(changingCourier ? 'delivery.modals.assignCourier.changeDescription' : 'delivery.modals.assignCourier.description', {
+            {t('delivery.modals.assignCourier.description', {
               orderNumber: orderRefOf(selectedDeliveryForAssign, showOrderCode),
             })}
           </Typography>
@@ -853,7 +667,7 @@ export function DeliveryPage() {
             {pendingAction?.startsWith('assign:') ? (
               <CircularProgress size={20} color="inherit" />
             ) : (
-              t(changingCourier ? 'delivery.modals.assignCourier.changeSubmit' : 'delivery.modals.assignCourier.submit')
+              t('delivery.modals.assignCourier.submit')
             )}
           </Button>
         </DialogActions>
@@ -877,29 +691,6 @@ export function DeliveryPage() {
           <Button onClick={() => setCompleteModalOpen(false)}>{t('delivery.modals.complete.cancel')}</Button>
           <Button variant="contained" color="success" disabled={Boolean(pendingAction)} onClick={handleCompleteDelivery}>
             {pendingAction?.startsWith('complete:') ? <CircularProgress size={20} color="inherit" /> : t('delivery.modals.complete.submit')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Fail Delivery Modal */}
-      <Dialog open={failModalOpen} onClose={() => setFailModalOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>{t('delivery.modals.fail.title')}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              label={t('delivery.modals.fail.reasonLabel')}
-              value={failReason}
-              onChange={(e) => setFailReason(e.target.value)}
-              fullWidth
-              multiline
-              rows={2}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setFailModalOpen(false)}>{t('delivery.modals.fail.cancel')}</Button>
-          <Button variant="contained" color="error" disabled={Boolean(pendingAction)} onClick={handleFailDelivery}>
-            {pendingAction?.startsWith('fail:') ? <CircularProgress size={20} color="inherit" /> : t('delivery.modals.fail.submit')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -931,46 +722,6 @@ export function DeliveryPage() {
           >
             {t('delivery.modals.addCourier.submit')}
           </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Courier Already On File */}
-      <Dialog open={Boolean(courierOnFile)} onClose={() => setCourierOnFile(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>
-          {t('delivery.modals.moveCourier.title')} <VersionTag feature="delivery.moveCourier" />
-        </DialogTitle>
-        <DialogContent>
-          {courierOnFile && (
-            <Stack spacing={2} sx={{ pt: 1 }}>
-              <Typography variant="body2">
-                {courierOnFile.branch_id === branchId
-                  ? t('delivery.modals.moveCourier.descriptionHere', { name: courierOnFile.name, code: courierOnFile.code })
-                  : t('delivery.modals.moveCourier.description', {
-                      name: courierOnFile.name,
-                      code: courierOnFile.code,
-                      branch: courierOnFile.branch_name || t('delivery.modals.moveCourier.otherBranch'),
-                    })}
-              </Typography>
-              {courierOnFile.branch_id !== branchId && (
-                <Alert severity="info">{t('delivery.modals.moveCourier.unsettledNote')}</Alert>
-              )}
-            </Stack>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCourierOnFile(null)}>{t('delivery.modals.moveCourier.cancel')}</Button>
-          {/* Moving a courier between branches, or bringing one back, stays the manager's. */}
-          {courierOnFile && !isCashier && (courierOnFile.branch_id !== branchId || !courierOnFile.is_active) && (
-            <Button variant="contained" disabled={Boolean(pendingAction)} onClick={handleMoveCourier}>
-              {pendingAction?.startsWith('move:') ? (
-                <CircularProgress size={20} color="inherit" />
-              ) : courierOnFile.branch_id === branchId ? (
-                t('delivery.modals.moveCourier.restore')
-              ) : (
-                t('delivery.modals.moveCourier.submit')
-              )}
-            </Button>
-          )}
         </DialogActions>
       </Dialog>
 
@@ -1068,28 +819,6 @@ export function DeliveryPage() {
         <DialogActions>
           <Button onClick={() => setZoneModalOpen(false)}>{t('delivery.modals.addZone.cancel')}</Button>
           <Button variant="contained" onClick={handleCreateZone}>{t('delivery.modals.addZone.submit')}</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Assign Terminal Modal */}
-      <Dialog open={terminalAssignModalOpen} onClose={() => setTerminalAssignModalOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>{t('delivery.modals.assignTerminal.title')}</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            {t('delivery.modals.assignTerminal.description', { courierName: selectedCourierForTerminal?.name })}
-          </Typography>
-          <FormControl fullWidth>
-            <InputLabel>{t('delivery.modals.assignTerminal.terminal')}</InputLabel>
-            <Select value={selectedTerminalId} label={t('delivery.modals.assignTerminal.terminal')} onChange={(e) => setSelectedTerminalId(e.target.value)}>
-              {terminals.map((tm) => (
-                <MenuItem key={tm.id} value={tm.id}>{tm.name || tm.code} ({tm.serial_number || 'Mobile POS'})</MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setTerminalAssignModalOpen(false)}>{t('delivery.modals.assignTerminal.cancel')}</Button>
-          <Button variant="contained" onClick={handleAssignTerminal}>{t('delivery.modals.assignTerminal.submit')}</Button>
         </DialogActions>
       </Dialog>
     </Box>
