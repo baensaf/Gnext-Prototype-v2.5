@@ -6,7 +6,6 @@ import { PrintAttempt } from '../../entities/PrintAttempt.entity';
 import { Printer } from '../../entities/Printer.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
-import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { Tenant } from '../../entities/Tenant.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
@@ -59,7 +58,6 @@ export class PrintQueueService {
     private readonly renderService: PrintRenderService,
     private readonly routingService: PrintRoutingService,
     private readonly auditWriter: AuditWriter,
-    @InjectRepository(OperationalAlert) private readonly alertRepo: Repository<OperationalAlert>,
     private readonly agentPrinting: AgentPrintingService,
   ) {}
 
@@ -463,13 +461,11 @@ export class PrintQueueService {
 
     // No printer at all, so nothing will ever print this. It used to stay QUEUED with no
     // printer and an ordinary "enqueued" audit entry — a kitchen ticket that went nowhere
-    // looked exactly like one that printed. Fail it where the print queue shows failures,
-    // and tell the branch.
+    // looked exactly like one that printed. Fail it where the print queue shows failures.
     if (targets.length === 0) {
       const savedJob = await this.jobRepo.save(newJob(undefined, 1));
       savedJob.status = 'FAILED';
       await this.jobRepo.save(savedJob);
-      await this.raiseUnroutedAlert(tenantId, order, documentType);
       await this.auditWriter.write({
         tenantId,
         actorType: opts.userId ? 'ADMIN' : 'SYSTEM',
@@ -553,33 +549,6 @@ export class PrintQueueService {
       correlationId: 'corr-print-enqueue',
       details,
     });
-  }
-
-  /**
-   * One open alert per branch and document type: a branch with no kitchen printer would
-   * otherwise raise one for every order until somebody noticed.
-   */
-  private async raiseUnroutedAlert(tenantId: string, order: OrderHeader, documentType: string) {
-    const title = `No printer for ${documentType}`;
-    const open = await this.alertRepo.findOne({
-      where: { tenant_id: tenantId, branch_id: order.branch_id, type: 'PRINT_UNROUTED', title, acknowledged: false },
-    });
-    if (open) return;
-    await this.alertRepo.save(
-      this.alertRepo.create({
-        tenant_id: tenantId,
-        branch_id: order.branch_id,
-        type: 'PRINT_UNROUTED',
-        // A kitchen ticket that never prints is food nobody cooks.
-        severity: documentType === 'KITCHEN_TICKET' ? 'CRITICAL' : 'WARNING',
-        title,
-        message:
-          documentType === 'KITCHEN_TICKET'
-            ? `Order ${order.order_number}: no kitchen printer is in service at this branch, so the kitchen ticket did not print. Add a kitchen printer and mark it the default on Print routing, then retry the job from the print queue.`
-            : `Order ${order.order_number}: no printer is in service for ${documentType} at this branch, so it did not print. Give the till a receipt printer, or add a receipt printer, then retry the job from the print queue.`,
-        acknowledged: false,
-      }),
-    );
   }
 
   // Handle simulation outcome

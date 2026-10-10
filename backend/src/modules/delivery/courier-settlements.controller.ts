@@ -88,26 +88,6 @@ export class CourierSettlementsController {
   }
 
   @BranchOwned(CourierSettlement)
-  @Post(':id/review')
-  async reviewSettlement(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id;
-    if (!userId) throw new UnauthorizedException('User session required');
-    const correlationId = (req as any).correlationId;
-    return await this.deliveryService.reviewSettlement(tenantId, id, userId, correlationId);
-  }
-
-  @BranchOwned(CourierSettlement)
-  @Post(':id/return')
-  async returnSettlement(@Param('id') id: string, @Body() body: { reason?: string }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id;
-    if (!userId) throw new UnauthorizedException('User session required');
-    const correlationId = (req as any).correlationId;
-    return await this.deliveryService.returnSettlement(tenantId, id, userId, body?.reason, correlationId);
-  }
-
-  @BranchOwned(CourierSettlement)
   @Post(':id/close')
   async closeSettlement(@Param('id') id: string, @Body() body: { reasonCodeId?: string; reason?: string; approvalRequestId?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

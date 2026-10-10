@@ -13,7 +13,6 @@ import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { OptionItem } from '../../entities/OptionItem.entity';
 import { OptionGroup } from '../../entities/OptionGroup.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
-import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { OrderService } from './order.service';
 import { OrderSequenceService } from './order-sequence.service';
 import { IncomingOrderPolicyService } from './incoming-order-policy.service';
@@ -47,7 +46,6 @@ import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module'
       OptionItem,
       OptionGroup,
       TenantSetting,
-      OperationalAlert,
     ]),
     CatalogModule,
     DiscountsModule,

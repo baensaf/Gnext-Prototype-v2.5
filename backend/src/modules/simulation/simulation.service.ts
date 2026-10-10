@@ -7,7 +7,6 @@ import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { Product } from '../../entities/Product.entity';
 import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
-import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { IncomingOrderPolicyService } from '../order/incoming-order-policy.service';
 import { CHANNEL_PAUSE_KEY, OnlineOrdersService } from '../order/online-orders.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
@@ -61,7 +60,6 @@ export class SimulationService {
     @InjectRepository(OrderItem) private readonly orderItemRepo: Repository<OrderItem>,
     @InjectRepository(Product) private readonly productRepo: Repository<Product>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
-    @InjectRepository(OperationalAlert) private readonly alertRepo: Repository<OperationalAlert>,
     @InjectRepository(Payment) private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(PaymentAllocation) private readonly allocationRepo: Repository<PaymentAllocation>,
     @InjectRepository(PaymentMethod) private readonly paymentMethodRepo: Repository<PaymentMethod>,
@@ -591,7 +589,7 @@ export class SimulationService {
    * Applies Snappfood's totals to the order and records what the customer paid Snappfood
    * online as an ONLINE payment, so it shows in payments by method. A re-sent order whose total
    * changed reverses the earlier payment first. Without an active ONLINE method the order is
-   * left owing and the branch is told, rather than marked paid with no payment behind it.
+   * left owing, rather than marked paid with no payment behind it.
    */
   private async applySnappfoodMoney(tenantId: string, order: OrderHeader, payload: any, lines: SnappfoodLine[]) {
     const { totals, onlinePaid } = this.snappfoodTotals(payload, lines);
@@ -614,17 +612,6 @@ export class SimulationService {
     const method = await this.paymentMethodRepo.findOne({ where: { tenant_id: tenantId, kind: 'ONLINE', is_active: true } });
     if (!method) {
       this.settleOrderTotals(order, '0');
-      await this.alertRepo.save(
-        this.alertRepo.create({
-          tenant_id: tenantId,
-          branch_id: order.branch_id,
-          type: 'INCOMING_ORDER',
-          severity: 'WARNING',
-          title: `Snappfood order ${order.order_number} was paid online, but no ONLINE payment method is active`,
-          message: 'The order shows as owing until an ONLINE payment method is set up and the payment is recorded.',
-          acknowledged: false,
-        }),
-      );
       return;
     }
 

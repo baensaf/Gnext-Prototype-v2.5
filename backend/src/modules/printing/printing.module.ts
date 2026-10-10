@@ -5,7 +5,6 @@ import { PrintJob } from '../../entities/PrintJob.entity';
 import { PrintAttempt } from '../../entities/PrintAttempt.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { Branch } from '../../entities/Branch.entity';
-import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { Product } from '../../entities/Product.entity';
 import { PrintRoute } from '../../entities/PrintRoute.entity';
 import { Terminal } from '../../entities/Terminal.entity';
@@ -25,7 +24,6 @@ import { AgentPrintingService } from './agent-printing.service';
       PrintAttempt,
       OrderHeader,
       Branch,
-      OperationalAlert,
       Product,
       PrintRoute,
       Terminal,

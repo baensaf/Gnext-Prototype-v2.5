@@ -6,7 +6,6 @@ export type DeliveryState =
   | 'PICKED_UP'
   | 'EN_ROUTE'
   | 'DELIVERED'
-  | 'FAILED'
   | 'CANCELLED';
 
 @Entity('delivery')
@@ -53,9 +52,6 @@ export class Delivery {
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   mobile_pos_expected: string;
 
-
-  @Column({ type: 'text', nullable: true })
-  failure_reason: string;
 
   @VersionColumn()
   version: number;

@@ -5,7 +5,6 @@ import { AgentEnrolmentCode } from '../../entities/AgentEnrolmentCode.entity';
 import { AgentRelease } from '../../entities/AgentRelease.entity';
 import { AgentCommand } from '../../entities/AgentCommand.entity';
 import { Branch } from '../../entities/Branch.entity';
-import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { Printer } from '../../entities/Printer.entity';
 import { AuditModule } from '../audit/audit.module';
@@ -26,7 +25,7 @@ import { AgentReleasesCiController, AgentReleasesController } from './agent-rele
 
 /** The cloud side of the branch agent (docs/agent-gateway/agent-protocol.md). */
 @Module({
-  imports: [TypeOrmModule.forFeature([Agent, AgentEnrolmentCode, AgentCommand, AgentRelease, Branch, Printer, PaymentDevice, OperationalAlert]), AuditModule],
+  imports: [TypeOrmModule.forFeature([Agent, AgentEnrolmentCode, AgentCommand, AgentRelease, Branch, Printer, PaymentDevice]), AuditModule],
   controllers: [AgentRegistryController, AgentController, AgentReleasesCiController, AgentReleasesController],
   providers: [
     AgentRegistryService,

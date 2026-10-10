@@ -22,7 +22,6 @@ import { CourierSettlement } from '../src/entities/CourierSettlement.entity';
 import { CustomerCreditAccount } from '../src/entities/CustomerCreditAccount.entity';
 import { CreditEntry } from '../src/entities/CreditEntry.entity';
 import { IntegrationLog } from '../src/entities/IntegrationLog.entity';
-import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import { AdminUser } from '../src/entities/AdminUser.entity';
 import { TenantSetting } from '../src/entities/TenantSetting.entity';
 import { Product } from '../src/entities/Product.entity';
@@ -531,25 +530,6 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
 
     const settlementsReport = await reportsService.queryReport(testTenantId, 'courier-settlements', {});
     expect(settlementsReport).toBeDefined();
-  });
-
-  it('Journey 7: Offline Queue & Sync Alerts', async () => {
-    const alertRepo = dataSource.getRepository(OperationalAlert);
-
-    await alertRepo.save(
-      alertRepo.create({
-        tenant_id: testTenantId,
-        branch_id: testBranchId,
-        type: 'OFFLINE_SYNC_DELAY',
-        severity: 'WARNING',
-        title: 'Branch Offline Duration Exceeded Threshold',
-        message: 'Branch BR-R27 has pending offline transactions queued for sync.',
-        acknowledged: false,
-      }),
-    );
-
-    const alerts = await alertRepo.find({ where: { tenant_id: testTenantId } });
-    expect(alerts.length).toBeGreaterThan(0);
   });
 
   it('Journey 8: Translation Key Parity & Report Export Certification', async () => {

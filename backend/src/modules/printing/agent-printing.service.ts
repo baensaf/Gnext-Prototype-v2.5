@@ -4,7 +4,6 @@ import { DataSource, EntityManager, Repository } from 'typeorm';
 import { PrintJob } from '../../entities/PrintJob.entity';
 import { PrintAttempt } from '../../entities/PrintAttempt.entity';
 import { Printer } from '../../entities/Printer.entity';
-import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { AgentCommand } from '../../entities/AgentCommand.entity';
 import { AgentCommandsService, ResultOutcome } from '../agent-gateway/agent-commands.service';
 import { Envelope } from '../agent-gateway/agent-protocol';
@@ -165,8 +164,8 @@ export class AgentPrintingService implements OnApplicationBootstrap {
   }
 
   /**
-   * The job follows its latest attempt. A failure raises one open alert per printer, loudest
-   * for kitchen tickets: a chit that never prints is food nobody cooks.
+   * The job follows its latest attempt. A failure leaves the job FAILED in the print queue,
+   * where it is retried once the printer is fixed.
    */
   private async settleJob(em: EntityManager, attempt: PrintAttempt, success: boolean, code: string | null, message: string | null) {
     const job = await em.findOne(PrintJob, { where: { id: attempt.job_id, tenant_id: attempt.tenant_id } });
@@ -180,24 +179,6 @@ export class AgentPrintingService implements OnApplicationBootstrap {
     await em.save(PrintJob, job);
 
     if (success) return;
-    const printer = await em.findOne(Printer, { where: { id: attempt.printer_id }, withDeleted: true });
-    const title = `Printer ${printer?.name || attempt.printer_id} failed`.slice(0, 150);
-    const open = await em.findOne(OperationalAlert, {
-      where: { tenant_id: job.tenant_id, branch_id: job.branch_id, type: 'PRINT_FAILED', title, acknowledged: false },
-    });
-    if (open) return;
-    await em.save(
-      OperationalAlert,
-      em.create(OperationalAlert, {
-        tenant_id: job.tenant_id,
-        branch_id: job.branch_id,
-        type: 'PRINT_FAILED',
-        severity: job.document_type === 'KITCHEN_TICKET' ? 'CRITICAL' : 'WARNING',
-        title,
-        message: `${job.document_type}${job.label ? ` (${job.label})` : ''} did not print: ${code}${message ? ` - ${message}` : ''}. Fix the printer, then retry the job from the print queue.`,
-        acknowledged: false,
-      }),
-    );
     this.logger.warn(`print job ${job.id} failed on ${attempt.printer_id}: ${code}`);
   }
 }

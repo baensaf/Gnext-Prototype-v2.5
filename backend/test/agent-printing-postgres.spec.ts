@@ -9,7 +9,6 @@ import { Printer } from '../src/entities/Printer.entity';
 import { PrintJob } from '../src/entities/PrintJob.entity';
 import { PrintAttempt } from '../src/entities/PrintAttempt.entity';
 import { AgentCommand } from '../src/entities/AgentCommand.entity';
-import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import { AgentEnrolmentService } from '../src/modules/agent-gateway/agent-enrolment.service';
 import { AgentRegistryService } from '../src/modules/agent-gateway/agent-registry.service';
 import { AgentCommandsService } from '../src/modules/agent-gateway/agent-commands.service';
@@ -182,7 +181,7 @@ describe('printing via the branch agent (PostgreSQL)', () => {
     expect(agent.frames.some((m) => m.type === 'print.job')).toBe(false);
   });
 
-  it('fails the job and raises a critical alert when the kitchen printer is out of paper, then retries for real', async () => {
+  it('fails the job when the kitchen printer is out of paper, then retries for real', async () => {
     const { agent } = await connect();
     const printed = await reprint(agentPrinterId);
     const first = await agent.next((m) => m.type === 'print.job' && m.payload.job_id === printed.id);
@@ -192,11 +191,6 @@ describe('printing via the branch agent (PostgreSQL)', () => {
 
     expect(await job(printed.id)).toMatchObject({ status: 'FAILED' });
     expect((await attemptsOf(printed.id))[0]).toMatchObject({ status: 'FAILED', error_code: 'PAPER_OUT', error_message: 'Paper end' });
-    const alert = await dataSource
-      .getRepository(OperationalAlert)
-      .findOneByOrFail({ tenant_id: tenantId, branch_id: branchId, type: 'PRINT_FAILED', acknowledged: false });
-    expect(alert).toMatchObject({ severity: 'CRITICAL', title: 'Printer Kitchen failed' });
-    expect(alert.message).toContain('PAPER_OUT');
 
     await queue.retryJob(tenantId, printed.id, { reason: 'paper loaded' });
     const second = await agent.next((m) => m.type === 'print.job' && m.payload.job_id === printed.id && m.payload.attempt_no === 2);

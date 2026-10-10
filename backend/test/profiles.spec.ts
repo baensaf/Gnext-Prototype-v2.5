@@ -1,7 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
 import { HEAD_OFFICE_ONLY_KEY } from '../src/common/decorators/roles.decorator';
-import { BRANCH_OWNED_KEY } from '../src/common/decorators/branch-owned.decorator';
-import { Courier } from '../src/entities/Courier.entity';
 import { ProfilesController } from '../src/modules/profiles/profiles.controller';
 import { ProfilesService, maskAuditPayload } from '../src/modules/profiles/profiles.service';
 
@@ -12,11 +10,6 @@ describe('Entity 360 profiles', () => {
     it('keeps customer and account profiles with head office, where their lists live', () => {
       expect(Reflect.getMetadata(HEAD_OFFICE_ONLY_KEY, handler('customerProfile'))).toBe(true);
       expect(Reflect.getMetadata(HEAD_OFFICE_ONLY_KEY, handler('userProfile'))).toBe(true);
-    });
-
-    it('lets a branch open only its own couriers', () => {
-      expect(Reflect.getMetadata(HEAD_OFFICE_ONLY_KEY, handler('courierProfile'))).toBeUndefined();
-      expect(Reflect.getMetadata(BRANCH_OWNED_KEY, handler('courierProfile'))).toEqual({ entity: Courier });
     });
   });
 
@@ -47,7 +40,7 @@ describe('Entity 360 profiles', () => {
 
     beforeEach(() => {
       query = jest.fn().mockResolvedValue([]);
-      service = new ProfilesService({ query } as any, {} as any, {} as any);
+      service = new ProfilesService({ query } as any, {} as any);
     });
 
     it('refuses an account that does not exist in the tenant', async () => {

@@ -9,8 +9,6 @@ import { Payment } from '../../entities/Payment.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
 import { DeliveryZone } from '../../entities/DeliveryZone.entity';
-import { CourierAttendance } from '../../entities/CourierAttendance.entity';
-import { CourierTerminalAssignment } from '../../entities/CourierTerminalAssignment.entity';
 import { Delivery } from '../../entities/Delivery.entity';
 import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
@@ -38,8 +36,6 @@ import { CashierModule } from '../cashier/cashier.module';
       PaymentMethod,
       ApprovalRequest,
       DeliveryZone,
-      CourierAttendance,
-      CourierTerminalAssignment,
       Delivery,
       DeliveryEvent,
       CustomerAddress,

@@ -15,7 +15,6 @@ import { PaymentAttempt } from '../src/entities/PaymentAttempt.entity';
 import { PaymentAllocation } from '../src/entities/PaymentAllocation.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { AgentCommand } from '../src/entities/AgentCommand.entity';
-import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import { AgentEnrolmentService } from '../src/modules/agent-gateway/agent-enrolment.service';
 import { AgentRegistryService } from '../src/modules/agent-gateway/agent-registry.service';
 import { AgentCommandsService } from '../src/modules/agent-gateway/agent-commands.service';
@@ -57,8 +56,6 @@ describe('card payments via the branch agent (PostgreSQL)', () => {
   const paymentRow = (id: string) => dataSource.getRepository(Payment).findOneByOrFail({ id });
   const attemptsOf = (paymentId: string) =>
     dataSource.getRepository(PaymentAttempt).find({ where: { payment_id: paymentId }, order: { attempt_no: 'ASC' } });
-  const alertsFor = (paymentNumber: string) =>
-    dataSource.getRepository(OperationalAlert).find({ where: { tenant_id: tenantId, title: `Check card terminal: ${paymentNumber}` } });
 
   const connect = async (capabilities = ['print.html', 'payment.charge', 'payment.query']) => {
     const agent = new TestAgent(wsUrl, deviceKey);
@@ -267,8 +264,6 @@ describe('card payments via the branch agent (PostgreSQL)', () => {
     const unknown = await paymentRow(intent.id);
     expect(unknown).toMatchObject({ status: 'PROCESSING', needs_terminal_check: true });
     expect((await attemptsOf(intent.id))[0]).toMatchObject({ status: 'UNKNOWN', error_code: 'TIMEOUT' });
-    const [alert] = await alertsFor(intent.payment_number);
-    expect(alert).toMatchObject({ type: 'PAYMENT_TERMINAL', severity: 'CRITICAL', acknowledged: false, branch_id: branchId });
 
     // Nothing may charge again or wipe it away until someone checks.
     await expect(payments.processPayment(tenantId, intent.id, {}, cashierId)).rejects.toMatchObject({
@@ -285,7 +280,6 @@ describe('card payments via the branch agent (PostgreSQL)', () => {
 
     await approve(agent, query);
     expect(await paymentRow(intent.id)).toMatchObject({ status: 'SUCCEEDED', needs_terminal_check: false });
-    expect((await alertsFor(intent.payment_number))[0].acknowledged).toBe(true);
     expect((await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: order.id })).outstanding_total).toBe('0.0000');
   });
 

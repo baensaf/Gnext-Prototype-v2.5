@@ -14,7 +14,7 @@ export class DeliveryAssignment {
   @Column({ type: 'uuid' })
   courier_id: string;
 
-  @Column({ type: 'varchar', length: 32, default: 'ASSIGNED' }) // ASSIGNED, PICKED_UP, OUT_FOR_DELIVERY, DELIVERED, FAILED, RETURNED, REASSIGNED (taken off before leaving)
+  @Column({ type: 'varchar', length: 32, default: 'ASSIGNED' }) // ASSIGNED, PICKED_UP, OUT_FOR_DELIVERY, DELIVERED, RETURNED, REASSIGNED (taken off before leaving)
   status: string;
 
   @Column({ type: 'timestamptz' })
@@ -32,9 +32,6 @@ export class DeliveryAssignment {
   @Column({ type: 'numeric', precision: 12, scale: 2, default: '0.00' })
   tip_amount: string;
 
-
-  @Column({ type: 'text', nullable: true })
-  failure_reason: string;
 
   @Column({ type: 'boolean', default: false })
   is_settled: boolean;

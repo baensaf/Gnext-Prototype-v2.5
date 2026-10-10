@@ -1039,7 +1039,6 @@ export class OrderService {
       state: 'UNASSIGNED',
       fee: context.fee ?? courierDeliveryFee(context.zone?.fee, order.delivery_fee_manual),
       currency_code: order.currency_code || 'IRR',
-      failure_reason: null,
       address_snapshot: {
         address_id: context.address.id,
         title: context.address.title,
@@ -1754,7 +1753,7 @@ export class OrderService {
       // call it a takeaway while it is on a motorbike.
       if (from === 'DELIVERY') {
         const delivery = await em.findOne(Delivery, { where: { tenant_id: tenantId, order_id: id } });
-        if (delivery && !['UNASSIGNED', 'CANCELLED', 'FAILED'].includes(delivery.state)) {
+        if (delivery && !['UNASSIGNED', 'CANCELLED'].includes(delivery.state)) {
           throw new ConflictException({
             code: 'DELIVERY_IN_PROGRESS',
             message: `Order ${order.order_number} is already with a courier (${delivery.state}) and cannot stop being a delivery`,

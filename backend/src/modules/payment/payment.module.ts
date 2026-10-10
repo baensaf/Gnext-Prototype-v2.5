@@ -16,7 +16,6 @@ import { CashierModule } from '../cashier/cashier.module';
 import { AuditModule } from '../audit/audit.module';
 import { OrderModule } from '../order/order.module';
 import { AgentGatewayModule } from '../agent-gateway/agent-gateway.module';
-import { OperationalAlert } from '../../entities/OperationalAlert.entity';
 import { AgentPaymentsService } from './agent-payments.service';
 
 @Module({
@@ -31,7 +30,6 @@ import { AgentPaymentsService } from './agent-payments.service';
       PaymentDevice,
       PaymentAllocation,
       PaymentAttempt,
-      OperationalAlert,
     ]),
     CustomerModule,
     CashierModule,

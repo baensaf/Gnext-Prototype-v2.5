@@ -17,7 +17,7 @@ export class CourierSettlement {
   @Column({ type: 'varchar', length: 64, unique: true })
   settlement_number: string;
 
-  @Column({ type: 'varchar', length: 32, default: 'DRAFT' }) // DRAFT, UNDER_REVIEW, CLOSED, REVERSED
+  @Column({ type: 'varchar', length: 32, default: 'DRAFT' }) // DRAFT, CLOSED, REVERSED
   status: string;
 
   @Column({ type: 'timestamptz' })
@@ -53,9 +53,6 @@ export class CourierSettlement {
 
   @Column({ type: 'uuid', nullable: true })
   created_by_user_id: string;
-
-  @Column({ type: 'uuid', nullable: true })
-  reviewed_by_user_id: string;
 
   @Column({ type: 'uuid', nullable: true })
   closed_by_user_id: string;

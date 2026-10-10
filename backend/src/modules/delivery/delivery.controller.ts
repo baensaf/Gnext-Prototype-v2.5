@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Req, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Request } from 'express';
 import { DeliveryService } from './delivery.service';
-import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
+import { MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { Courier } from '../../entities/Courier.entity';
 import { CourierSettlement } from '../../entities/CourierSettlement.entity';
@@ -47,18 +47,11 @@ export class DeliveryController {
     return await this.deliveryService.deleteZone(tenantId, id);
   }
 
-  // --- 2. COURIERS & ATTENDANCE ---
+  // --- 2. COURIERS ---
   @Get('couriers')
   async getCouriers(@Query('branchId') branchId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.deliveryService.getCouriers(tenantId, branchId);
-  }
-
-  @BranchOwned(Courier)
-  @Get('couriers/:id')
-  async getCourierById(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.deliveryService.getCourierById(tenantId, id);
   }
 
   /**
@@ -86,22 +79,6 @@ export class DeliveryController {
     return await this.deliveryService.createCourier(tenantId, data, correlationId, (req as any).userId);
   }
 
-  /**
-   * Brings a courier who is on file at another branch over to this one.
-   *
-   * Deliberately not `@BranchOwned`: the courier belongs to another shop until this call
-   * succeeds, so that check would refuse every move. What it may not do is send a courier
-   * anywhere but the caller's own branch — a pinned account's target is its own branch
-   * whatever the body says, and only head office names one.
-   */
-  @Roles(...MANAGER_AND_ABOVE)
-  @Post('couriers/:id/move')
-  async moveCourier(@Param('id') id: string, @Body() body: { branch_id?: string }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const targetBranchId = (req as any).userBranchId ?? body?.branch_id;
-    return await this.deliveryService.moveCourier(tenantId, id, targetBranchId, (req as any).userId);
-  }
-
   @BranchOwned(Courier)
   @Post('couriers/:id/status')
   async updateCourierStatus(@Param('id') id: string, @Body() body: { status: 'AVAILABLE' | 'ON_DELIVERY' | 'INACTIVE' }, @Req() req: Request) {
@@ -110,35 +87,7 @@ export class DeliveryController {
     return await this.deliveryService.updateCourierStatus(tenantId, id, body.status, correlationId, (req as any).userId);
   }
 
-  @Post('couriers/attendance')
-  async recordAttendance(@Body() body: { courier_id: string; branch_id: string; status: 'CHECKED_IN' | 'CHECKED_OUT' | 'PAUSED'; availability_status?: 'AVAILABLE' | 'BUSY' | 'OFF_LINE' }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.deliveryService.recordAttendance(tenantId, body, (req as any).userId, (req as any).userBranchId ?? null);
-  }
-
-  @BranchOwned(Courier)
-  @Post('couriers/:id/availability')
-  async setCourierAvailability(@Param('id') courierId: string, @Body() body: { availability_status: 'AVAILABLE' | 'BUSY' | 'OFF_LINE' }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.deliveryService.setCourierAvailability(tenantId, courierId, body.availability_status, (req as any).userId);
-  }
-
-  // --- 3. TERMINAL ASSIGNMENTS ---
-  @BranchOwned(Courier)
-  @Post('couriers/:id/terminal-assignment')
-  async assignMobileTerminal(@Param('id') courierId: string, @Body() body: { terminalId: string }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.deliveryService.assignMobileTerminal(tenantId, courierId, body.terminalId, (req as any).userId);
-  }
-
-  @BranchOwned(Courier)
-  @Delete('couriers/:id/terminal-assignment')
-  async unassignMobileTerminal(@Param('id') courierId: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.deliveryService.unassignMobileTerminal(tenantId, courierId, (req as any).userId);
-  }
-
-  // --- 4. DELIVERY EXECUTION & STATE MACHINE ---
+  // --- 3. DELIVERY EXECUTION & STATE MACHINE ---
   @Get('board')
   async getDeliveries(@Query('branchId') branchId: string, @Query('state') state: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -160,7 +109,7 @@ export class DeliveryController {
     return await this.deliveryService.assignCourier(tenantId, deliveryId, body.courierId, userId);
   }
 
-  // The board's one step: name the courier and the order leaves; on an order already out, swap the rider.
+  // The board's one step: name the courier and the order leaves.
   @BranchOwned(Delivery, BY_ORDER)
   @Post(':id/dispatch')
   async dispatchCourier(@Param('id') deliveryId: string, @Body() body: { courierId: string }, @Req() req: Request) {
@@ -183,22 +132,6 @@ export class DeliveryController {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id;
     return await this.deliveryService.completeDelivery(tenantId, deliveryId, body, userId);
-  }
-
-  @BranchOwned(Delivery, BY_ORDER)
-  @Post(':id/fail')
-  async failDelivery(@Param('id') deliveryId: string, @Body() body: { reason: string }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id;
-    return await this.deliveryService.failDelivery(tenantId, deliveryId, body.reason, userId);
-  }
-
-  @BranchOwned(Delivery, BY_ORDER)
-  @Post(':id/requeue')
-  async requeueDelivery(@Param('id') deliveryId: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id;
-    return await this.deliveryService.requeueDelivery(tenantId, deliveryId, userId);
   }
 
   @BranchOwned(Delivery, BY_ORDER)
@@ -228,12 +161,11 @@ export class DeliveryController {
   @Post('assignments/:id/status')
   async updateAssignmentStatus(
     @Param('id') assignmentId: string,
-    @Body() body: { status: 'ASSIGNED' | 'PICKED_UP' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'FAILED' | 'RETURNED'; failureReason?: string },
+    @Body() body: { status: 'ASSIGNED' | 'PICKED_UP' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'RETURNED' },
     @Req() req: Request,
   ) {
     const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.deliveryService.updateAssignmentStatus(tenantId, assignmentId, body.status, body.failureReason, correlationId);
+    return await this.deliveryService.updateAssignmentStatus(tenantId, assignmentId, body.status);
   }
 
   @Get('settlements/unsettled-summary')
@@ -336,26 +268,6 @@ export class DeliveryController {
   }
 
   @BranchOwned(CourierSettlement)
-  @Post('settlements/:id/review')
-  async reviewSettlement(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id;
-    if (!userId) throw new UnauthorizedException('User session required');
-    const correlationId = (req as any).correlationId;
-    return await this.deliveryService.reviewSettlement(tenantId, id, userId, correlationId);
-  }
-
-  @BranchOwned(CourierSettlement)
-  @Post('settlements/:id/return')
-  async returnSettlement(@Param('id') id: string, @Body() body: { reason?: string }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id;
-    if (!userId) throw new UnauthorizedException('User session required');
-    const correlationId = (req as any).correlationId;
-    return await this.deliveryService.returnSettlement(tenantId, id, userId, body?.reason, correlationId);
-  }
-
-  @BranchOwned(CourierSettlement)
   @Post('settlements/:id/close')
   async closeSettlement(@Param('id') id: string, @Body() body: { reasonCodeId?: string; reason?: string; approvalRequestId?: string }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -380,19 +292,5 @@ export class DeliveryController {
   async getSettlementStatement(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.deliveryService.getSettlementStatement(tenantId, id);
-  }
-
-  // --- CHAIN ROLL-UP ---
-
-  /**
-   * Head office only, and on purpose: a branch manager already has the board, and this
-   * answers about everybody else's shops. Nothing here writes, so there is no @Roles —
-   * reach is the whole question, not seniority.
-   */
-  @HeadOfficeOnly()
-  @Get('rollup')
-  async getFleetRollup(@Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.deliveryService.getFleetRollup(tenantId);
   }
 }

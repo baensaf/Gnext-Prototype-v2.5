@@ -5,7 +5,6 @@ import { IncomingOrderPolicyService } from '../src/modules/order/incoming-order-
 import { OrderService } from '../src/modules/order/order.service';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { TenantSetting } from '../src/entities/TenantSetting.entity';
-import { OperationalAlert } from '../src/entities/OperationalAlert.entity';
 import {
   INCOMING_ORDER_POLICY_DEFAULTS,
   resolveIncomingOrderPolicy,
@@ -53,7 +52,6 @@ describe('incoming order policy', () => {
   describe('applying it', () => {
     let service: IncomingOrderPolicyService;
     let orderRepo: any;
-    let alertRepo: any;
     let orderService: any;
     let settingRows: any[];
 
@@ -79,7 +77,6 @@ describe('incoming order policy', () => {
     beforeEach(async () => {
       settingRows = [];
       orderRepo = { findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) };
-      alertRepo = { create: jest.fn((dto: any) => dto), save: jest.fn((dto: any) => Promise.resolve(dto)) };
       orderService = {
         acceptIncomingOrder: jest.fn((_t: string, id: string) => Promise.resolve({ id, state: 'CONFIRMED' })),
         rejectUnanswered: jest.fn((_t: string, id: string) => Promise.resolve({ id, state: 'REJECTED' })),
@@ -90,7 +87,6 @@ describe('incoming order policy', () => {
           IncomingOrderPolicyService,
           { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
           { provide: getRepositoryToken(TenantSetting), useValue: { find: jest.fn(() => Promise.resolve(settingRows)) } },
-          { provide: getRepositoryToken(OperationalAlert), useValue: alertRepo },
           { provide: OrderService, useValue: orderService },
         ],
       }).compile();
@@ -127,7 +123,7 @@ describe('incoming order policy', () => {
       expect(accepted).toBeNull();
     });
 
-    it('rejects an order left past the time limit, alerts its branch, and leaves a younger one alone', async () => {
+    it('rejects an order left past the time limit, and leaves a younger one alone', async () => {
       orderRepo.find.mockResolvedValue([
         pending({ placed_at: minutesAgo(6) }),
         pending({ id: 'o-2', order_number: 'SNP-SF-2', placed_at: minutesAgo(2) }),
@@ -138,12 +134,6 @@ describe('incoming order policy', () => {
       expect(handled).toBe(1);
       expect(orderService.rejectUnanswered).toHaveBeenCalledTimes(1);
       expect(orderService.rejectUnanswered).toHaveBeenCalledWith('t-1', 'o-1', 5);
-      expect(alertRepo.save).toHaveBeenCalledTimes(1);
-      const [alert] = alertRepo.save.mock.calls[0];
-      expect(alert).toEqual(
-        expect.objectContaining({ tenant_id: 't-1', branch_id: 'b-1', type: 'INCOMING_ORDER_EXPIRED', severity: 'WARNING' }),
-      );
-      expect(alert.title).toContain('SNP-SF-1');
     });
 
     it('accepts instead when the branch chose that for an unanswered order', async () => {
@@ -156,7 +146,7 @@ describe('incoming order policy', () => {
       expect(orderService.rejectUnanswered).not.toHaveBeenCalled();
     });
 
-    it('rejects instead of accepting an unanswered order when no shift is open, and says why', async () => {
+    it('rejects instead of accepting an unanswered order when no shift is open', async () => {
       orderRepo.find.mockResolvedValue([pending({ placed_at: minutesAgo(6) })]);
       settingRows = [branchSetting({ timeoutAction: 'ACCEPT' })];
       orderService.acceptIncomingOrder.mockRejectedValue(new ConflictException({ code: 'NO_OPEN_SHIFT' }));
@@ -165,18 +155,15 @@ describe('incoming order policy', () => {
 
       expect(handled).toBe(1);
       expect(orderService.rejectUnanswered).toHaveBeenCalledWith('t-1', 'o-1', 5);
-      const [alert] = alertRepo.save.mock.calls[0];
-      expect(alert.message).toContain('No shift was open');
     });
 
-    it('skips an order a cashier answered while the sweep was running, without an alert', async () => {
+    it('skips an order a cashier answered while the sweep was running', async () => {
       orderRepo.find.mockResolvedValue([pending({ placed_at: minutesAgo(6) })]);
       orderService.rejectUnanswered.mockRejectedValue(new ConflictException('already answered'));
 
       const handled = await service.expireOverdue(NOW);
 
       expect(handled).toBe(0);
-      expect(alertRepo.save).not.toHaveBeenCalled();
     });
   });
 });
