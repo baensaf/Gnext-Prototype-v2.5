@@ -691,7 +691,6 @@ export async function runSeed() {
   };
   const pick = <T,>(list: T[]): T => list[Math.floor(rand() * list.length)];
 
-  // Only selling sites get a sales history; the commissary is deliberately absent.
   const namedProfiles: Record<string, { ordersPerDay: number; maxQty: number; types: string[] }> = {
     'TEH-CENTRAL': { ordersPerDay: 8, maxQty: 2, types: ['DINE_IN', 'DINE_IN', 'TAKEAWAY', 'DELIVERY'] },
     'TEH-DOWNTOWN': { ordersPerDay: 12, maxQty: 1, types: ['TAKEAWAY', 'TAKEAWAY', 'DELIVERY'] },
