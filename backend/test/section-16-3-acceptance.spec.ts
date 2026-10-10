@@ -1251,36 +1251,8 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
       expect(xlsxJob.content_base64.length).toBeGreaterThan(0);
     }
 
-    // Step 2: Persian Customer & Catalog Imports
-    // A) Persian Customer Import CSV
-    const customerCsv = `کد مشتری,نام,نام خانوادگی,موبایل\nCUST-FA-${tag},محسن,صادقی,0912${tag}99`;
-    const custJob = await importExportService.createStagedJob(
-      tenantId,
-      'CUSTOMERS',
-      'customers_persian.csv',
-      customerCsv,
-    );
-    expect(custJob.id).toBeDefined();
-    expect(custJob.total_rows).toBe(1);
-
-    const validatedCustJob = await importExportService.validateJob(custJob.id, {
-      'کد مشتری': 'code',
-      'نام': 'first_name',
-      'نام خانوادگی': 'last_name',
-      'موبایل': 'mobile',
-    });
-    expect(validatedCustJob.valid_rows).toBe(1);
-
-    const custImportResult = await importExportService.executeJob(custJob.id, adminUserId);
-    expect(custImportResult.importedCount).toBe(1);
-
-    const custRepo = dataSource.getRepository(Customer);
-    const importedCust = await custRepo.findOne({ where: { tenant_id: tenantId, code: `CUST-FA-${tag}` } });
-    expect(importedCust).toBeDefined();
-    expect(importedCust?.first_name).toBe('محسن');
-    expect(importedCust?.last_name).toBe('صادقی');
-
-    // B) Persian Catalog Product Import CSV
+    // Step 2: Persian Catalog Import
+    // Persian Catalog Product Import CSV
     const productCsv = `کد کالا,نام کالا,قیمت پایه,کد دسته بندی\nPROD-FA-${tag},چلوکباب کوبیده سیخی,280000.0000,CAT-BURGER-163`;
     const prodJob = await importExportService.createStagedJob(
       tenantId,

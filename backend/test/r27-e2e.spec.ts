@@ -473,19 +473,19 @@ describe('R27 Final Integration, Regression & Customer-Validation Certification 
     expect(payResult.receipt.reference_number).toBeDefined();
   });
 
-  it('Journey 5: Persian CSV Customer & Catalog Import, Protected Reset, Minimal Reseed & Post-Reset Login', async () => {
-    // 1. Stage Persian CSV Import for Customers
-    const persianCustomersCsv = 'کد مشتری,نام,نام خانوادگی,شماره تماس,ایمیل,وضعیت\nCUST-FA-01,مجید,محمدی,09121110022,majid@example.com,فعال';
+  it('Journey 5: Persian CSV Catalog Import, Protected Reset, Minimal Reseed & Post-Reset Login', async () => {
+    // 1. Stage Persian CSV Import for Categories
+    const persianCategoriesCsv = 'کد دسته بندی,نام دسته بندی\nCAT-FA-01,پیتزا';
     const stagedJob = await importExportService.createStagedJob(
       testTenantId,
-      'CUSTOMERS',
-      'customers_fa.csv',
-      persianCustomersCsv,
+      'CATEGORIES',
+      'categories_fa.csv',
+      persianCategoriesCsv,
     );
     expect(stagedJob.id).toBeDefined();
 
     // Auto Map, Validate & Execute Import
-    const columnMapping = { 'کد مشتری': 'code', 'نام': 'first_name', 'نام خانوادگی': 'last_name', 'شماره تماس': 'mobile', 'ایمیل': 'email' };
+    const columnMapping = { 'کد دسته بندی': 'code', 'نام دسته بندی': 'name_fa' };
     await importExportService.validateJob(stagedJob.id, columnMapping);
     const execResult = await importExportService.executeJob(stagedJob.id, testAdminUserId);
     expect(execResult.importedCount).toBeGreaterThanOrEqual(1);

@@ -71,19 +71,9 @@ describe('System reset stays inside its tenant', () => {
     if (app) await app.close();
   }, 30000);
 
-  const stageValidatedCustomerImport = async (tenantId: string, code: string, mobile: string) => {
-    const job = await importExportService.createStagedJob(
-      tenantId,
-      'CUSTOMERS',
-      'customers.csv',
-      `code,first_name,last_name,mobile\n${code},Sara,Ahmadi,${mobile}`,
-    );
-    const validated = await importExportService.validateJob(job.id, {
-      code: 'code',
-      first_name: 'first_name',
-      last_name: 'last_name',
-      mobile: 'mobile',
-    });
+  const stageValidatedCategoryImport = async (tenantId: string, code: string) => {
+    const job = await importExportService.createStagedJob(tenantId, 'CATEGORIES', 'categories.csv', `code,name_fa\n${code},Burgers`);
+    const validated = await importExportService.validateJob(job.id, { code: 'code', name_fa: 'name_fa' });
     expect(validated.valid_rows).toBe(1);
     return job.id;
   };
@@ -110,9 +100,9 @@ describe('System reset stays inside its tenant', () => {
   };
 
   it("leaves another tenant's staged import rows and settlement lines alone", async () => {
-    const keptJobId = await stageValidatedCustomerImport(keptTenantId, `CUST-KEPT-${tag}`, `0912${tag}`);
+    const keptJobId = await stageValidatedCategoryImport(keptTenantId, `CAT-KEPT-${tag}`);
     const keptSettlementId = await createSettlementWithLine(keptTenantId, 'KEPT');
-    const resetJobId = await stageValidatedCustomerImport(resetTenantId, `CUST-RESET-${tag}`, `0935${tag}`);
+    const resetJobId = await stageValidatedCategoryImport(resetTenantId, `CAT-RESET-${tag}`);
     const resetSettlementId = await createSettlementWithLine(resetTenantId, 'RESET');
 
     await importExportService.systemReset(resetTenantId, userId);

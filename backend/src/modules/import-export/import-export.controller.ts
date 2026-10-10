@@ -26,8 +26,8 @@ export class ImportExportController {
   ) {
     const tenantId = (req as any)?.tenantId;
 
-    if (!entityType || !['CUSTOMERS', 'PRODUCTS', 'CATEGORIES'].includes(entityType)) {
-      throw new BadRequestException('Valid entityType (CUSTOMERS, PRODUCTS, CATEGORIES) is required');
+    if (!entityType || !['PRODUCTS', 'CATEGORIES'].includes(entityType)) {
+      throw new BadRequestException('Valid entityType (PRODUCTS, CATEGORIES) is required');
     }
 
     if (!file && !fileContentString) {

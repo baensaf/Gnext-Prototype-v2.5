@@ -112,7 +112,6 @@ export const FEATURE_LABELS = {
   // V1 stops are "until further notice" only: off until the next shift and off for set hours are F.
   'catalog.stopBranches': 'V4',
   'catalog.sellingWindows': 'V2',
-  'import.customers': 'F',
   // Price changes: V1 changes base prices now.
   'pricing.scheduled': 'V4',
   'pricing.listPrices': 'V4',
