@@ -90,7 +90,6 @@ export const FEATURE_LABELS = {
   'shift.openOrdersPin': 'V4',
   // Business days
   'businessDay.reopen': 'V2',
-  'businessDay.dateReview': 'F',
   // Card terminals and the bank accounts they settle into
   'payments.onlineGateway': 'F',
   'payments.bankTransfer': 'V4',

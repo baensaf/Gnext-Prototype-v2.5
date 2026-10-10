@@ -1222,13 +1222,7 @@
     "currentDay": "Business day now: {{date}} · turns over at {{cutoff}}",
     "autoCloseOn": "The date moves on at the cutoff by itself and new shifts open on the new day. Each day closes on its own once every shift on it is counted; close one here only to finish it early.",
     "autoCloseOff": "The date moves on at the cutoff by itself and new shifts open on the new day. Automatic closing is off for this branch, so close each day here once its drawers are counted.",
-    "dateReview": {
-      "title": "Check past dates against the cutoff",
-      "subtitle": "Lists orders, payments, refunds and shifts from the last 90 days whose stored date the current cutoff would have given differently — usually sales after midnight dated to the next day. Nothing is changed.",
-      "run": "Check",
-      "result": "{{from}} to {{to}}: {{orders}} orders, {{payments}} payments, {{refunds}} refunds and {{shifts}} shifts are stored on a date the {{cutoff}} cutoff would not give them. They keep their stored dates.",
-      "failed": "Could not review the stored dates"
-    }
+    "dateReview": {}
   },
   "shift": {
     "register": "Register",
