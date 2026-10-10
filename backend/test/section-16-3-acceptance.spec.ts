@@ -275,8 +275,6 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
         name: 'Mobile / Network POS Terminal',
         kind: 'NETWORK_POS',
         is_active: true,
-        // A card sale may be paid back in cash: the step-6 refund relies on it.
-        allows_alternative_refund: true,
       }),
     );
     posPaymentMethodId = posPm.id;
@@ -659,104 +657,36 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     const customerAging = agingReport.customers.find((c: any) => c.customerId === customer.id || c.customerCode === customer.code);
     expect(customerAging).toBeDefined();
 
-    // Step 5: Refund Path A - Partial Original Refund to Credit Account (100,000 IRR)
-    const creditRefund = await refundService.createRefundIntent(
+    // Step 5: Refund - the whole order goes back, each payment by the method it was paid with:
+    // the credit tender returns to the account, the card tender is paid back as card.
+    const refunds = await refundService.refundOrder(
       tenantId,
       submittedOrder.id,
-      {
-        amount: '100000.0000',
-        targetMethodId: creditPaymentMethodId,
-        reason: 'Customer returned 1 item (Credit account refund)',
-        full: false,
-      },
-      cashierUserId,
-      correlationId,
+      { reason: 'Customer returned the order' },
+      { userId: cashierUserId, correlationId, approvedBy: adminUserId },
     );
-    expect(creditRefund.id).toBeDefined();
+    expect(refunds.map((r) => [r.method_kind, MoneyUtil.format(r.amount)]).sort()).toEqual([
+      ['CUSTOMER_CREDIT', '500000.0000'],
+      ['NETWORK_POS', '300000.0000'],
+    ]);
+    expect(refunds.every((r) => r.status === 'SUCCEEDED')).toBe(true);
 
-    const processedCreditRefund = await refundService.processRefund(
-      tenantId,
-      creditRefund.id,
-      {},
-      cashierUserId,
-      correlationId,
-    );
-    expect(processedCreditRefund.status).toBe('SUCCEEDED');
+    // The 500,000 credit sale is given back: -500,000 + 200,000 repaid + 500,000 returned.
+    const accountAfterRefund = await creditService.getAccountById(tenantId, creditAccount.id);
+    expect(MoneyUtil.format(accountAfterRefund.current_balance)).toBe('200000.0000');
 
-    const postRefundStatement = await creditService.getAccountStatement(tenantId, creditAccount.id, {});
-    expect(MoneyUtil.format(postRefundStatement.closingBalance)).toBe('-200000.0000');
-
-    // Step 6: Refund Path B - Alternative Cash Refund with Manager Approval (100,000 IRR)
-    // 1. Attempt alternative refund without approval -> Forbidden
+    // A second refund of the same order finds nothing left to give back.
     await expect(
-      refundService.createRefundIntent(
-        tenantId,
-        submittedOrder.id,
-        {
-          amount: '100000.0000',
-          targetMethodId: cashPaymentMethodId,
-          reason: 'Customer requests cash payout for defective item',
-          full: false,
-        },
-        cashierUserId,
-        correlationId,
-      ),
-    ).rejects.toThrow();
-
-    // 2. Manager Approves Alternative Refund via ApprovalRequest
-    const approvalReq = await approvalService.createRequest(
-      tenantId,
-      cashierUserId,
-      {
-        action: 'REFUND_ALTERNATIVE_METHOD',
-        entity_type: 'OrderHeader',
-        entity_id: submittedOrder.id,
-        reason: 'Authorized Cash Payout for Terminal Purchase',
-      },
-      correlationId,
-    );
-
-    // Verify Manager PIN & Record Decision
-    await approvalService.approveRequest(
-      tenantId,
-      approvalReq.id,
-      adminUserId,
-      '1234',
-      'Approved by Branch Manager',
-      correlationId,
-    );
-
-    // 3. Re-execute alternative refund with approvalRequestId -> Success
-    const altCashRefund = await refundService.createRefundIntent(
-      tenantId,
-      submittedOrder.id,
-      {
-        amount: '100000.0000',
-        targetMethodId: cashPaymentMethodId,
-        reason: 'Customer requests cash payout for defective item',
-        approvalRequestId: approvalReq.id,
-        full: false,
-      },
-      cashierUserId,
-      correlationId,
-    );
-    expect(altCashRefund.is_alternative_method).toBe(true);
-
-    const processedAltRefund = await refundService.processRefund(
-      tenantId,
-      altCashRefund.id,
-      {},
-      adminUserId,
-      correlationId,
-    );
-    expect(processedAltRefund.status).toBe('SUCCEEDED');
+      refundService.refundOrder(tenantId, submittedOrder.id, { reason: 'Again' }, { userId: cashierUserId, correlationId }),
+    ).rejects.toThrow('no refundable balance');
 
     // Step 7: Close Shift for Customer Counter
     const closedCustShift = await shiftService.closeShift(
       tenantId,
       openCustShift.id,
       {
-        actualCash: '400000.0000',
+        // The 500,000 float: no cash changed hands (credit and card sale, both refunded as such).
+        actualCash: '500000.0000',
       },
       cashierUserId,
       correlationId,
@@ -1086,19 +1016,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
 
     // Snappfood refunds its own customer, so the till refuses to refund a Snappfood order.
     const tillRefund = await refundService
-      .createRefundIntent(
-        tenantId,
-        createdOrder.id,
-        {
-          amount: createdOrder.total_amount,
-          targetMethodId: posPaymentMethodId,
-          reason: 'Snappfood order cancellation refund',
-          full: true,
-        },
-        cashierUserId,
-        correlationId,
-        true, // isCancellationOrchestration
-      )
+      .refundOrder(tenantId, createdOrder.id, { reason: 'Snappfood order cancellation refund' }, { userId: cashierUserId, correlationId })
       .catch((err) => err);
     expect(tillRefund.getResponse?.()).toEqual(expect.objectContaining({ code: 'SNAPPFOOD_ORDER_LOCKED' }));
 

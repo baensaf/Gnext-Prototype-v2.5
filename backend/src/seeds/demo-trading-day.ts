@@ -380,7 +380,6 @@ export async function seedDemoTradingDay(
         em.create(RefundAllocation, {
           tenant_id: tenantId,
           refund_id: refund.id,
-          refund_request_id: refund.id,
           payment_id: payment.id,
           payment_method_id: method.id,
           original_payment_id: payment.id,

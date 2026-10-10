@@ -20,11 +20,8 @@ export interface RefundRecord {
   currency_code: string;
   reason_code_id?: string;
   reason_text?: string;
-  reference?: string;
   failure_code?: string;
-  is_alternative_method: boolean;
   approval_request_id?: string;
-  device_id?: string;
   shift_id?: string;
   initiated_at: string;
   posted_at?: string;
@@ -38,8 +35,6 @@ export interface RefundRecord {
   note?: string;
   created_at: string;
 }
-
-export type RefundRequest = RefundRecord;
 
 const toRecord = (r: any): RefundRecord => ({
   ...r,
@@ -64,22 +59,17 @@ export const refundApi = {
     return toRecord(res.data);
   },
 
-  /** Made and settled in one call: it either pays back in full or leaves nothing behind. */
+  /**
+   * Made and settled in one call: the whole order goes back, each payment by its own method
+   * (a split sale comes back as one refund per payment), or nothing happens.
+   */
   createRefund: async (data: {
     order_id: string;
-    amount?: string;
-    full?: boolean;
     reason_code_id?: string;
     reason?: string;
     pin?: string;
-    targetMethodId?: string;
-    reference?: string;
-  }): Promise<RefundRecord> => {
+  }): Promise<RefundRecord[]> => {
     const payload = {
-      amount: data.amount,
-      full: data.full,
-      targetMethodId: data.targetMethodId,
-      reference: data.reference,
       reasonCodeId: data.reason_code_id,
       reason: data.reason || 'Customer return',
       // The server asks for this whenever the account issuing the refund is not one that
@@ -87,13 +77,12 @@ export const refundApi = {
       pin: data.pin,
     };
     const res = await httpClient.post(`/api/v1/orders/${data.order_id}/refunds`, payload);
-    return toRecord(res.data);
+    return (Array.isArray(res.data) ? res.data : [res.data]).map(toRecord);
   },
 
-  cancelPaidOrder: async (orderId: string, reason?: string, targetMethodId?: string, pin?: string): Promise<any> => {
+  cancelPaidOrder: async (orderId: string, reason?: string, pin?: string): Promise<any> => {
     const res = await httpClient.post(`/api/v1/orders/${orderId}/cancel-paid`, {
       reason: reason || 'Paid order cancellation',
-      targetMethodId,
       pin,
     });
     return res.data;

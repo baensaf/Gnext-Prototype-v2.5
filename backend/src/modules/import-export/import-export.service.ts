@@ -559,8 +559,6 @@ export class ImportExportService {
       'payment_attempt',
       'payment',
       'refund_allocation',
-      'refund_item',
-      'refund_request',
       'refund',
       'cash_movement',
       'cashier_shift',

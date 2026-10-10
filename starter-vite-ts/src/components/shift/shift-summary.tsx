@@ -119,7 +119,7 @@ export function ShiftReport({ summary: s }: { summary: ShiftSalesSummary }) {
             {refunds.map((r) => (
               <Line
                 key={r.kind}
-                label={`${t(`shift.summary.refundMethods.${r.kind}`, r.kind)} (${r.count})`}
+                label={`${t(`shift.summary.methods.${r.kind}`, r.kind)} (${r.count})`}
                 value={minus(r.amount)}
               />
             ))}

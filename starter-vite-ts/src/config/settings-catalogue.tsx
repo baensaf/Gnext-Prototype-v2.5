@@ -275,15 +275,15 @@ export function useSettingsCatalogue(): SettingCategory[] {
         {
           id: 'payments',
           scope: 'ORG',
-          title: t('settings.hub.items.payments.title', 'Payments & Refund Methods'),
+          title: t('settings.hub.items.payments.title', 'Payment Methods'),
           description: t(
             'settings.hub.items.payments.description',
-            'Payment and refund methods, and the bank accounts the card terminals settle into.'
+            'Payment methods, and the bank accounts the card terminals settle into.'
           ),
           path: '/app/settings/payments-refunds',
           icon: <PaymentsIcon sx={{ color: 'success.main' }} />,
           badge: { color: 'success', label: t('settings.hub.items.payments.badge', 'Gateways Ready') },
-          tags: ['payments', 'refunds', 'gateways', 'eft', 'cash drawer', 'cards', 'transactions', 'پرداخت', 'استرداد', 'کارتخوان', 'پوز', 'مرجوعی'],
+          tags: ['payments', 'gateways', 'eft', 'cash drawer', 'cards', 'transactions', 'پرداخت', 'کارتخوان', 'پوز'],
         },
         {
           id: 'customerFields',

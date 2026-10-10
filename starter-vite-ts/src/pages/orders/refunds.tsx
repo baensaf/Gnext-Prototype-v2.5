@@ -1,5 +1,5 @@
 import type { OrderListRow } from 'src/api/orderApi';
-import type { RefundRequest } from 'src/api/refundApi';
+import type { RefundRecord } from 'src/api/refundApi';
 import type { PaymentMethod } from 'src/api/settingsApi';
 
 import { useTranslation } from 'react-i18next';
@@ -26,18 +26,15 @@ import {
   IconButton,
   DialogTitle,
   Autocomplete,
-  ToggleButton,
   DialogContent,
   DialogActions,
   TableContainer,
-  ToggleButtonGroup,
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
 import { serverText } from 'src/utils/server-text';
 import { useCurrencyLabel } from 'src/utils/currency';
-import { amountText, amountFromText } from 'src/utils/amount-input';
 
 import { orderApi } from 'src/api/orderApi';
 import { refundApi } from 'src/api/refundApi';
@@ -65,10 +62,9 @@ export function RefundsPage() {
   const [newOpen, setNewOpen] = useState(false);
   const [pinOpen, setPinOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  // A card paid in Iran cannot be refunded on the terminal, so money goes back in cash from the
-  // drawer, by a card-to-card transfer (whose tracking number is kept with the refund), or onto
-  // the customer's club credit.
-  const EMPTY_FORM = { orderId: '', amount: '', reason: '', payBack: 'CASH' as 'CASH' | 'TRANSFER' | 'CREDIT', reference: '' };
+  // The whole order goes back, each payment by the method it was paid with: all that is asked
+  // is which order and why.
+  const EMPTY_FORM = { orderId: '', reason: '' };
   const [form, setForm] = useState(EMPTY_FORM);
   // The server refunds a completed order only; saying so before the PIN saves the manager a trip.
   const pickedOrder = orderOptions.find((order) => order.id === form.orderId);
@@ -77,10 +73,8 @@ export function RefundsPage() {
   const pickedRefundable = pickedOrder
     ? MoneyUtil.subtract(pickedOrder.paid_total || pickedOrder.paid_amount || '0', pickedOrder.refunded_total || '0')
     : null;
-  // Club credit is the customer's own account, so it needs a customer on the order.
-  const creditNeedsCustomer = form.payBack === 'CREDIT' && !!pickedOrder && !pickedOrder.customer_id;
 
-  const [refunds, setRefunds] = useState<RefundRequest[]>([]);
+  const [refunds, setRefunds] = useState<RefundRecord[]>([]);
   const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,19 +82,9 @@ export function RefundsPage() {
   // Names for the methods a refund went back to; the refund itself carries only their ids.
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const methodNames: Record<string, string> = Object.fromEntries(methods.map((m) => [m.id, m.name]));
-  // How a refund went back, named the way the dialog offers it.
+  // How a refund went back: the method the money was paid with.
   const payBackLabel = (r: { method_id?: string; method_kind?: string }) =>
-    r.method_kind === 'CASH'
-      ? t('refunds.payBack.cash')
-      : r.method_kind === 'BANK_TRANSFER'
-        ? t('refunds.payBack.transfer')
-        : r.method_kind === 'CUSTOMER_CREDIT'
-          ? t('refunds.payBack.credit')
-          : (r.method_id && methodNames[r.method_id]) || r.method_kind || '-';
-  const cashMethod = methods.find((m) => m.is_active && m.kind === 'CASH');
-  const transferMethod = methods.find((m) => m.is_active && m.kind === 'BANK_TRANSFER');
-  const creditMethod = methods.find((m) => m.is_active && m.kind === 'CUSTOMER_CREDIT');
-  const targetOf = { CASH: cashMethod, TRANSFER: transferMethod, CREDIT: creditMethod };
+    (r.method_id && methodNames[r.method_id]) || r.method_kind || '-';
   const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   const loadData = async () => {
@@ -157,11 +141,7 @@ export function RefundsPage() {
     try {
       await refundApi.createRefund({
         order_id: form.orderId,
-        amount: form.amount || undefined,
-        full: !form.amount,
         reason: form.reason,
-        targetMethodId: targetOf[form.payBack]?.id,
-        reference: form.payBack === 'TRANSFER' ? form.reference.trim() : undefined,
         pin,
       });
       setNewOpen(false);
@@ -185,10 +165,6 @@ export function RefundsPage() {
       setPinOpen(true);
     }
   };
-
-  // A refund took back the whole order when it matches the order's total.
-  const typeOf = (r: { order_total?: string | null; total_refund_amount?: string }) =>
-    r.order_total && MoneyUtil.equals(r.total_refund_amount || '0', r.order_total) ? 'FULL' : 'PARTIAL';
 
   const statusColor = (status: string) =>
     status === 'SUCCEEDED'
@@ -217,7 +193,7 @@ export function RefundsPage() {
             {t('refunds.title')}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {t('refunds.subtitle', 'Full and partial refunds of paid orders, released by a manager PIN.')}
+            {t('refunds.subtitle', 'A paid order goes back in full, released by a manager PIN.')}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -246,7 +222,6 @@ export function RefundsPage() {
             <TableRow>
               <TableCell>{t('refunds.col.code')}</TableCell>
               <TableCell>{t('refunds.order')}</TableCell>
-              <TableCell>{t('refunds.col.type')}</TableCell>
               <TableCell>{t('refunds.payBack.label')}</TableCell>
               <TableCell>{t('refunds.amount')}</TableCell>
               <TableCell>{t('refunds.col.status')}</TableCell>
@@ -258,7 +233,7 @@ export function RefundsPage() {
           <TableBody>
             {refunds.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} align="center">
+                <TableCell colSpan={8} align="center">
                   <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
                     {t('refunds.empty')}
                   </Typography>
@@ -275,13 +250,6 @@ export function RefundsPage() {
                   <TableCell>
                     {/* The order number is what the receipt in the customer's hand shows. */}
                     <code>{r.order_number || `${r.order_id.slice(0, 8)}...`}</code>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={t(`refunds.type.${typeOf(r)}`)}
-                      color={typeOf(r) === 'FULL' ? 'error' : 'warning'}
-                      size="small"
-                    />
                   </TableCell>
                   <TableCell>{payBackLabel(r)}</TableCell>
                   <TableCell sx={{ fontWeight: 'bold', color: 'error.main' }}>
@@ -311,9 +279,6 @@ export function RefundsPage() {
           {selectedRefund && (
             <Stack spacing={2} sx={{ pt: 1 }}>
               <Typography variant="body2">
-                <strong>{t('refunds.col.type')}:</strong> {t(`refunds.type.${typeOf(selectedRefund)}`)}
-              </Typography>
-              <Typography variant="body2">
                 <strong>{t('refunds.amount')}:</strong> {MoneyUtil.formatCurrency(selectedRefund.total_refund_amount)} {currency}
               </Typography>
               <Typography variant="body2">
@@ -323,7 +288,6 @@ export function RefundsPage() {
               <Typography variant="body2">
                 <strong>{t('refunds.payBack.label')}:</strong>{' '}
                 {payBackLabel(selectedRefund)}
-                {selectedRefund.reference && ` · ${selectedRefund.reference}`}
               </Typography>
             </Stack>
           )}
@@ -366,54 +330,10 @@ export function RefundsPage() {
               </Alert>
             )}
 
-            <TextField
-              label={`${t('refunds.amount', 'Amount')} (${currency})`}
-              placeholder={t('refunds.wholeOrder')}
-              value={amountText(form.amount)}
-              onChange={(e) => setForm({ ...form, amount: amountFromText(e.target.value) })}
-              helperText={
-                pickedRefundable
-                  ? t('refunds.refundable', { amount: `${MoneyUtil.formatCurrency(pickedRefundable)} ${currency}` })
-                  : t('refunds.amountHelp', 'Leave empty to refund the whole order.')
-              }
-              slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'numeric' } }}
-              fullWidth
-            />
-
-            <Box>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-                {t('refunds.payBack.label')}
-              </Typography>
-              <ToggleButtonGroup
-                exclusive
-                fullWidth
-                size="small"
-                value={form.payBack}
-                onChange={(_, value) => value && setForm({ ...form, payBack: value })}
-              >
-                <ToggleButton value="CASH" disabled={!cashMethod}>
-                  {t('refunds.payBack.cash')}
-                </ToggleButton>
-                <ToggleButton value="TRANSFER" disabled={!transferMethod}>
-                  {t('refunds.payBack.transfer')}
-                </ToggleButton>
-                <ToggleButton value="CREDIT" disabled={!creditMethod}>
-                  {t('refunds.payBack.credit')}
-                </ToggleButton>
-              </ToggleButtonGroup>
-            </Box>
-
-            {creditNeedsCustomer && <Alert severity="warning">{t('refunds.payBack.creditNeedsCustomer')}</Alert>}
-
-            {form.payBack === 'TRANSFER' && (
-              <TextField
-                required
-                label={t('refunds.payBack.reference')}
-                value={form.reference}
-                onChange={(e) => setForm({ ...form, reference: e.target.value })}
-                slotProps={{ htmlInput: { dir: 'ltr' } }}
-                fullWidth
-              />
+            {pickedRefundable && !pickedStillOpen && (
+              <Alert severity="info">
+                {t('refunds.refundable', { amount: `${MoneyUtil.formatCurrency(pickedRefundable)} ${currency}` })}
+              </Alert>
             )}
 
             <TextField
@@ -446,9 +366,7 @@ export function RefundsPage() {
               submitting ||
               !form.orderId ||
               !form.reason.trim() ||
-              pickedStillOpen ||
-              creditNeedsCustomer ||
-              (form.payBack === 'TRANSFER' && !form.reference.trim())
+              pickedStillOpen
             }
           >
             {canApprove ? t('common.save', 'Save') : t('refunds.continue', 'Continue')}

@@ -18,8 +18,6 @@ export interface PaymentMethod {
   currency_code: string;
   requires_reference: boolean;
   requires_device: boolean;
-  allows_refund: boolean;
-  allows_alternative_refund: boolean;
   is_active: boolean;
   sort_order: number;
 }

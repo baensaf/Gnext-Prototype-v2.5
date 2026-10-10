@@ -33,7 +33,7 @@ const PAGE_SIZES = [25, 50, 100];
 /**
  * The money taken at this branch, newest first. Only a list to read: the card terminals are
  * set up under Settings → Card terminals, and the bank accounts they settle into under
- * Settings → Payments & refunds.
+ * Settings → Payment methods.
  */
 export function PaymentsPage() {
   const { t, i18n } = useTranslation();
