@@ -5,7 +5,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, EntityManager, In, IsNull } from 'typeorm';
+import { Repository, DataSource, EntityManager, IsNull } from 'typeorm';
 import { BusinessDayClose } from '../../entities/BusinessDayClose.entity';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
@@ -18,12 +18,10 @@ import { BusinessDayCloseDto, BusinessDayReopenDto } from './dtos/shift.dto';
 import { MoneyUtil } from '../../common/utils/money.util';
 import {
   ORDER_BUSINESS_DATE_EXPR,
-  REFUND_BUSINESS_DATE_EXPR,
   NON_REVENUE_ORDER_STATES,
   REVENUE_ORDER_PREDICATE,
 } from '../../common/utils/business-date.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
-import { addDays, isBusinessDate, toMinutes } from '../../common/utils/business-day';
 import {
   OPEN_ORDER_STATES,
   FINISHED_ORDER_STATES,
@@ -119,137 +117,6 @@ export class BusinessDayService {
   async getCurrentBusinessDay(tenantId: string, branchId?: string | null) {
     const clock = await loadBusinessClock(this.dataSource.manager, tenantId, branchId);
     return { branchId: branchId || null, ...clock.describe() };
-  }
-
-  /**
-   * What the branch's current rule would have dated differently, over a window of past days.
-   * Read only: stored dates are what reports, closes and call numbers were built on, and they
-   * stay as they are. This is how a manager sees what the overnight business day would have
-   * moved (a sale at 01:30 that the midnight rule put on the next day) before deciding
-   * whether anything needs correcting by hand.
-   */
-  async reviewStoredDates(tenantId: string, query: { branchId?: string; from?: string; to?: string }) {
-    if (!query.branchId) throw new BadRequestException('branchId is required');
-    const clock = await loadBusinessClock(this.dataSource.manager, tenantId, query.branchId);
-    const today = clock.today();
-    const to = isBusinessDate(query.to) ? query.to : addDays(today, -1);
-    const from = isBusinessDate(query.from) ? query.from : addDays(to, -89);
-    if (from > to) throw new BadRequestException('from must not be after to');
-
-    const zone = clock.policy.timeZone;
-    const cutoff = toMinutes(clock.policy.cutoff);
-    const underRule = (ts: string) => `((${ts} AT TIME ZONE $3) - make_interval(mins => $4))::date::text`;
-    const params = [tenantId, query.branchId, zone, cutoff, clock.startOf(from), clock.endOf(to)];
-    const run = async (sql: string) => {
-      const rows: any[] = await this.dataSource.query(`${sql} ORDER BY at ASC LIMIT 501`, params);
-      return { count: rows.length > 500 ? '500+' : rows.length, rows: rows.slice(0, 500) };
-    };
-
-    const orders = await run(`
-      SELECT o.id, o.order_number AS reference, o.placed_at AS at,
-             ${ORDER_BUSINESS_DATE_EXPR('o')} AS stored_date, ${underRule('o.placed_at')} AS rule_date
-        FROM order_header o
-       WHERE o.tenant_id = $1 AND o.branch_id = $2 AND o.placed_at BETWEEN $5 AND $6
-         AND ${ORDER_BUSINESS_DATE_EXPR('o')} <> ${underRule('o.placed_at')}`);
-    const payments = await run(`
-      SELECT p.id, p.payment_number AS reference, p.initiated_at AS at,
-             p.business_date AS stored_date, ${underRule('p.initiated_at')} AS rule_date
-        FROM payment p JOIN order_header o ON o.id = p.order_id
-       WHERE p.tenant_id = $1 AND o.branch_id = $2 AND p.initiated_at BETWEEN $5 AND $6
-         AND p.business_date <> ${underRule('p.initiated_at')}`);
-    const refunds = await run(`
-      SELECT r.id, r.refund_number AS reference, r.initiated_at AS at,
-             ${REFUND_BUSINESS_DATE_EXPR('r')} AS stored_date, ${underRule('r.initiated_at')} AS rule_date
-        FROM refund r JOIN order_header o ON o.id = r.order_id
-       WHERE r.tenant_id = $1 AND o.branch_id = $2 AND r.initiated_at BETWEEN $5 AND $6
-         AND ${REFUND_BUSINESS_DATE_EXPR('r')} <> ${underRule('r.initiated_at')}`);
-    const shifts = await run(`
-      SELECT s.id, s.shift_number AS reference, s.opened_at AS at,
-             s.business_date AS stored_date, ${underRule('s.opened_at')} AS rule_date
-        FROM cashier_shift s
-       WHERE s.tenant_id = $1 AND s.branch_id = $2 AND s.opened_at BETWEEN $5 AND $6
-         AND s.business_date <> ${underRule('s.opened_at')}`);
-
-    return {
-      branchId: query.branchId,
-      from,
-      to,
-      rule: { cutoff: clock.policy.cutoff, timeZone: zone },
-      changesStoredDates: false,
-      orders,
-      payments,
-      refunds,
-      shifts,
-    };
-  }
-
-  /**
-   * Moves what reviewStoredDates lists onto the business date the current rule gives it: an
-   * order sold on the 22nd but stored on the 11th, because it was rung up on a shift left open
-   * since then, goes to the 22nd. Only when a manager asks, with a reason, and every row moved
-   * is audited with its old and new date. Orders, payments and refunds only: a shift's date is
-   * the day its drawer was opened, and its count was made against it.
-   *
-   * Refused, moving nothing, when a row would leave or join a day the branch has closed (reopen
-   * that day first), or when the window lists more rows than the review shows.
-   */
-  async applyDateCorrections(
-    tenantId: string,
-    dto: { branchId?: string; from?: string; to?: string; reason?: string },
-    userId?: string,
-    correlationId?: string,
-  ) {
-    const reason = dto.reason?.trim();
-    if (!reason) throw new BadRequestException('Correcting stored business dates requires a reason');
-    const review = await this.reviewStoredDates(tenantId, dto);
-    const sections = { orders: review.orders, payments: review.payments, refunds: review.refunds };
-    for (const [kind, section] of Object.entries(sections)) {
-      if (section.count === '500+') {
-        throw new BadRequestException(`More than 500 ${kind} to correct; narrow the window with from and to`);
-      }
-    }
-
-    const touched = new Set<string>();
-    for (const section of Object.values(sections)) {
-      for (const row of section.rows) touched.add(row.stored_date).add(row.rule_date);
-    }
-    if (touched.size) {
-      const closed = await this.dayCloseRepo.find({
-        where: { tenant_id: tenantId, branch_id: review.branchId, business_date: In([...touched]), status: 'CLOSED' },
-      });
-      if (closed.length) {
-        throw new ConflictException({
-          code: 'DAY_CLOSED',
-          message: `Business day(s) ${closed.map((d) => d.business_date).sort().join(', ')} are closed. Reopen them before moving anything in or out.`,
-        });
-      }
-    }
-
-    const tables = { orders: OrderHeader, payments: Payment, refunds: Refund } as const;
-    const moved = await this.dataSource.transaction(async (em) => {
-      const counts = { orders: 0, payments: 0, refunds: 0 };
-      for (const kind of Object.keys(tables) as (keyof typeof tables)[]) {
-        for (const row of sections[kind].rows) {
-          await em.update(tables[kind] as any, { id: row.id, tenant_id: tenantId }, { business_date: row.rule_date });
-          counts[kind] += 1;
-          await this.auditWriter.write({
-            tenantId,
-            actorType: userId ? 'ADMIN' : 'SYSTEM',
-            actorId: userId,
-            action: 'BUSINESS_DATE_CORRECTED',
-            entityType: tables[kind].name,
-            entityId: row.id,
-            correlationId,
-            beforeData: { business_date: row.stored_date },
-            afterData: { business_date: row.rule_date },
-            details: { reference: row.reference, at: row.at, reason, branchId: review.branchId, rule: review.rule },
-          });
-        }
-      }
-      return counts;
-    });
-
-    return { branchId: review.branchId, from: review.from, to: review.to, rule: review.rule, reason, moved };
   }
 
   /**
