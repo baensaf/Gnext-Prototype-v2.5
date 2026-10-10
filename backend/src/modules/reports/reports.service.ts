@@ -117,7 +117,6 @@ export class ReportsService {
       { code: 'tax-packaging', name: 'Tax & Packaging Compliance', category: 'TAX' },
       { code: 'print-operations', name: 'Print Operations & Job Queue Log', category: 'SIMULATION' },
       { code: 'integration-operations', name: 'Integration & Webhook Operations', category: 'SIMULATION' },
-      { code: 'v5-preview-inventory', name: 'V5 Preview: Inventory Stock & Movement', category: 'V5_PREVIEW' },
     ];
     if (actor && !isHeadOfficeUser(actor)) {
       return catalog.filter((report) => !CHAIN_ONLY_REPORTS.includes(report.code));
@@ -1307,18 +1306,6 @@ export class ReportsService {
           summary_totals: {
             log_count: logs.length,
             avg_latency_ms: logs.length > 0 ? (totalLatency / logs.length).toFixed(0) : '0',
-          },
-        };
-      }
-
-      case 'v5-preview-inventory': {
-        return {
-          report_code: reportCode,
-          is_v5_preview: true,
-          label: 'V5 Preview Module Report',
-          rows: [],
-          summary_totals: {
-            total_v5_records: 0,
           },
         };
       }

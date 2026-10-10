@@ -85,7 +85,6 @@ export const FEATURE_LABELS = {
   'pos.pay.courierCollects': 'V3',
   // Orders list and the order drawer
   'orders.snappfood': 'V3',
-  'orders.takenOffline': 'F',
   'orders.headOfficeView': 'V4',
   // Shifts: in V1 the cashier enters the counted cash and closes the shift, nothing more.
   'shift.safeDrop': 'V4',
@@ -110,7 +109,6 @@ export const FEATURE_LABELS = {
   'delivery.mobilePos': 'V4',
   'delivery.settlementReview': 'V4',
   'delivery.settlementReverse': 'V2',
-  'delivery.audit': 'F',
   // Catalog. Sizes, add-on groups, combos and the packaging price are V1 (2026-10-04).
   'catalog.maxPerOrder': 'V4',
   'catalog.priceHistory': 'V4',
@@ -129,7 +127,6 @@ export const FEATURE_LABELS = {
   // Customers and credit
   'customers.block': 'F',
   'customers.credit': 'V3',
-  'customers.audit': 'F',
   'credit.aging': 'V4',
   'coupons.testBench': 'F',
   // Operations
@@ -167,7 +164,6 @@ export const REPORT_LABELS: Record<string, PhaseLabel> = {
   'branch-comparison': 'V4',
   'print-operations': 'F',
   'integration-operations': 'F',
-  'v5-preview-inventory': 'F',
 };
 
 /** Whether `pathname` is `prefix` or under it; a `*` in the prefix stands for one path segment. */

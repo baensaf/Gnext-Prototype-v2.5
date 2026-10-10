@@ -1,4 +1,4 @@
-import type { Courier, Delivery, DeliveryZone, CourierOnFile, DeliveryEvent } from 'src/api/deliveryApi';
+import type { Courier, Delivery, DeliveryZone, CourierOnFile } from 'src/api/deliveryApi';
 
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router';
@@ -9,7 +9,6 @@ import MapIcon from '@mui/icons-material/Map';
 import EditIcon from '@mui/icons-material/Edit';
 import CheckIcon from '@mui/icons-material/Check';
 import PersonIcon from '@mui/icons-material/Person';
-import HistoryIcon from '@mui/icons-material/History';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
@@ -52,7 +51,6 @@ import { paths } from 'src/routes/paths';
 
 import { localMobile } from 'src/utils/phone';
 import { MoneyUtil } from 'src/utils/money.util';
-import { fDateTime } from 'src/utils/format-time';
 import { useLiveRefresh } from 'src/utils/use-live-refresh';
 import { orderRefOf, useShowsOrderCode } from 'src/utils/order-ref';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
@@ -67,7 +65,7 @@ import { VersionTag } from 'src/components/version-tag';
 
 import { CourierSettlementsPage } from './settlements';
 
-type DeliveryTab = 'BOARD' | 'COURIERS' | 'SETTLEMENTS' | 'ZONES' | 'AUDIT';
+type DeliveryTab = 'BOARD' | 'COURIERS' | 'SETTLEMENTS' | 'ZONES';
 
 // The map and its drawing tools only load when zones are on screen.
 const ZoneMap = lazy(() => import('src/components/zone-map').then((m) => ({ default: m.ZoneMap })));
@@ -81,7 +79,6 @@ const TAB_PATHS: Record<DeliveryTab, string> = {
   COURIERS: '/app/delivery/couriers',
   SETTLEMENTS: '/app/delivery/settlements',
   ZONES: '/app/delivery/zones',
-  AUDIT: '/app/delivery/audit',
 };
 
 function tabFromPathname(pathname: string): DeliveryTab {
@@ -221,8 +218,8 @@ export function DeliveryPage() {
   const role = useAuthStore((state) => state.user?.role);
   const isCashier = role?.toUpperCase() === 'CASHIER';
   const isHeadOfficeAccount = useIsHeadOffice();
-  // The same table the router applies: a cashier was offered Zones and Audit, and clicking
-  // either swapped the whole page for "Not available for your role".
+  // The same table the router applies: a cashier was offered Zones, and clicking
+  // it swapped the whole page for "Not available for your role".
   const canOpenTab = (key: DeliveryTab) => canReachPath(role, TAB_PATHS[key], isHeadOfficeAccount);
   const location = useLocation();
   const navigate = useNavigate();
@@ -248,8 +245,6 @@ export function DeliveryPage() {
   const [couriers, setCouriers] = useState<Courier[]>([]);
   const [zones, setZones] = useState<DeliveryZone[]>([]);
   const [terminals, setTerminals] = useState<any[]>([]);
-  const [selectedEvents, setSelectedEvents] = useState<DeliveryEvent[]>([]);
-  const [_eventDeliveryId, setEventDeliveryId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -327,7 +322,6 @@ export function DeliveryPage() {
   useLiveRefresh(['delivery'], () => loadData(true), branchId);
 
   useEffect(() => {
-    setSelectedEvents([]);
     setNotice(null);
   }, [branchId]);
 
@@ -544,38 +538,6 @@ export function DeliveryPage() {
     }
   };
 
-  const handleViewEvents = async (delId: string) => {
-    try {
-      const events = await deliveryApi.getEvents(delId);
-      setSelectedEvents(events);
-      setEventDeliveryId(delId);
-      goToTab('AUDIT');
-    } catch (err: any) {
-      setError(err.detail || t('delivery.errors.timelineFailed'));
-    }
-  };
-
-  const getDeliveryStateLabel = (state?: string) => {
-    switch (state) {
-      case 'UNASSIGNED':
-        return t('delivery.states.unassigned');
-      case 'ASSIGNED':
-        return t('delivery.states.assigned');
-      case 'PICKED_UP':
-        return t('delivery.states.pickedUp');
-      case 'EN_ROUTE':
-        return t('delivery.states.enRoute');
-      case 'DELIVERED':
-        return t('delivery.states.delivered');
-      case 'FAILED':
-        return t('delivery.states.failed');
-      case 'CANCELLED':
-        return t('delivery.states.cancelled');
-      default:
-        return state || '';
-    }
-  };
-
   // The board holds open deliveries only: a failed ride goes back to waiting by itself, and
   // finished ones live in Orders and settlements, so a history column here never filled.
   const unassigned = deliveries.filter((d) => d.state === 'UNASSIGNED');
@@ -608,18 +570,6 @@ export function DeliveryPage() {
             <Tab key="COURIERS" label={`${t('delivery.tabs.couriers')} (${couriers.length})`} value="COURIERS" icon={<PersonIcon />} iconPosition="start" />,
             <Tab key="SETTLEMENTS" label={t('delivery.tabs.settlements')} value="SETTLEMENTS" icon={<ReceiptLongIcon />} iconPosition="start" />,
             <Tab key="ZONES" label={`${t('delivery.tabs.zones')} (${zones.length})`} value="ZONES" icon={<MapIcon />} iconPosition="start" />,
-            <Tab
-              key="AUDIT"
-              label={
-                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                  <span>{t('delivery.tabs.audit')}</span>
-                  <VersionTag feature="delivery.audit" />
-                </Stack>
-              }
-              value="AUDIT"
-              icon={<HistoryIcon />}
-              iconPosition="start"
-            />,
           ].filter((item) => canOpenTab(item.key as DeliveryTab))}
         </Tabs>
       </Paper>
@@ -638,12 +588,6 @@ export function DeliveryPage() {
               <Stack spacing={2}>
                 {unassigned.map((del) => (
                   <DeliveryCard key={del.id} delivery={del} now={now} currency={currency}>
-                    {/* The timeline opens on the Audit tab, which a cashier cannot reach. */}
-                    {canOpenTab('AUDIT') && (
-                      <IconButton size="small" onClick={() => handleViewEvents(del.id)}>
-                        <HistoryIcon fontSize="small" />
-                      </IconButton>
-                    )}
                     <Button variant="contained" size="small" onClick={() => handleOpenAssignModal(del)} sx={{ ml: 'auto' }}>
                       {t('delivery.card.assignCourier')}
                     </Button>
@@ -873,43 +817,6 @@ export function DeliveryPage() {
                   </TableCell>
                 </TableRow>
               ))}
-            </TableBody>
-          </Table>
-        </Card>
-      )}
-
-      {/* AUDIT TAB */}
-      {tab === 'AUDIT' && (
-        <Card sx={{ p: 3, borderRadius: 2 }}>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
-            {t('delivery.audit.title')} ({selectedEvents.length})
-          </Typography>
-
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>{t('delivery.audit.timestamp')}</TableCell>
-                <TableCell>{t('delivery.audit.fromState')}</TableCell>
-                <TableCell>{t('delivery.audit.toState')}</TableCell>
-                <TableCell>{t('delivery.audit.reason')}</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {selectedEvents.map((ev) => (
-                <TableRow key={ev.id}>
-                  <TableCell>{fDateTime(ev.occurred_at)}</TableCell>
-                  <TableCell><Chip label={getDeliveryStateLabel(ev.from_state)} size="small" /></TableCell>
-                  <TableCell><Chip label={getDeliveryStateLabel(ev.to_state)} color="primary" size="small" /></TableCell>
-                  <TableCell>{ev.reason || t('delivery.audit.stateTransition')}</TableCell>
-                </TableRow>
-              ))}
-              {selectedEvents.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} align="center" sx={{ py: 4 }}>
-                    {t('delivery.audit.empty')}
-                  </TableCell>
-                </TableRow>
-              )}
             </TableBody>
           </Table>
         </Card>

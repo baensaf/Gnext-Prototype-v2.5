@@ -31,7 +31,6 @@ import { MoneyUtil } from 'src/utils/money.util';
 
 import { profilesApi } from 'src/api/profilesApi';
 
-import { VersionTag } from 'src/components/version-tag';
 import {
   InfoCard,
   formatMoney,
@@ -40,11 +39,10 @@ import {
   ProfileTable,
   ProfileHeader,
   formatDateTime,
-  ProfileAuditTable,
   ProfileOrdersTable,
 } from 'src/components/entity-profile';
 
-type ProfileTab = 'overview' | 'orders' | 'credit' | 'audit';
+type ProfileTab = 'overview' | 'orders' | 'credit';
 
 export function CustomerProfilePage() {
   const { t } = useTranslation();
@@ -146,14 +144,6 @@ export function CustomerProfilePage() {
         <Tab value="overview" label={t('profile.tabs.overview')} />
         <Tab value="orders" label={`${t('profile.tabs.orders')} (${stats.order_count})`} />
         <Tab value="credit" label={t('profile.tabs.credit')} />
-        <Tab
-          value="audit"
-          label={
-            <span>
-              {t('profile.tabs.audit')} <VersionTag feature="customers.audit" />
-            </span>
-          }
-        />
       </Tabs>
 
       {tab === 'overview' && (
@@ -332,7 +322,6 @@ export function CustomerProfilePage() {
           <Alert severity="info">{t('profile.customer.noAccount')}</Alert>
         ))}
 
-      {tab === 'audit' && <ProfileAuditTable events={profile.audit} />}
     </Container>
   );
 }

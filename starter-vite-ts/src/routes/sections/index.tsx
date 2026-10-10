@@ -215,7 +215,6 @@ export const routesSection: RouteObject[] = [
       { path: 'delivery/settlements', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
       { path: 'delivery/settlements/:settlementId', element: <SettlementDetailPage /> },
       { path: 'delivery/zones', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
-      { path: 'delivery/audit', element: <RequiresBranch rollup="/app/delivery/rollup"><DeliveryPage /></RequiresBranch> },
       { path: 'delivery/rollup', element: <FleetRollupPage /> },
       { path: 'cashier/shifts', element: <RequiresBranch rollup="/app/cashier/rollup"><CashDrawerPage /></RequiresBranch> },
       { path: 'cashier/shifts/:shiftId', element: <ShiftDetailPage /> },

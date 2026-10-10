@@ -543,7 +543,6 @@
       "counter": "Counter",
       "itemCount": "{{count}} items in all",
       "emptyHint": "Try other filters or the All tab.",
-      "takenOffline": "Taken while the branch was offline",
       "typeWhere": "Type & where",
       "amount": "Amount",
       "dueColumn": "Due",
@@ -808,8 +807,7 @@
       "board": "Dispatch board",
       "couriers": "Couriers & Roster",
       "settlements": "Courier settlements",
-      "zones": "Zones & Fees",
-      "audit": "Delivery Audit Log"
+      "zones": "Zones & Fees"
     },
     "columns": {
       "unassigned": "Waiting for courier",
@@ -910,15 +908,6 @@
       "active": "Active",
       "inactive": "Inactive",
       "mins": "mins"
-    },
-    "audit": {
-      "title": "Delivery State Timeline Events",
-      "timestamp": "Timestamp",
-      "fromState": "From State",
-      "toState": "To State",
-      "reason": "Reason / Note",
-      "stateTransition": "State transition",
-      "empty": "Select a delivery from the board to view its audit timeline."
     },
     "modals": {
       "assignCourier": {
@@ -4026,8 +4015,7 @@
       "credit": "Credit",
       "settlements": "Settlements",
       "attendance": "Attendance & terminals",
-      "shiftsCash": "Shifts & cash",
-      "audit": "Audit log"
+      "shiftsCash": "Shifts & cash"
     },
     "kpi": {
       "orders": "Orders",
