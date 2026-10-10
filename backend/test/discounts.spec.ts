@@ -1,10 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ConflictException } from '@nestjs/common';
 import { DiscountsService } from '../src/modules/discounts/discounts.service';
 import { DiscountEvaluationService } from '../src/modules/discounts/discount-evaluation.service';
-import { Coupon } from '../src/entities/Coupon.entity';
-import { DiscountUsage } from '../src/entities/DiscountUsage.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { TenantSetting } from '../src/entities/TenantSetting.entity';
 import { CustomerDiscount } from '../src/entities/CustomerDiscount.entity';
@@ -13,38 +10,21 @@ import { ApprovalRequest } from '../src/entities/ApprovalRequest.entity';
 import { Product } from '../src/entities/Product.entity';
 
 /**
- * The engine has three sources, in precedence order — the cashier's manual discount, a
- * one-time coupon, the customer's own rate — and applies at most one of them. Discount
- * campaigns (automatic promotions, scopes, stacking) are not part of the prototype.
+ * After the automatic item discounts, the engine has two order discount sources, in
+ * precedence order — the cashier's manual discount, the customer's own rate — and applies at
+ * most one of them. Discount campaigns (automatic promotions, scopes, stacking) and coupons
+ * are not part of the prototype.
  */
 describe('Discounts & Evaluation Engine Suite (R11)', () => {
   let service: DiscountsService;
   let evaluationService: DiscountEvaluationService;
 
-  let couponRepo: any;
-  let usageRepo: any;
   let settingRepo: any;
   let customerDiscountRepo: any;
   let auditWriter: any;
   let productRepo: any;
 
-  const coupon = (overrides: Partial<Coupon> = {}): Partial<Coupon> => ({
-    id: 'cp-1',
-    code: 'SAVE10',
-    percentage: '10.00',
-    minimum_subtotal: null,
-    maximum_discount_amount: null,
-    is_active: true,
-    max_uses: 1,
-    uses_count: 0,
-    effective_from: null,
-    effective_to: null,
-    ...overrides,
-  });
-
   beforeEach(async () => {
-    couponRepo = { findOne: jest.fn().mockResolvedValue(null), find: jest.fn(), create: jest.fn((v) => v), save: jest.fn((v) => Promise.resolve({ id: 'cp-new', ...v })) };
-    usageRepo = { count: jest.fn().mockResolvedValue(0), find: jest.fn(), create: jest.fn(), save: jest.fn() };
     settingRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() };
     customerDiscountRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null), create: jest.fn(), save: jest.fn() };
     auditWriter = { write: jest.fn() };
@@ -54,8 +34,6 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
       providers: [
         DiscountsService,
         DiscountEvaluationService,
-        { provide: getRepositoryToken(Coupon), useValue: couponRepo },
-        { provide: getRepositoryToken(DiscountUsage), useValue: usageRepo },
         { provide: getRepositoryToken(CustomerDiscount), useValue: customerDiscountRepo },
         { provide: getRepositoryToken(Customer), useValue: { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() } },
         { provide: getRepositoryToken(ApprovalRequest), useValue: { findOne: jest.fn().mockResolvedValue(null), create: jest.fn(), save: jest.fn() } },
@@ -78,205 +56,32 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
     expect(result.consideredDiscounts).toEqual([]);
   });
 
-  // HAMI audit gap: free-item promotions, as a coupon type.
-  describe('Free-item coupons', () => {
-    const burger = (quantity: string) => ({ productId: 'p-burger', unitPrice: '300000.0000', quantity });
-    const drink = (quantity: string) => ({ productId: 'p-drink', unitPrice: '50000.0000', quantity });
-    const freeDrink = (overrides: Partial<Coupon> = {}) =>
-      coupon({
-        code: 'DRINK',
-        coupon_type: 'FREE_ITEM',
-        percentage: '100.00',
-        buy_product_id: 'p-burger',
-        buy_quantity: 2,
-        reward_product_id: 'p-drink',
-        reward_quantity: 1,
-        ...overrides,
-      });
-    const quote = (items: any[]) => evaluationService.evaluateQuote('t-1', { orderDraft: { items }, couponCode: 'DRINK' });
+  describe("The customer's own rate", () => {
+    const item = { productId: 'p-1', unitPrice: '100000.0000', quantity: '1' };
 
-    it('makes one drink free when two burgers are bought', async () => {
-      couponRepo.findOne.mockResolvedValue(freeDrink());
-
-      const result = await quote([burger('2'), drink('2')]);
-
-      expect(result.discountTotal).toBe('50000.0000');
-      expect(result.items.map((i) => i.discountTotal)).toEqual(['0.0000', '50000.0000']);
-      expect(result.consideredDiscounts).toEqual([
-        expect.objectContaining({ source: 'COUPON', status: 'APPLIED', discountType: 'FREE_ITEM', couponId: 'cp-1' }),
-      ]);
-    });
-
-    it('does not apply until enough burgers are bought', async () => {
-      couponRepo.findOne.mockResolvedValue(freeDrink());
-
-      const result = await quote([burger('1'), drink('1')]);
-
-      expect(result.discountTotal).toBe('0.0000');
-      expect(result.consideredDiscounts).toEqual([
-        expect.objectContaining({ status: 'REJECTED', rejectionReason: 'COUPON_BUY_CONDITION_NOT_MET' }),
-      ]);
-    });
-
-    it('asks for the free item to be rung up when it is not in the order', async () => {
-      couponRepo.findOne.mockResolvedValue(freeDrink());
-
-      const result = await quote([burger('2')]);
-
-      expect(result.consideredDiscounts).toEqual([
-        expect.objectContaining({ status: 'REJECTED', rejectionReason: 'COUPON_REWARD_NOT_IN_ORDER' }),
-      ]);
-    });
-
-    it('buy 2 get 1 free on one product does not count the free unit towards the buy', async () => {
-      couponRepo.findOne.mockResolvedValue(freeDrink({ buy_product_id: 'p-burger', reward_product_id: 'p-burger' }));
-
-      expect((await quote([burger('2')])).discountTotal).toBe('0.0000');
-      expect((await quote([burger('3')])).discountTotal).toBe('300000.0000');
-    });
-
-    it('with no buy product, any other item qualifies', async () => {
-      couponRepo.findOne.mockResolvedValue(freeDrink({ buy_product_id: null, buy_quantity: 1 }));
-
-      expect((await quote([burger('1'), drink('1')])).discountTotal).toBe('50000.0000');
-      expect((await quote([drink('3')])).discountTotal).toBe('0.0000');
-    });
-
-    it('creates a free-item coupon at 100% of the reward, checking its products exist', async () => {
-      const productFind = jest.fn().mockResolvedValue({ id: 'p' });
-      (service as any).productRepo.findOne = productFind;
-
-      const saved = await service.createOneTimeCoupon('t-1', {
-        code: 'drink',
-        coupon_type: 'FREE_ITEM',
-        buy_product_id: 'p-burger',
-        buy_quantity: 2,
-        reward_product_id: 'p-drink',
-      });
-
-      expect(saved).toEqual(
-        expect.objectContaining({ code: 'DRINK', coupon_type: 'FREE_ITEM', percentage: '100.00', buy_quantity: 2, reward_product_id: 'p-drink', reward_quantity: 1 }),
-      );
-      await expect(service.createOneTimeCoupon('t-1', { code: 'nope', coupon_type: 'FREE_ITEM' })).rejects.toThrow('names the product');
-    });
-  });
-
-  describe('Coupons', () => {
-    it("applies the coupon's own percentage and names the coupon it came from", async () => {
-      couponRepo.findOne.mockResolvedValue(coupon());
-
-      const result = await evaluationService.evaluateQuote('t-1', {
-        orderDraft: { items: [{ productId: 'p-1', unitPrice: '100000.0000', quantity: '1' }] },
-        couponCode: 'SAVE10',
-      });
-
-      expect(result.discountTotal).toBe('10000.0000');
-      expect(result.consideredDiscounts).toEqual([
-        expect.objectContaining({ source: 'COUPON', status: 'APPLIED', couponId: 'cp-1', couponCode: 'SAVE10' }),
-      ]);
-    });
-
-    it('does not discount items marked NEVER_DISCOUNT', async () => {
-      couponRepo.findOne.mockResolvedValue(coupon());
-
-      const result = await evaluationService.evaluateQuote('t-1', {
-        orderDraft: {
-          items: [
-            { productId: 'p-normal', unitPrice: '100000.0000', quantity: '1' },
-            { productId: 'p-never', unitPrice: '200000.0000', quantity: '1', neverDiscount: true },
-          ],
-        },
-        couponCode: 'SAVE10',
-      });
-
-      expect(result.subtotal).toBe('300000.0000');
-      expect(result.discountTotal).toBe('10000.0000');
-      expect(result.grandTotal).toBe('290000.0000');
-      expect(result.items[1].discountTotal).toBe('0.0000');
-    });
-
-    it('caps the coupon as a whole and keeps the line figures adding up to it', async () => {
-      couponRepo.findOne.mockResolvedValue(coupon({ percentage: '50.00', maximum_discount_amount: '30000.0000' }));
-
-      const result = await evaluationService.evaluateQuote('t-1', {
-        orderDraft: {
-          items: [
-            { productId: 'p-1', unitPrice: '100000.0000', quantity: '1' },
-            { productId: 'p-2', unitPrice: '200000.0000', quantity: '1' },
-          ],
-        },
-        couponCode: 'SAVE10',
-      });
-
-      // 50% would be 150,000; the cap holds it to 30,000, split 1:2 by line.
-      expect(result.discountTotal).toBe('30000.0000');
-      expect(result.items[0].discountTotal).toBe('10000.0000');
-      expect(result.items[1].discountTotal).toBe('20000.0000');
-    });
-
-    it('rejects a coupon below its minimum subtotal', async () => {
-      couponRepo.findOne.mockResolvedValue(coupon({ minimum_subtotal: '500000.0000' }));
-
-      const result = await evaluationService.evaluateQuote('t-1', {
-        orderDraft: { items: [{ productId: 'p-1', unitPrice: '100000.0000', quantity: '1' }] },
-        couponCode: 'SAVE10',
-      });
-
-      expect(result.discountTotal).toBe('0.0000');
-      expect(result.consideredDiscounts[0]).toEqual(
-        expect.objectContaining({ status: 'REJECTED', rejectionReason: 'COUPON_MINIMUM_NOT_MET' }),
-      );
-    });
-
-    it('upper-cases the code and rejects a used-up coupon', async () => {
-      couponRepo.findOne.mockResolvedValue(coupon({ code: 'SUMMER2026', max_uses: 10, uses_count: 10 }));
-
-      const result = await evaluationService.evaluateQuote('t-1', {
-        orderDraft: { items: [{ productId: 'p-1', unitPrice: '50000.0000', quantity: '1' }] },
-        couponCode: ' summer2026 ',
-      });
-
-      expect(couponRepo.findOne).toHaveBeenCalledWith({ where: { tenant_id: 't-1', code: 'SUMMER2026' } });
-      expect(result.consideredDiscounts).toEqual([
-        expect.objectContaining({ status: 'REJECTED', rejectionReason: 'COUPON_MAX_USES_REACHED' }),
-      ]);
-    });
-
-    it("wins over the customer's own rate, and only one of them applies", async () => {
-      couponRepo.findOne.mockResolvedValue(coupon());
+    it('applies when the cashier gave no discount, and names where it came from', async () => {
       customerDiscountRepo.findOne.mockResolvedValue({ customer_id: 'cust-1', discount_percentage: '20.00', is_active: true });
 
-      const result = await evaluationService.evaluateQuote('t-1', {
-        orderDraft: { customerId: 'cust-1', items: [{ productId: 'p-1', unitPrice: '100000.0000', quantity: '1' }] },
-        couponCode: 'SAVE10',
-      });
+      const result = await evaluationService.evaluateQuote('t-1', { orderDraft: { customerId: 'cust-1', items: [item] } });
 
-      expect(result.discountTotal).toBe('10000.0000');
-      expect(result.consideredDiscounts.filter((d) => d.status === 'APPLIED').map((d) => d.source)).toEqual(['COUPON']);
+      expect(result.discountTotal).toBe('20000.0000');
+      expect(result.consideredDiscounts).toEqual([expect.objectContaining({ source: 'CUSTOMER', status: 'APPLIED' })]);
     });
 
-    it('validates a coupon on the test bench without sending its stand-in line to the database', async () => {
-      couponRepo.findOne.mockResolvedValue(coupon({ percentage: '15.00', maximum_discount_amount: '20000.0000' }));
+    it("gives way to the cashier's own discount, and only one of them applies", async () => {
+      customerDiscountRepo.findOne.mockResolvedValue({ customer_id: 'cust-1', discount_percentage: '20.00', is_active: true });
 
-      const result = await service.validateCoupon('t-1', 'SAVE10', '200000');
-
-      // 15% of 200,000 is 30,000; the cap holds it to 20,000.
-      expect(result.calculatedAmount).toBe('20000.0000');
-      expect(productRepo.find).not.toHaveBeenCalled();
-    });
-
-    it('stores the terms on the coupon itself when a one-time coupon is created', async () => {
-      await service.createOneTimeCoupon('t-1', { code: 'welcome', percentage: '15', maximum_discount_amount: '50000' });
-
-      expect(couponRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          code: 'WELCOME',
-          percentage: '15.0000',
-          maximum_discount_amount: '50000.0000',
-          max_uses: 1,
-        }),
+      const result = await evaluationService.evaluateQuote(
+        't-1',
+        {
+          orderDraft: { customerId: 'cust-1', items: [item] },
+          manualDiscount: { calculation_type: 'PERCENTAGE', value: '5.0000' },
+        },
+        'CASHIER',
       );
-      expect(couponRepo.create.mock.calls[0][0]).not.toHaveProperty('campaign_id');
+
+      expect(result.discountTotal).toBe('5000.0000');
+      expect(result.consideredDiscounts.filter((d) => d.status === 'APPLIED').map((d) => d.source)).toEqual(['MANUAL']);
     });
   });
 
@@ -371,64 +176,6 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
       expect(result.subtotal).toBe('150000.0000');
       expect(result.taxTotal).toBe('13500.0000');
       expect(result.grandTotal).toBe('163500.0000');
-    });
-  });
-
-  describe('Transactional coupon usage', () => {
-    const emFor = (row: any) => {
-      const qb = {
-        setLock: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        getOne: jest.fn().mockResolvedValue(row),
-      };
-      return {
-        qb,
-        em: {
-          createQueryBuilder: jest.fn().mockReturnValue(qb),
-          create: jest.fn((_entity, value) => value),
-          save: jest.fn(),
-        } as any,
-      };
-    };
-
-    it('locks the coupon row and refuses the last use twice', async () => {
-      const { em, qb } = emFor({ id: 'cp-1', code: 'ONCE', max_uses: 1, uses_count: 1 });
-
-      await expect(evaluationService.consumeUsage('t-1', 'ord-1', 'cust-1', 'cp-1', '10000.0000', em)).rejects.toThrow(
-        ConflictException,
-      );
-      expect(qb.setLock).toHaveBeenCalledWith('pessimistic_write');
-    });
-
-    it('counts the use on the coupon and records who redeemed it', async () => {
-      const row = { id: 'cp-1', code: 'ONCE', max_uses: 1, uses_count: 0 };
-      const { em } = emFor(row);
-
-      await evaluationService.consumeUsage('t-1', 'ord-1', 'cust-1', 'cp-1', '10000', em);
-
-      expect(row.uses_count).toBe(1);
-      expect(em.create).toHaveBeenCalledWith(
-        DiscountUsage,
-        expect.objectContaining({ coupon_id: 'cp-1', customer_id: 'cust-1', order_id: 'ord-1', amount: '10000.0000' }),
-      );
-    });
-
-    it('gives a cancelled order its coupon use back, once', async () => {
-      const row = { id: 'cp-1', code: 'ONCE', max_uses: 1, uses_count: 1 };
-      const usage: any = { id: 'u-1', coupon_id: 'cp-1', order_id: 'ord-1', reversed_at: null };
-      const { em } = emFor(row);
-      em.find = jest.fn().mockResolvedValue([usage]);
-      usageRepo.manager = { transaction: (work: any) => work(em) };
-
-      await evaluationService.releaseUsage('t-1', 'ord-1');
-
-      expect(row.uses_count).toBe(0);
-      expect(usage.reversed_at).toBeInstanceOf(Date);
-      // Only uses not yet given back are read, so a second cancel finds nothing to release.
-      expect(em.find).toHaveBeenCalledWith(
-        DiscountUsage,
-        expect.objectContaining({ where: expect.objectContaining({ order_id: 'ord-1', reversed_at: expect.anything() }) }),
-      );
     });
   });
 });

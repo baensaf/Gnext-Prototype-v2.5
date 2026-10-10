@@ -66,7 +66,7 @@ const OPEN_BY_DESIGN: Array<[string, any, string[]]> = [
   // it back, with no reason and no pin (2026-10-10).
   ['catalog', CatalogController, ['availability/pos-stop', 'availability/pos-resume']],
   // Reads in all but HTTP verb — the register calls both in the middle of an order.
-  ['discounts', DiscountsController, ['coupons/validate', 'discount-quotes']],
+  ['discounts', DiscountsController, ['discount-quotes']],
   ['localization', LocalizationController, []],
   // Everything a counter does with a customer: sign one up, correct what it got wrong, add
   // a phone, an address, a consent. The record itself is the chain's, so merging two and the
@@ -170,7 +170,6 @@ describe('what a branch still decides for itself', () => {
       .filter((route) => !route.headOfficeOnly)
       .map((route) => route.path);
 
-    expect(open).toContain('coupons/validate');
     expect(open).toContain('discount-quotes');
   });
 });

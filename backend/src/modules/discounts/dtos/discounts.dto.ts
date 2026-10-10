@@ -6,8 +6,6 @@ import {
   IsBoolean,
   IsNumberString,
   IsUUID,
-  IsInt,
-  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -89,10 +87,6 @@ export class DiscountQuoteRequestDto {
   @ValidateNested()
   @Type(() => ManualDiscountDto)
   manualDiscount?: ManualDiscountDto;
-
-  @IsOptional()
-  @IsString()
-  couponCode?: string;
 }
 
 export class CreateCustomerDiscountDto {
@@ -142,62 +136,3 @@ export class UpdateCustomerDiscountDto {
   @IsBoolean()
   is_active?: boolean;
 }
-
-export class CreateOneTimeCouponDto {
-  @IsString()
-  @IsNotEmpty()
-  code: string;
-
-  @IsOptional()
-  @IsEnum(['PERCENTAGE', 'FREE_ITEM'])
-  coupon_type?: 'PERCENTAGE' | 'FREE_ITEM';
-
-  /** Required for a PERCENTAGE coupon. */
-  @IsOptional()
-  @IsNumberString()
-  percentage?: string;
-
-  @IsOptional()
-  @IsUUID()
-  buy_product_id?: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  buy_quantity?: number;
-
-  @IsOptional()
-  @IsUUID()
-  reward_product_id?: string;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  reward_quantity?: number;
-
-  @IsOptional()
-  @IsNumberString()
-  minimum_subtotal?: string;
-
-  @IsOptional()
-  @IsNumberString()
-  maximum_discount_amount?: string;
-
-  @IsOptional()
-  @IsString()
-  effective_from?: string;
-
-  @IsOptional()
-  @IsString()
-  effective_to?: string;
-
-  /** How many orders may redeem the code; 1 (the default) for a single-use code. */
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  max_uses?: number;
-}
-

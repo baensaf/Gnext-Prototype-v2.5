@@ -11,7 +11,6 @@ import { CustomerConsent } from '../../entities/CustomerConsent.entity';
 import { CustomerMerge } from '../../entities/CustomerMerge.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { CreditEntry } from '../../entities/CreditEntry.entity';
-import { DiscountUsage } from '../../entities/DiscountUsage.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
@@ -498,9 +497,6 @@ export class CustomerService {
         sourceAccount.status = 'CLOSED';
         await accRepoTx.save(sourceAccount);
       }
-
-      // Coupon redemptions count per customer, so they follow the person.
-      await manager.getRepository(DiscountUsage).update({ tenant_id: tenantId, customer_id: source.id }, { customer_id: target.id });
 
       // Relink addresses & phones
       await addrRepoTx.update({ tenant_id: tenantId, customer_id: source.id }, { customer_id: target.id });

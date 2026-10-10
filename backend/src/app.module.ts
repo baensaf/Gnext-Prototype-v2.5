@@ -45,8 +45,6 @@ import { LiveModule } from './modules/live/live.module';
 import { ImportJob } from './entities/ImportJob.entity';
 import { ImportRow } from './entities/ImportRow.entity';
 
-import { RefundRequest } from './entities/RefundRequest.entity';
-import { RefundItem } from './entities/RefundItem.entity';
 import { RefundAllocation } from './entities/RefundAllocation.entity';
 import { Refund } from './entities/Refund.entity';
 import { Printer } from './entities/Printer.entity';
@@ -86,8 +84,6 @@ import { ApprovalRule } from './entities/ApprovalRule.entity';
 import { ApprovalRequest } from './entities/ApprovalRequest.entity';
 import { ApprovalDecision } from './entities/ApprovalDecision.entity';
 import { PinAttemptLog } from './entities/PinAttemptLog.entity';
-import { Coupon } from './entities/Coupon.entity';
-import { DiscountUsage } from './entities/DiscountUsage.entity';
 import { Customer } from './entities/Customer.entity';
 import { CustomerDiscount } from './entities/CustomerDiscount.entity';
 import { ItemDiscount } from './entities/ItemDiscount.entity';
@@ -156,13 +152,13 @@ import { OperationalAlert } from './entities/OperationalAlert.entity';
           PriceEntry, PriceGroupBranch, PriceBulkJob,
           ProductAvailability,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
-          Coupon, DiscountUsage, CustomerDiscount, ItemDiscount,
+          CustomerDiscount, ItemDiscount,
           Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CreditEntry,
           CustomFieldDefinition, CustomerCustomValue, CustomerTag, CustomerTagLink, CustomerSegment,
           CustomerConsent, CustomerMerge,
           OrderHeader, OrderItem, OrderItemOption, OrderAdjustment, OrderNote, OrderLink, OrderStateEvent, OrderSequence,
           Payment, SettlementAccount, PaymentDevice, PaymentAllocation, PaymentAttempt,
-          RefundRequest, RefundItem, RefundAllocation, Refund,
+          RefundAllocation, Refund,
           PrintRoute,
           Printer, PrintJob, PrintAttempt,
           Courier, DeliveryAssignment, CourierSettlement, CourierSettlementLine,

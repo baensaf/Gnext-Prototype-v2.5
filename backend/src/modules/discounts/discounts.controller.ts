@@ -8,7 +8,7 @@ import { ItemDiscountsService, ItemDiscountInput } from './item-discounts.servic
 /**
  * How an order is discounted. First the automatic item discounts (a dated percent off a
  * product, V1), line by line; then at most one order discount on what is left, in precedence
- * order: the cashier's manual discount, a one-time coupon code, and the customer's own rate.
+ * order: the cashier's manual discount, then the customer's own rate.
  * Discount campaigns (targeting, conditions, stacking rules) are not part of the prototype.
  */
 @Controller('api/v1')
@@ -40,19 +40,6 @@ export class DiscountsController {
   @Delete('item-discounts/:id')
   async deleteItemDiscount(@Param('id') id: string, @Req() req: Request) {
     return await this.itemDiscounts.remove((req as any).tenantId, id, (req as any).userId, (req as any).correlationId);
-  }
-
-  // Coupons
-  @Get('coupons')
-  async getCoupons(@Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.discountsService.getCoupons(tenantId);
-  }
-
-  @Post('coupons/validate')
-  async validateCoupon(@Body() body: { couponCode: string; orderTotal: string }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.discountsService.validateCoupon(tenantId, body.couponCode, body.orderTotal);
   }
 
   // Quote Evaluation Endpoint (Section 8.5)
@@ -102,23 +89,4 @@ export class DiscountsController {
     const correlationId = (req as any).correlationId;
     return await this.discountsService.revokeCustomerDiscount(tenantId, id, correlationId);
   }
-
-  // One-Time Coupon (Workflow 4)
-  @HeadOfficeOnly()
-  @Post('coupons/one-time')
-  async createOneTimeCoupon(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.discountsService.createOneTimeCoupon(tenantId, body, correlationId);
-  }
-
-  /** Switch a code off (a leaked code, a campaign ended early) or back on. */
-  @HeadOfficeOnly()
-  @Patch('coupons/:id')
-  async setCouponActive(@Param('id') id: string, @Body() body: { is_active: boolean }, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.discountsService.setCouponActive(tenantId, id, body.is_active !== false, correlationId);
-  }
 }
-

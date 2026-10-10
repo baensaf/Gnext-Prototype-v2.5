@@ -4,7 +4,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
  * A dated price cut on one product (V1, 2026-10-03), as HAMI branches use them: "cheese
  * mushroom 20% off from the 1st to the 15th". It applies by itself to every POS line of the
  * product at every branch while the branch's business day is within the dates, and the one
- * order discount (manual, coupon or customer rate) then applies to what is left.
+ * order discount (manual or customer rate) then applies to what is left.
  *
  * Not campaigns: no customer targeting, no conditions, no minimum basket. Category-wide
  * discounts, fixed amounts, time-of-day and per-branch rules are later.

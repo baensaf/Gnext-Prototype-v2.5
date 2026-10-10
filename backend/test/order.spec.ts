@@ -291,7 +291,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
   });
 
   describe('BUG-01: POS Held Order Updates (branch_id and order_type support)', () => {
-    it('should successfully update draft order with branch_id, order_type, coupon_code and items containing variant_name', async () => {
+    it('should successfully update draft order with branch_id, order_type and items containing variant_name', async () => {
       const draftOrder: any = {
         id: 'ord-draft-1',
         tenant_id: 't-1',
@@ -320,7 +320,6 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       const updated = await service.updateDraft('t-1', 'ord-draft-1', {
         branch_id: 'b2222222-2222-2222-2222-222222222222',
         order_type: 'DINE_IN',
-        coupon_code: 'SUMMER20',
         items: [
           {
             product_id: 'p1111111-1111-1111-1111-111111111111',
@@ -334,7 +333,6 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       expect(updated).toBeDefined();
       expect(draftOrder.branch_id).toBe('b2222222-2222-2222-2222-222222222222');
       expect(draftOrder.order_type).toBe('DINE_IN');
-      expect(draftOrder.coupon_code).toBe('SUMMER20');
       expect(mockEntityManager.save.mock.invocationCallOrder[0])
         .toBeLessThan(mockEntityManager.delete.mock.invocationCallOrder[0]);
       expect(mockEntityManager.save).toHaveBeenCalledWith(

@@ -241,10 +241,9 @@ export const routesSection: RouteObject[] = [
       { path: 'pricing/bulk-update', element: <Navigate to="/app/pricing/changes" replace /> },
       { path: 'discounts', element: <Navigate to="/app/discounts/customer-rates" replace /> },
       { path: 'discounts/customer-rates', element: <DiscountsHubPage defaultTab={0} /> },
-      { path: 'discounts/coupons', element: <DiscountsHubPage defaultTab={1} /> },
       // Cashier discount caps are a policy, so they live in Settings; this was a second door.
       { path: 'discounts/authorizations', element: <Navigate to="/app/settings/discount-authorizations" replace /> },
-      { path: 'discounts/wallet', element: <DiscountsHubPage defaultTab={2} /> },
+      { path: 'discounts/wallet', element: <DiscountsHubPage defaultTab={1} /> },
       { path: 'operations/branches', element: <BranchesPage /> },
       { path: 'operations/branches/new', element: <BranchNewPage /> },
       { path: 'operations/branches/:id', element: <BranchDetailPage /> },

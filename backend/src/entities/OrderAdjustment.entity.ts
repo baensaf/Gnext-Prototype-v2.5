@@ -25,7 +25,7 @@ export class OrderAdjustment {
   @Column({ type: 'varchar', length: 24, default: 'DISCOUNT' })
   type: string;
 
-  /** MANUAL (the cashier), COUPON or CUSTOMER (the customer's own rate). */
+  /** MANUAL (the cashier), ITEM or CUSTOMER (the customer's own rate). */
   @Column({ type: 'varchar', length: 32, default: 'MANUAL' })
   source_type: string;
 

@@ -101,10 +101,10 @@ const CHAIN_ONLY_PATHS = [
   '/app/catalog/categories',
   '/app/catalog/modifiers',
   '/app/pricing',
-  // Discounts are the chain's for the same reason the menu is: a coupon and a negotiated
-  // customer rate carry no branch column, so a branch editing one is editing everybody's.
-  // The register still validates coupons and quotes discounts — those are reads in all but
-  // HTTP verb. Cashier discount caps live only at /app/settings/discount-authorizations.
+  // Discounts are the chain's for the same reason the menu is: a negotiated customer rate
+  // carries no branch column, so a branch editing one is editing everybody's. The register
+  // still quotes discounts — a read in all but HTTP verb. Cashier discount caps live only
+  // at /app/settings/discount-authorizations.
   '/app/discounts',
   '/app/customer-club',
   // Customers and their credit are held centrally: one record per customer across the

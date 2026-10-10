@@ -25,7 +25,6 @@ describe('BUG-01 & BUG-02 Verification Suite', () => {
             branch_id: dto.branch_id,
             order_type: dto.order_type,
             state: 'DRAFT',
-            coupon_code: dto.coupon_code,
             items: dto.items,
           }),
         ),
@@ -44,12 +43,11 @@ describe('BUG-01 & BUG-02 Verification Suite', () => {
       ordersController = module.get<OrdersController>(OrdersController);
     });
 
-    it('should validate OrderUpdateDto with branch_id, order_type, coupon_code and variant_name without whitelist/forbidNonWhitelisted errors', async () => {
+    it('should validate OrderUpdateDto with branch_id, order_type and variant_name without whitelist/forbidNonWhitelisted errors', async () => {
       const rawPayload = {
         branch_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
         order_type: 'DINE_IN',
         customer_id: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
-        coupon_code: 'DISCOUNT10',
         notes: 'Held draft order from POS',
         items: [
           {

@@ -60,7 +60,7 @@ export class ReportsService {
       { code: 'sales-summary', name: 'Sales Summary', category: 'FINANCIAL' },
       { code: 'product-sales', name: 'Product & Category Velocity', category: 'CATALOG' },
       { code: 'payments-by-method', name: 'Payment Methods & Allocations', category: 'PAYMENT' },
-      { code: 'discounts', name: 'Discounts Given (Manual, Coupon, Customer Rate)', category: 'PROMOTION' },
+      { code: 'discounts', name: 'Discounts Given (Manual, Customer Rate)', category: 'PROMOTION' },
       { code: 'cashier-shifts', name: 'Cashier Shifts & EOD Balancing', category: 'CASH' },
       { code: 'customer-credit', name: 'Customer Credit Ledger', category: 'CREDIT' },
       { code: 'aggregator-orders', name: 'Aggregator Orders & Integration Notes', category: 'INTEGRATION' },

@@ -1,7 +1,5 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Coupon } from '../../entities/Coupon.entity';
-import { DiscountUsage } from '../../entities/DiscountUsage.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { CustomerDiscount } from '../../entities/CustomerDiscount.entity';
 import { Customer } from '../../entities/Customer.entity';
@@ -17,8 +15,6 @@ import { AuditModule } from '../audit/audit.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([
-      Coupon,
-      DiscountUsage,
       TenantSetting,
       CustomerDiscount,
       Customer,

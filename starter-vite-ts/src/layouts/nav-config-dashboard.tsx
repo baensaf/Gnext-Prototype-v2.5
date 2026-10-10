@@ -31,7 +31,7 @@ const ICONS = {
   options: icon('ic-params'),
   pricing: icon('ic-invoice'),
   discounts: icon('ic-label'),
-  coupons: icon('ic-order'),
+  refunds: icon('ic-order'),
   // The MUI MoveToInbox shape, as the header's Incoming Orders button draws it.
   inbox: icon('ic-inbox'),
   customers: icon('ic-user'),
@@ -130,7 +130,7 @@ export function useNavData(): NavSectionProps['data'] {
         {
           title: t('nav.refunds', 'Refunds'),
           path: '/app/refunds',
-          icon: ICONS.coupons,
+          icon: ICONS.refunds,
         },
         // The shop's own printers jamming mid-service — live work, not a report.
         {
@@ -209,10 +209,6 @@ export function useNavData(): NavSectionProps['data'] {
             {
               title: t('nav.customerDiscounts', 'Customer-Specific Rates'),
               path: '/app/discounts/customer-rates',
-            },
-            {
-              title: t('nav.coupons', 'One-Time Coupons Studio'),
-              path: '/app/discounts/coupons',
             },
             {
               title: t('nav.customerWallet', 'Wallet & Cashback'),

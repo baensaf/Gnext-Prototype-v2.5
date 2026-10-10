@@ -65,13 +65,11 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/credit': 'V3',
   // Customer-specific rates and the wallet belong to the customer club.
   '/app/discounts': 'V4',
-  '/app/discounts/coupons': 'V3',
 };
 
 /** Features that ship later than the page they sit on. */
 export const FEATURE_LABELS = {
   // POS register
-  'pos.coupon': 'V3',
   'pos.customerCredit': 'V3',
   // Delivery platforms (Snappfood) come with the incoming orders, in V3.
   'pos.onlineTab': 'V3',
@@ -110,7 +108,6 @@ export const FEATURE_LABELS = {
   // Customers and credit
   'customers.credit': 'V3',
   'credit.aging': 'V4',
-  'coupons.testBench': 'F',
   // Operations
   'terminals.kiosk': 'V3',
   'printers.simulated': 'F',
@@ -118,7 +115,6 @@ export const FEATURE_LABELS = {
   // Settings. Money is shown in Toman in V1; the Omani rial and the US dollar come in V7.
   'settings.reopenOrders': 'V2',
   'settings.incomingOrders': 'V3',
-  'settings.refundMethods': 'V2',
   // Kiosk (V3): sizes and add-ons ship with the kiosk.
   'kiosk.simulatedTerminal': 'F',
   // Dashboard: head office's view across branches
