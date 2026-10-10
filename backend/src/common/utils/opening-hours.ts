@@ -1,14 +1,27 @@
 import { EntityManager } from 'typeorm';
 import { Branch } from '../../entities/Branch.entity';
 import { BranchOperatingHour } from '../../entities/BranchOperatingHour.entity';
-import { localClock } from './availability-schedule.util';
 import { BUSINESS_TIME_ZONE } from './business-date.util';
+
+/** The weekday (0 = Sunday) and minute of the day at `at`, on the given zone's clock. */
+export function localClock(at: Date, timeZone: string): { day: number; minute: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(at);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value || '';
+  const day = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(get('weekday'));
+  return { day, minute: Number(get('hour')) * 60 + Number(get('minute')) };
+}
 
 /**
  * A branch's weekly opening hours: each weekday is closed or has one opening time (a row; the
  * code calls one a shift, which has nothing to do with a cashier's cash shift). One that closes
  * at or before it opens runs past midnight into the next day and belongs to the day it opened
- * on; equal times are the whole day. The same reading as selling windows.
+ * on; equal times are the whole day.
  *
  * Hours do not stop the till. They decide whether an order is marked after hours, and from
  * V3 they will close the online channels.

@@ -12,12 +12,10 @@ import { Product } from '../src/entities/Product.entity';
 import { ProductVariant } from '../src/entities/ProductVariant.entity';
 import { OptionGroup } from '../src/entities/OptionGroup.entity';
 import { OptionItem } from '../src/entities/OptionItem.entity';
-import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { deleteTenantData } from './utils/tenant-teardown';
-import { clearOfDayTurnover } from './utils/day-turnover';
 
 // What Snappfood's vendor panel lets a restaurant say about its menu, against the real
-// database: today's stock, a stop on one variant, an add-on left off one product, and a
+// database: a stop on one variant, an add-on left off one product, and a
 // day with two shifts.
 describe('Snappfood-style menu controls (PostgreSQL)', () => {
   let moduleRef: TestingModule;
@@ -28,7 +26,6 @@ describe('Snappfood-style menu controls (PostgreSQL)', () => {
   let tenants: TenantService;
   let tenantId: string;
   let branchId: string;
-  let lasagne: string;
   let sandwich: string;
   let hot: string;
   let cold: string;
@@ -55,7 +52,6 @@ describe('Snappfood-style menu controls (PostgreSQL)', () => {
     const categoryId = (await save(Category, { tenant_id: tenantId, code: 'SFP-MAINS', name: 'Mains', is_active: true })).id;
     const product = async (code: string) =>
       (await save(Product, { tenant_id: tenantId, category_id: categoryId, code, name: code, base_price: '100000.0000', tax_rate: '0.0900' })).id;
-    lasagne = await product('LASAGNE');
     sandwich = await product('SANDWICH');
     hot = (await save(ProductVariant, { tenant_id: tenantId, product_id: sandwich, code: 'SW-HOT', name: 'Hot', base_price: '120000.0000', is_default: true, is_active: true })).id;
     cold = (await save(ProductVariant, { tenant_id: tenantId, product_id: sandwich, code: 'SW-COLD', name: 'Cold', base_price: '110000.0000', is_default: false, is_active: true })).id;
@@ -65,31 +61,12 @@ describe('Snappfood-style menu controls (PostgreSQL)', () => {
     await catalog.attachOptionGroupToProduct(tenantId, sandwich, groupId, 0, 'test');
   });
 
-  // Today's count and the sales against it must fall on one business day.
-  beforeEach(() => clearOfDayTurnover(dataSource, tenantId, branchId), 15_000);
-
   afterAll(async () => {
     await deleteTenantData(dataSource, tenantId);
     await app.close();
   });
 
   const order = (items: any[]) => orders.createDraft(tenantId, { branch_id: branchId, order_type: 'TAKEAWAY', items } as any);
-
-  it("stops selling at today's count and gives units back when an order is cancelled", async () => {
-    await catalog.setDailyStock(tenantId, branchId, [{ productId: lasagne, quantity: 3 }], 'test');
-
-    const first = await order([{ product_id: lasagne, quantity: 2 }]);
-    expect((await catalog.getDailyStock(tenantId, branchId))[0]).toMatchObject({ quantity: 3, sold: 2, remaining: 1 });
-
-    await expect(order([{ product_id: lasagne, quantity: 2 }])).rejects.toThrow('Only 1');
-
-    await dataSource.getRepository(OrderHeader).update({ id: first.id }, { state: 'CANCELLED', status: 'CANCELLED' } as any);
-    await expect(order([{ product_id: lasagne, quantity: 2 }])).resolves.toBeDefined();
-
-    // An empty count clears the line: no limit again.
-    await catalog.setDailyStock(tenantId, branchId, [{ productId: lasagne, quantity: null }], 'test');
-    expect(await catalog.getDailyStock(tenantId, branchId)).toHaveLength(0);
-  });
 
   it('takes one variant off sale, and a whole-product stop and resume leave it alone', async () => {
     await catalog.suspendProduct(tenantId, sandwich, branchId, 'test', { variantId: cold });

@@ -9,15 +9,10 @@ import { OptionItem } from '../../entities/OptionItem.entity';
 import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
 import { CategoryOptionGroup } from '../../entities/CategoryOptionGroup.entity';
 import { ProductAvailability } from '../../entities/ProductAvailability.entity';
-import { AvailabilitySchedule } from '../../entities/AvailabilitySchedule.entity';
 import { Branch } from '../../entities/Branch.entity';
-import { DailyStock } from '../../entities/DailyStock.entity';
 import { FileAsset } from '../../entities/FileAsset.entity';
 import { assetUrl } from '../../common/utils/asset-url.util';
 import { MoneyUtil } from '../../common/utils/money.util';
-import { describeWindows, isOnSchedule, isValidTime, parseDays } from '../../common/utils/availability-schedule.util';
-import { loadBusinessClock } from '../../common/utils/business-clock';
-import { addDays } from '../../common/utils/business-day';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
 import { PriceListService } from './price-lists.service';
@@ -40,9 +35,6 @@ export interface StopTarget {
 
 /** The channels an item can be stopped on by itself. */
 export const STOP_CHANNELS = ['SNAPPFOOD'];
-
-/** Refusals that are a lost sale: the item was off (86'd, outside its hours or sold out). */
-export const REFUSED_SALE_CODES = ['PRODUCT_SUSPENDED', 'PRODUCT_OUT_OF_SCHEDULE', 'PRODUCT_OUT_OF_STOCK'];
 
 /** Which items a bulk stop is on: a category, or a list of products. */
 export interface BulkStopTargets {
@@ -87,9 +79,7 @@ export class CatalogService {
     @InjectRepository(OptionItem) private readonly itemRepo: Repository<OptionItem>,
     @InjectRepository(ProductOptionGroup) private readonly prodGroupRepo: Repository<ProductOptionGroup>,
     @InjectRepository(ProductAvailability) private readonly availRepo: Repository<ProductAvailability>,
-    @InjectRepository(AvailabilitySchedule) private readonly scheduleRepo: Repository<AvailabilitySchedule>,
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
-    @InjectRepository(DailyStock) private readonly stockRepo: Repository<DailyStock>,
     private readonly auditWriter: AuditWriter,
     private readonly priceLists: PriceListService,
   ) {}
@@ -380,9 +370,6 @@ export class CatalogService {
       this.assertPrice(data.base_price, 'base_price');
       data.base_price = MoneyUtil.format(data.base_price);
     }
-    if (data.container_price !== undefined) {
-      data.container_price = MoneyUtil.format(data.container_price || '0');
-    }
     if (data.max_per_order !== undefined) {
       const cap = data.max_per_order === null || (data.max_per_order as unknown) === '' ? null : Number(data.max_per_order);
       if (cap !== null && (!Number.isInteger(cap) || cap < 1)) {
@@ -419,8 +406,8 @@ export class CatalogService {
 
   /**
    * A base price typed on the product page is the price from now on, so a dated base price in
-   * force (from a price change) ends here; otherwise it would keep winning, and the sweep that
-   * copies it into the product would put the old figure back. Changes dated later still apply.
+   * force (from a price change) ends here; otherwise it would keep winning, and the copy that
+   * puts it into the product would put the old figure back.
    */
   private async endDatedBasePrice(tenantId: string, productId: string, variantId: string | null) {
     const now = new Date();
@@ -964,7 +951,7 @@ export class CatalogService {
     branchId?: string,
     at: Date = new Date(),
     variantId?: string | null,
-  ): Promise<{ isSuspended: boolean; outOfSchedule: boolean; reason: string | null; suspendedUntil: Date | null }> {
+  ): Promise<{ isSuspended: boolean; reason: string | null; suspendedUntil: Date | null }> {
     const rows = await this.availRepo.find({ where: { tenant_id: tenantId, product_id: productId } });
     // A stop on one variant (the cold sandwich) leaves the others on sale.
     const active = rows.find(
@@ -973,107 +960,9 @@ export class CatalogService {
         this.stopIsLive(row, branchId, at),
     );
     if (active) {
-      return { isSuspended: true, outOfSchedule: false, reason: active.reason || null, suspendedUntil: active.suspended_until || null };
+      return { isSuspended: true, reason: active.reason || null, suspendedUntil: active.suspended_until || null };
     }
-
-    // Outside its selling window (breakfast after 11:00) is off sale too, on the branch's clock.
-    const product = await this.prodRepo.findOne({ where: { id: productId, tenant_id: tenantId } });
-    const windows = product ? await this.windowsFor(tenantId, product, branchId) : [];
-    if (!isOnSchedule(windows, at, await this.branchTimeZone(tenantId, branchId))) {
-      return { isSuspended: true, outOfSchedule: true, reason: `Only on sale ${describeWindows(windows)}`, suspendedUntil: null };
-    }
-    return { isSuspended: false, outOfSchedule: false, reason: null, suspendedUntil: null };
-  }
-
-  // Scheduled availability: weekly selling windows
-
-  /** The active windows that govern a product at a branch: its own, else its category's. */
-  private async windowsFor(tenantId: string, product: Product, branchId?: string, all?: AvailabilitySchedule[]) {
-    const schedules = all ?? (await this.scheduleRepo.find({ where: { tenant_id: tenantId, is_active: true } }));
-    const here = schedules.filter((s) => s.is_active && (!s.branch_id || !branchId || s.branch_id === branchId));
-    // A window set on the product itself replaces its category's: a breakfast category can
-    // still hold one all-day item.
-    const own = here.filter((s) => s.product_id === product.id);
-    return own.length ? own : here.filter((s) => !!product.category_id && s.category_id === product.category_id);
-  }
-
-  private async branchTimeZone(tenantId: string, branchId?: string): Promise<string> {
-    const branch = branchId ? await this.branchRepo.findOne({ where: { id: branchId, tenant_id: tenantId } }) : null;
-    return branch?.time_zone || 'Asia/Tehran';
-  }
-
-  async getSchedules(tenantId: string, branchId?: string) {
-    const schedules = await this.scheduleRepo.find({ where: { tenant_id: tenantId }, order: { created_at: 'ASC' } });
-    return branchId ? schedules.filter((s) => !s.branch_id || s.branch_id === branchId) : schedules;
-  }
-
-  async createSchedule(
-    tenantId: string,
-    body: { productId?: string; categoryId?: string; branchId?: string; daysOfWeek: number[]; startTime: string; endTime: string; label?: string },
-    correlationId?: string,
-  ) {
-    if (!!body.productId === !!body.categoryId) {
-      throw new BadRequestException('A selling window is for one product or one category');
-    }
-    const days = parseDays((body.daysOfWeek || []).join(','));
-    if (!days.length) throw new BadRequestException('Pick at least one day');
-    if (!isValidTime(body.startTime) || !isValidTime(body.endTime)) {
-      throw new BadRequestException('Times are HH:MM, 00:00 to 23:59');
-    }
-    if (body.productId) await this.getProductById(tenantId, body.productId);
-    if (body.categoryId && !(await this.catRepo.findOne({ where: { id: body.categoryId, tenant_id: tenantId } }))) {
-      throw new NotFoundException(`Category ${body.categoryId} not found`);
-    }
-
-    const saved = await this.scheduleRepo.save(
-      this.scheduleRepo.create({
-        tenant_id: tenantId,
-        product_id: body.productId || null,
-        category_id: body.categoryId || null,
-        branch_id: body.branchId || null,
-        days_of_week: [...new Set(days)].sort().join(','),
-        start_time: body.startTime,
-        end_time: body.endTime,
-        label: body.label?.trim() || null,
-        is_active: true,
-      }),
-    );
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'AVAILABILITY_SCHEDULE_CREATED',
-      correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
-      afterData: saved,
-    });
-    return saved;
-  }
-
-  async deleteSchedule(tenantId: string, id: string, correlationId?: string) {
-    const schedule = await this.scheduleRepo.findOne({ where: { id, tenant_id: tenantId } });
-    if (!schedule) throw new NotFoundException('Selling window not found');
-    await this.scheduleRepo.delete({ id, tenant_id: tenantId });
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'AVAILABILITY_SCHEDULE_DELETED',
-      correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
-      beforeData: schedule,
-    });
-    return { success: true };
-  }
-
-  /** Products outside their selling window at a branch right now, for the register to grey out. */
-  async getOffScheduleProducts(tenantId: string, branchId?: string, at: Date = new Date()) {
-    const schedules = await this.scheduleRepo.find({ where: { tenant_id: tenantId, is_active: true } });
-    if (!schedules.length) return [];
-    const timeZone = await this.branchTimeZone(tenantId, branchId);
-    const products = await this.prodRepo.find({ where: { tenant_id: tenantId } });
-    const off: Array<{ product_id: string; windows: string }> = [];
-    for (const product of products) {
-      const windows = await this.windowsFor(tenantId, product, branchId, schedules);
-      if (!isOnSchedule(windows, at, timeZone)) off.push({ product_id: product.id, windows: describeWindows(windows) });
-    }
-    return off;
+    return { isSuspended: false, reason: null, suspendedUntil: null };
   }
 
   async getAvailabilities(tenantId: string, branchId?: string) {
@@ -1218,25 +1107,6 @@ export class CatalogService {
       }
     }
     return { resumed, chain_wide: chainWide };
-  }
-
-  /**
-   * A sale refused because the item was off: the register or kiosk tried to sell it while it
-   * was stopped, outside its hours or sold out. The stop report counts these as lost sales.
-   */
-  async recordRefusedSale(
-    tenantId: string,
-    sale: { branchId?: string | null; productId: string; variantId?: string | null; quantity: number; code: string; channel?: string | null },
-  ) {
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'SYSTEM',
-      action: 'SALE_REFUSED',
-      entityType: 'Product',
-      entityId: sale.productId,
-      branchId: sale.branchId || undefined,
-      details: { productId: sale.productId, variantId: sale.variantId || null, quantity: sale.quantity, code: sale.code, channel: sale.channel || null },
-    });
   }
 
   /** What a stop is on: a whole product, one of its variants, or an add-on item; everywhere or on one channel. */
@@ -1441,7 +1311,7 @@ export class CatalogService {
     if (data.sort_order !== undefined) item.sort_order = data.sort_order;
     const saved = await this.itemRepo.save(item);
     // As for a product's price: a price typed here is the price from now on, so a dated add-on
-    // price in force (from a price change) ends, or the sweep would put its figure back.
+    // price in force (from a price change) ends, or the copy would put its figure back.
     if (data.price_delta !== undefined && !MoneyUtil.equals(before.price_delta || '0', saved.price_delta || '0')) {
       await this.prodRepo.manager
         .createQueryBuilder()
@@ -1484,130 +1354,22 @@ export class CatalogService {
     return saved;
   }
 
-  // Today's stock: how many of an item a branch has left to sell
-
-  /**
-   * The business day a stock count belongs to: the branch's, turning over at its cutoff, so a
-   * count set for the evening still holds at 01:00 and starts afresh with the next day.
-   */
-  private async stockDay(tenantId: string, branchId: string, at: Date = new Date()): Promise<string> {
-    return (await loadBusinessClock(this.stockRepo.manager, tenantId, branchId)).today(at);
-  }
-
-  async getDailyStock(tenantId: string, branchId: string, date?: string) {
-    date = date || (await this.stockDay(tenantId, branchId));
-    const rows = await this.stockRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, business_date: date } });
-    const out = [];
-    for (const row of rows) {
-      const sold = await this.soldOn(this.stockRepo.manager, tenantId, branchId, date, row.product_id, row.variant_id);
-      out.push({ ...row, sold, remaining: Math.max(0, row.quantity - sold) });
-    }
-    return out;
-  }
-
-  /** Set today's counts. A null or empty quantity clears the line: no limit again. */
-  async setDailyStock(
-    tenantId: string,
-    branchId: string,
-    entries: Array<{ productId: string; variantId?: string | null; quantity: number | null }>,
-    correlationId: string,
-  ) {
-    if (!branchId) throw new BadRequestException("Stock is a branch's count; pick a branch first");
-    const date = await this.stockDay(tenantId, branchId);
-    for (const entry of entries || []) {
-      const where = {
-        tenant_id: tenantId,
-        branch_id: branchId,
-        business_date: date,
-        product_id: entry.productId,
-        variant_id: entry.variantId || IsNull(),
-      };
-      const existing = await this.stockRepo.findOne({ where });
-      const qty = entry.quantity === null || entry.quantity === undefined || (entry.quantity as unknown) === '' ? null : Number(entry.quantity);
-      if (qty === null) {
-        if (existing) await this.stockRepo.delete({ id: existing.id });
-        continue;
-      }
-      if (!Number.isInteger(qty) || qty < 0) throw new BadRequestException('A stock count is a whole number, 0 or more');
-      if (existing) {
-        existing.quantity = qty;
-        await this.stockRepo.save(existing);
-      } else {
-        await this.stockRepo.save(
-          this.stockRepo.create({ tenant_id: tenantId, branch_id: branchId, business_date: date, product_id: entry.productId, variant_id: entry.variantId || null, quantity: qty }),
-        );
-      }
-    }
-    await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'DAILY_STOCK_SET', correlationId, details: { branchId, date, entries } });
-    return this.getDailyStock(tenantId, branchId, date);
-  }
-
-  /**
-   * Today's counts for some products at a branch, locked until the caller's transaction ends.
-   * Two registers selling the last unit both read "1 left" without it; with it the second
-   * waits for the first to commit, and then counts the first one's line as sold. Rows are
-   * locked in id order so two baskets of the same items cannot deadlock.
-   */
-  async lockStockCounts(em: EntityManager, tenantId: string, branchId: string, date: string, productIds: string[]): Promise<DailyStock[]> {
-    const ids = [...new Set(productIds)];
-    if (!ids.length) return [];
-    return em
-      .createQueryBuilder(DailyStock, 's')
-      .where('s.tenant_id = :tenantId AND s.branch_id = :branchId AND s.business_date = :date AND s.product_id IN (:...ids)', { tenantId, branchId, date, ids })
-      .orderBy('s.id')
-      .setLock('pessimistic_write')
-      .getMany();
-  }
-
-  /**
-   * Units of a product (or one variant of it) on a business day's live orders at a branch.
-   * An order is stamped with its business day only when it is submitted or paid; until then (a
-   * draft, a kiosk order awaiting its card) it belongs to the day its placement falls in on the
-   * same branch clock as the count. Not the calendar date ORDER_BUSINESS_DATE_EXPR falls back
-   * to: between midnight and the cutoff that is tomorrow, and the night's open orders would
-   * not count against the day's stock.
-   */
-  private async soldOn(em: EntityManager, tenantId: string, branchId: string, date: string, productId: string, variantId?: string | null) {
-    const clock = await loadBusinessClock(this.stockRepo.manager, tenantId, branchId);
-    const params: unknown[] = [tenantId, branchId, date, productId, clock.startOf(date), clock.startOf(addDays(date, 1))];
-    let variantClause = '';
-    if (variantId) {
-      params.push(variantId);
-      variantClause = `AND i.variant_id = $7`;
-    }
-    const rows = await em.query(
-      `SELECT COALESCE(SUM(i.quantity), 0) AS sold
-         FROM order_item i
-         JOIN order_header h ON h.id = i.order_id
-        WHERE h.tenant_id = $1 AND h.branch_id = $2
-          AND (h.business_date = $3 OR (h.business_date IS NULL AND h.placed_at >= $5 AND h.placed_at < $6))
-          AND h.state NOT IN ('CANCELLED', 'REJECTED')
-          AND h.deleted_at IS NULL
-          AND i.state = 'ACTIVE' AND i.product_id = $4 ${variantClause}`,
-      params,
-    );
-    return Math.floor(Number(rows[0]?.sold || 0));
-  }
-
   /**
    * Every rule on what may be sold, for a whole basket checked before anything is saved: the
    * kiosk builds its order in one go rather than line by line. Stops on the product, its size
-   * or an add-on, selling windows, a combo's chosen dishes, the per-order cap and today's
-   * stock, with lines of the same item added together. Given the transaction that will save
-   * the order, the stock counts stay locked until it commits (see `lockStockCounts`).
+   * or an add-on, a combo's chosen dishes and the per-order cap, with lines of the same item
+   * added together.
    */
   async assertBasketSellable(
     tenantId: string,
     branchId: string | undefined,
     lines: Array<{ product: Product; variantId: string | null; quantity: number; optionItems: OptionItem[] }>,
     at: Date = new Date(),
-    em?: EntityManager,
   ) {
     const refuse = (code: string, message: string, productId?: string) => new BadRequestException({ statusCode: 400, code, message, productId });
 
     for (const line of lines) {
       const stop = await this.getSuspension(tenantId, line.product.id, branchId, at, line.variantId);
-      if (stop.outOfSchedule) throw refuse('PRODUCT_OUT_OF_SCHEDULE', `${line.product.name} is not on sale now. ${stop.reason}`, line.product.id);
       if (stop.isSuspended) throw refuse('PRODUCT_SUSPENDED', `${line.product.name} is not available now${stop.reason ? ` (${stop.reason})` : ''}`, line.product.id);
       for (const item of line.optionItems) {
         const itemStop = await this.getOptionItemStop(tenantId, item.id, branchId, at);
@@ -1630,53 +1392,24 @@ export class CatalogService {
         throw refuse('PRODUCT_MAX_PER_ORDER', `At most ${product.max_per_order} × ${product.name} per order`);
       }
     }
-
-    if (!branchId) return;
-    const date = await this.stockDay(tenantId, branchId, at);
-    const reader = em || this.stockRepo.manager;
-    const allCounts = em
-      ? await this.lockStockCounts(em, tenantId, branchId, date, [...byProduct.keys()])
-      : await this.stockRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, business_date: date, product_id: In([...byProduct.keys()]) } });
-    for (const { product } of byProduct.values()) {
-      const counts = allCounts.filter((c) => c.product_id === product.id);
-      for (const count of counts) {
-        const wanted = lines
-          .filter((l) => l.product.id === product.id && (!count.variant_id || l.variantId === count.variant_id))
-          .reduce((sum, l) => sum + l.quantity, 0);
-        if (!wanted) continue;
-        const left = count.quantity - (await this.soldOn(reader, tenantId, branchId, date, product.id, count.variant_id));
-        if (wanted > left) {
-          throw refuse('PRODUCT_OUT_OF_STOCK', left > 0 ? `Only ${left} × ${product.name} left today` : `${product.name} is sold out today`, product.id);
-        }
-      }
-    }
   }
 
   /**
    * What a self-service menu should not offer right now at a branch: whole products that are
-   * stopped, out of their window or sold out, and the sizes and add-ons that are.
+   * stopped, and the sizes and add-ons that are.
    */
   async getUnavailableNow(tenantId: string, branchId?: string, at: Date = new Date()) {
     const live = (await this.getAvailabilities(tenantId, branchId)).filter((row) => this.stopIsLive(row, branchId, at));
     const products = new Set(live.filter((r) => r.product_id && !r.variant_id).map((r) => r.product_id as string));
     const variants = new Set(live.filter((r) => r.variant_id).map((r) => r.variant_id as string));
     const optionItems = new Set(live.filter((r) => r.option_item_id).map((r) => r.option_item_id as string));
-    for (const off of await this.getOffScheduleProducts(tenantId, branchId, at)) products.add(off.product_id);
-    if (branchId) {
-      for (const row of await this.getDailyStock(tenantId, branchId, await this.stockDay(tenantId, branchId, at))) {
-        if (row.remaining > 0) continue;
-        if (row.variant_id) variants.add(row.variant_id);
-        else products.add(row.product_id);
-      }
-    }
     return { products, variants, optionItems };
   }
 
   /**
    * The checks on one order line that come from how the item is sold rather than what it
-   * is: the per-order cap, today's stock count, and whether each add-on is offered on this
-   * product and on sale. Run before the line is saved, inside the order's transaction, so
-   * earlier lines of the same order already count against the stock.
+   * is: the per-order cap, and whether each add-on is offered on this product and on sale.
+   * Run before the line is saved, inside the order's transaction.
    */
   async assertLineSellable(
     em: EntityManager,
@@ -1699,23 +1432,6 @@ export class CatalogService {
           code: 'PRODUCT_MAX_PER_ORDER',
           message: `At most ${product.max_per_order} × ${product.name} per order`,
         });
-      }
-    }
-
-    if (order.branch_id) {
-      const date = await this.stockDay(tenantId, order.branch_id);
-      // Locked until the order's transaction commits, so a second register selling the same
-      // item waits here and then sees this line as sold (audit C11).
-      const counts = await this.lockStockCounts(em, tenantId, order.branch_id, date, [product.id]);
-      for (const count of counts.filter((c) => !c.variant_id || c.variant_id === variantId)) {
-        const left = count.quantity - (await this.soldOn(em, tenantId, order.branch_id, date, product.id, count.variant_id));
-        if (qty > left) {
-          throw new BadRequestException({
-            statusCode: 400,
-            code: 'PRODUCT_OUT_OF_STOCK',
-            message: left > 0 ? `Only ${left} × ${product.name} left today` : `${product.name} is sold out today`,
-          });
-        }
       }
     }
 

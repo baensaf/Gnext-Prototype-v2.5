@@ -3,7 +3,6 @@ import { Request } from 'express';
 import { CatalogService } from './catalog.service';
 import { PriceListService } from './price-lists.service';
 import { PriceChangeInput, PriceChangeService } from './price-changes.service';
-import { StopReportService } from './stop-report.service';
 import { NoteTemplateService } from './note-template.service';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { HeadOfficeOnly, Roles, MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
@@ -24,7 +23,6 @@ export class CatalogController {
     private readonly catalogService: CatalogService,
     private readonly priceLists: PriceListService,
     private readonly priceChanges: PriceChangeService,
-    private readonly stopReports: StopReportService,
     private readonly noteTemplates: NoteTemplateService,
   ) {}
 
@@ -302,7 +300,7 @@ export class CatalogController {
     return await this.priceLists.assignBranch((req as any).tenantId, body.branchId, body.priceListId || null, (req as any).correlationId);
   }
 
-  // Dated price changes ("+10% from Saturday"), on base prices or one list.
+  // Price changes ("+10% on drinks"), on base prices, one list or add-ons: previewed, then applied at once.
   @HeadOfficeOnly()
   @Post('catalog/price-changes/preview')
   async previewPriceChange(@Body() body: PriceChangeInput, @Req() req: Request) {
@@ -313,18 +311,6 @@ export class CatalogController {
   @Post('catalog/price-changes')
   async commitPriceChange(@Body() body: PriceChangeInput, @Req() req: Request) {
     return await this.priceChanges.commit((req as any).tenantId, body, (req as any).userId || null, (req as any).correlationId);
-  }
-
-  @HeadOfficeOnly()
-  @Get('catalog/price-changes')
-  async getPriceChanges(@Req() req: Request) {
-    return await this.priceChanges.list((req as any).tenantId);
-  }
-
-  @HeadOfficeOnly()
-  @Delete('catalog/price-changes/:id')
-  async cancelPriceChange(@Param('id') id: string, @Req() req: Request) {
-    return await this.priceChanges.cancel((req as any).tenantId, id, (req as any).userId || null, (req as any).correlationId);
   }
 
   @Get('products/:id/price-history')
@@ -368,35 +354,6 @@ export class CatalogController {
       tenantId,
       effectiveBranchId((req as any).userBranchId, branchId),
     );
-  }
-
-  // Weekly selling windows. What sells when is a menu decision, so head office sets them;
-  // any register reads which items are outside their window right now.
-  @Get('availability/schedules')
-  async getSchedules(@Query('branchId') branchId: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.catalogService.getSchedules(tenantId, effectiveBranchId((req as any).userBranchId, branchId));
-  }
-
-  @Get('availability/off-schedule')
-  async getOffScheduleProducts(@Query('branchId') branchId: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.catalogService.getOffScheduleProducts(tenantId, effectiveBranchId((req as any).userBranchId, branchId));
-  }
-
-  @HeadOfficeOnly()
-  @Post('availability/schedules')
-  async createSchedule(
-    @Body() body: { productId?: string; categoryId?: string; branchId?: string; daysOfWeek: number[]; startTime: string; endTime: string; label?: string },
-    @Req() req: Request,
-  ) {
-    return await this.catalogService.createSchedule((req as any).tenantId, body, (req as any).correlationId);
-  }
-
-  @HeadOfficeOnly()
-  @Delete('availability/schedules/:id')
-  async deleteSchedule(@Param('id') id: string, @Req() req: Request) {
-    return await this.catalogService.deleteSchedule((req as any).tenantId, id, (req as any).correlationId);
   }
 
   // An item stays off until somebody puts it back: no reason and no time limit (2026-10-10).
@@ -471,13 +428,6 @@ export class CatalogController {
     return named.length ? named : [null];
   }
 
-  // Who took what off sale, for how long, and the sales refused while it was off.
-  @Roles(...MANAGER_AND_ABOVE)
-  @Get('availability/report')
-  async stopReport(@Query('from') from: string, @Query('to') to: string, @Query('branchId') branchId: string, @Req() req: Request) {
-    return await this.stopReports.report((req as any).tenantId, { from, to, branchId: effectiveBranchId((req as any).userBranchId, branchId) });
-  }
-
   // 86 from the register's tile: any register user takes an item off, until somebody puts it
   // back. No reason, no time limit and no approver (2026-10-10). The branch is the session's
   // (or, for head office at a register, the one it is working in).
@@ -511,28 +461,6 @@ export class CatalogController {
     const branchId = effectiveBranchId((req as any).userBranchId, requested);
     if (!branchId) throw new BadRequestException({ statusCode: 400, code: 'BRANCH_REQUIRED', message: 'Pick the branch this register is in' });
     return branchId;
-  }
-
-  // Today's stock: a branch's own count, like the 86, so branch managers set it.
-  @Get('availability/daily-stock')
-  async getDailyStock(@Query('branchId') branchId: string, @Req() req: Request) {
-    const scoped = effectiveBranchId((req as any).userBranchId, branchId);
-    if (!scoped) return [];
-    return await this.catalogService.getDailyStock((req as any).tenantId, scoped);
-  }
-
-  @Roles(...MANAGER_AND_ABOVE)
-  @Put('availability/daily-stock')
-  async setDailyStock(
-    @Body() body: { branchId?: string; entries: Array<{ productId: string; variantId?: string | null; quantity: number | null }> },
-    @Req() req: Request,
-  ) {
-    return await this.catalogService.setDailyStock(
-      (req as any).tenantId,
-      effectiveBranchId((req as any).userBranchId, body.branchId),
-      body.entries,
-      (req as any).correlationId,
-    );
   }
 
   // Note templates: the fixed phrases a cashier taps instead of typing a note. What the

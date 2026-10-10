@@ -10,10 +10,8 @@ import { OptionItem } from '../src/entities/OptionItem.entity';
 import { ProductOptionGroup } from '../src/entities/ProductOptionGroup.entity';
 import { PriceGroup } from '../src/entities/PriceGroup.entity';
 import { ProductAvailability } from '../src/entities/ProductAvailability.entity';
-import { AvailabilitySchedule } from '../src/entities/AvailabilitySchedule.entity';
 import { Branch } from '../src/entities/Branch.entity';
 import { BranchOperatingHour } from '../src/entities/BranchOperatingHour.entity';
-import { DailyStock } from '../src/entities/DailyStock.entity';
 import { ProductOptionGroup as ProductOptionGroupEntity } from '../src/entities/ProductOptionGroup.entity';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 
@@ -24,10 +22,8 @@ describe('CatalogService (Unit)', () => {
   let prodGroupRepo: any;
   let priceItemRepo: any;
   let availRepo: any;
-  let scheduleRepo: any;
   let auditWriter: any;
   let hoursRepo: any;
-  let stockRepo: any;
   let groupRepo: any;
   let itemRepo: any;
 
@@ -51,7 +47,6 @@ describe('CatalogService (Unit)', () => {
       create: jest.fn(),
       save: jest.fn(),
     };
-    scheduleRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn(), create: jest.fn((d) => d), save: jest.fn((d) => Promise.resolve(d)), delete: jest.fn() };
     auditWriter = { write: jest.fn() };
     groupRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn((g) => Promise.resolve(g)) };
     itemRepo = { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn(), softRemove: jest.fn() };
@@ -73,7 +68,6 @@ describe('CatalogService (Unit)', () => {
     em.transaction = (work: any) => work(em);
     groupRepo.manager = em;
     hoursRepo = { find: jest.fn().mockResolvedValue([]) };
-    stockRepo = { find: jest.fn().mockResolvedValue([]), manager: { query: jest.fn().mockResolvedValue([{ sold: 0 }]) } };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -86,10 +80,8 @@ describe('CatalogService (Unit)', () => {
         { provide: getRepositoryToken(ProductOptionGroup), useValue: prodGroupRepo },
         { provide: getRepositoryToken(PriceGroup), useValue: { findOne: jest.fn(), find: jest.fn(), create: jest.fn(), save: jest.fn() } },
         { provide: getRepositoryToken(ProductAvailability), useValue: availRepo },
-        { provide: getRepositoryToken(AvailabilitySchedule), useValue: scheduleRepo },
         { provide: getRepositoryToken(Branch), useValue: { findOne: jest.fn().mockResolvedValue({ id: 'b-1', time_zone: 'Asia/Tehran' }) } },
         { provide: getRepositoryToken(BranchOperatingHour), useValue: hoursRepo },
-        { provide: getRepositoryToken(DailyStock), useValue: stockRepo },
         { provide: AuditWriter, useValue: auditWriter },
         basePriceLists(),
       ],
@@ -208,74 +200,6 @@ describe('CatalogService (Unit)', () => {
     });
   });
 
-  // HAMI audit gap: time-of-day menus. Tehran is UTC+03:30, so 05:00Z is 08:30 and 09:00Z is 12:30.
-  describe('Scheduled availability', () => {
-    const breakfast = { is_active: true, branch_id: null, days_of_week: '0,1,2,3,4,5,6', start_time: '07:00', end_time: '11:00' };
-    const at = (iso: string) => new Date(iso);
-
-    beforeEach(() => {
-      prodRepo.findOne.mockResolvedValue({ id: 'p-omelette', category_id: 'cat-breakfast' });
-    });
-
-    it('sells a breakfast item inside its window and not after it', async () => {
-      scheduleRepo.find.mockResolvedValue([{ ...breakfast, category_id: 'cat-breakfast' }]);
-
-      const morning = await service.getSuspension('t-1', 'p-omelette', 'b-1', at('2026-09-16T05:00:00Z'));
-      const noon = await service.getSuspension('t-1', 'p-omelette', 'b-1', at('2026-09-16T09:00:00Z'));
-
-      expect(morning.isSuspended).toBe(false);
-      expect(noon).toEqual(expect.objectContaining({ isSuspended: true, outOfSchedule: true, reason: 'Only on sale 07:00–11:00' }));
-    });
-
-    it("lets a product's own window replace its category's", async () => {
-      scheduleRepo.find.mockResolvedValue([
-        { ...breakfast, category_id: 'cat-breakfast' },
-        { ...breakfast, product_id: 'p-omelette', start_time: '00:00', end_time: '00:00' },
-      ]);
-
-      const noon = await service.getSuspension('t-1', 'p-omelette', 'b-1', at('2026-09-16T09:00:00Z'));
-
-      expect(noon.isSuspended).toBe(false);
-    });
-
-    it('runs a late window past midnight into the next day', async () => {
-      // Wednesday only, 22:00–02:00. 21:00Z Wednesday is 00:30 Thursday in Tehran.
-      scheduleRepo.find.mockResolvedValue([{ ...breakfast, product_id: 'p-omelette', days_of_week: '3', start_time: '22:00', end_time: '02:00' }]);
-
-      const afterMidnight = await service.getSuspension('t-1', 'p-omelette', 'b-1', at('2026-09-16T21:00:00Z'));
-      const nextNight = await service.getSuspension('t-1', 'p-omelette', 'b-1', at('2026-09-17T21:00:00Z'));
-
-      expect(afterMidnight.isSuspended).toBe(false);
-      expect(nextNight.isSuspended).toBe(true);
-    });
-
-    it("ignores another branch's window", async () => {
-      scheduleRepo.find.mockResolvedValue([{ ...breakfast, category_id: 'cat-breakfast', branch_id: 'b-other' }]);
-
-      const noon = await service.getSuspension('t-1', 'p-omelette', 'b-1', at('2026-09-16T09:00:00Z'));
-
-      expect(noon.isSuspended).toBe(false);
-    });
-
-    it('lists the items outside their window for the register', async () => {
-      scheduleRepo.find.mockResolvedValue([{ ...breakfast, category_id: 'cat-breakfast' }]);
-      prodRepo.find.mockResolvedValue([
-        { id: 'p-omelette', category_id: 'cat-breakfast' },
-        { id: 'p-burger', category_id: 'cat-burgers' },
-      ]);
-
-      const off = await service.getOffScheduleProducts('t-1', 'b-1', at('2026-09-16T09:00:00Z'));
-
-      expect(off).toEqual([{ product_id: 'p-omelette', windows: '07:00–11:00' }]);
-    });
-
-    it('refuses a window with no target, no day or a bad time', async () => {
-      await expect(service.createSchedule('t-1', { daysOfWeek: [1], startTime: '07:00', endTime: '11:00' })).rejects.toThrow('one product or one category');
-      await expect(service.createSchedule('t-1', { productId: 'p-omelette', daysOfWeek: [], startTime: '07:00', endTime: '11:00' })).rejects.toThrow('at least one day');
-      await expect(service.createSchedule('t-1', { productId: 'p-omelette', daysOfWeek: [1], startTime: '7:00', endTime: '11:00' })).rejects.toThrow('HH:MM');
-    });
-  });
-
   describe('Snappfood-style availability', () => {
     const at = (iso: string) => new Date(iso);
     const shift = (day: number, open: string, close: string) => ({ day_of_week: day, open_time: open, close_time: close, is_closed: false });
@@ -292,20 +216,7 @@ describe('CatalogService (Unit)', () => {
       const order = { id: 'o-1', branch_id: 'b-1' };
       const em = (over: any = {}) => ({
         query: jest.fn().mockResolvedValue([{ sold: '0', n: '0' }]),
-        find: jest.fn(async (entity: any) => (entity === DailyStock ? over.stock || [] : entity === ProductOptionGroupEntity ? over.links || [] : [])),
-        // lockStockCounts: SELECT … FOR UPDATE on today's counts.
-        createQueryBuilder: jest.fn(() => {
-          const qb: any = { where: () => qb, orderBy: () => qb, setLock: () => qb, getMany: async () => over.stock || [] };
-          return qb;
-        }),
-      });
-
-      it("refuses more than is left of today's stock", async () => {
-        const manager: any = em({ stock: [{ product_id: 'p-1', variant_id: null, quantity: 3 }] });
-        manager.query.mockResolvedValue([{ sold: '2' }]);
-
-        await expect(service.assertLineSellable(manager, 't-1', order, { id: 'p-1', name: 'Lasagne' } as any, null, '2', [])).rejects.toThrow('Only 1');
-        await expect(service.assertLineSellable(manager, 't-1', order, { id: 'p-1', name: 'Lasagne' } as any, null, '1', [])).resolves.toBeUndefined();
+        find: jest.fn(async (entity: any) => (entity === ProductOptionGroupEntity ? over.links || [] : [])),
       });
 
       it('refuses more than the per-order cap', async () => {
@@ -333,12 +244,6 @@ describe('CatalogService (Unit)', () => {
     it('adds lines of the same item together against the per-order cap', async () => {
       await expect(service.assertBasketSellable('t-1', 'b-1', [line(2), line(2)])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'PRODUCT_MAX_PER_ORDER' }) });
       await expect(service.assertBasketSellable('t-1', 'b-1', [line(1), line(2)])).resolves.toBeUndefined();
-    });
-
-    it("adds lines together against today's stock, less what is already sold", async () => {
-      stockRepo.find.mockResolvedValue([{ product_id: 'p-fr', variant_id: null, quantity: 5 }]);
-      stockRepo.manager.query.mockResolvedValue([{ sold: 3 }]);
-      await expect(service.assertBasketSellable('t-1', 'b-1', [line(1), line(2)])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'PRODUCT_OUT_OF_STOCK', message: 'Only 2 × Fries left today' }) });
     });
 
     it('refuses a stopped size', async () => {

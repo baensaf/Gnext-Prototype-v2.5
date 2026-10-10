@@ -38,7 +38,6 @@ import { Agent } from './entities/Agent.entity';
 import { AgentEnrolmentCode } from './entities/AgentEnrolmentCode.entity';
 import { AgentCommand } from './entities/AgentCommand.entity';
 import { AgentRelease } from './entities/AgentRelease.entity';
-import { DailyStock } from './entities/DailyStock.entity';
 import { NoteTemplate } from './entities/NoteTemplate.entity';
 import { AgentGatewayModule } from './modules/agent-gateway/agent-gateway.module';
 import { AgentLocalModule } from './modules/agent-local/agent-local.module';
@@ -83,7 +82,6 @@ import { PriceEntry } from './entities/PriceEntry.entity';
 import { PriceGroupBranch } from './entities/PriceGroupBranch.entity';
 import { PriceBulkJob } from './entities/PriceBulkJob.entity';
 import { ProductAvailability } from './entities/ProductAvailability.entity';
-import { AvailabilitySchedule } from './entities/AvailabilitySchedule.entity';
 import { ApprovalRule } from './entities/ApprovalRule.entity';
 import { ApprovalRequest } from './entities/ApprovalRequest.entity';
 import { ApprovalDecision } from './entities/ApprovalDecision.entity';
@@ -158,7 +156,7 @@ import { ReportExportJob } from './entities/ReportExportJob.entity';
           FileAsset, LocalizedString,
           Category, Product, ProductVariant, OptionGroup, OptionItem, ProductOptionGroup, CategoryOptionGroup, PriceGroup,
           PriceEntry, PriceGroupBranch, PriceBulkJob,
-          ProductAvailability, AvailabilitySchedule,
+          ProductAvailability,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
           Coupon, DiscountUsage, CustomerDiscount, ItemDiscount,
           Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CreditEntry,
@@ -176,7 +174,7 @@ import { ReportExportJob } from './entities/ReportExportJob.entity';
           ImportJob, ImportRow,
           OperationalAlert, SavedReportView, ReportExportJob,
           Agent, AgentEnrolmentCode, AgentCommand, AgentRelease,
-          DailyStock, NoteTemplate,
+          NoteTemplate,
         ],
         synchronize: false, // Mandatory AD-02
         logging: config.get<string>('NODE_ENV') === 'development' ? ['error', 'warn'] : false,

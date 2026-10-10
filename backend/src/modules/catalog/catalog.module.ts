@@ -10,16 +10,13 @@ import { PriceGroup } from '../../entities/PriceGroup.entity';
 import { PriceGroupBranch } from '../../entities/PriceGroupBranch.entity';
 import { PriceEntry } from '../../entities/PriceEntry.entity';
 import { ProductAvailability } from '../../entities/ProductAvailability.entity';
-import { AvailabilitySchedule } from '../../entities/AvailabilitySchedule.entity';
 import { Branch } from '../../entities/Branch.entity';
 import { BranchOperatingHour } from '../../entities/BranchOperatingHour.entity';
-import { DailyStock } from '../../entities/DailyStock.entity';
 import { NoteTemplate } from '../../entities/NoteTemplate.entity';
 import { CatalogService } from './catalog.service';
 import { CatalogController } from './catalog.controller';
 import { PriceListService } from './price-lists.service';
 import { PriceChangeService } from './price-changes.service';
-import { StopReportService } from './stop-report.service';
 import { NoteTemplateService } from './note-template.service';
 import { PriceBulkJob } from '../../entities/PriceBulkJob.entity';
 import { AuditEvent } from '../../entities/AuditEvent.entity';
@@ -41,16 +38,14 @@ import { ApprovalModule } from '../approval/approval.module';
       PriceBulkJob,
       AuditEvent,
       ProductAvailability,
-      AvailabilitySchedule,
       Branch,
       BranchOperatingHour,
-      DailyStock,
       NoteTemplate,
     ]),
     AuditModule,
     ApprovalModule,
   ],
-  providers: [CatalogService, PriceListService, PriceChangeService, StopReportService, NoteTemplateService],
+  providers: [CatalogService, PriceListService, PriceChangeService, NoteTemplateService],
   controllers: [CatalogController],
   exports: [CatalogService, PriceListService, PriceChangeService, NoteTemplateService],
 })
