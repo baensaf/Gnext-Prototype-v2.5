@@ -5,20 +5,11 @@
 export interface ShiftPolicy {
   /** What the Open Shift dialog offers as the float. The cashier still types what they counted. */
   defaultOpeningFloat: string;
-  /**
-   * The largest over or short, either way, a drawer may close on without a manager's pin.
-   * Any difference at all still needs a reason.
-   */
-  varianceTolerance: string;
-  /** The person counting down a drawer is not shown what it should hold until they have counted. */
-  blindClose: boolean;
 }
 
 export const SHIFT_POLICY_DEFAULTS: ShiftPolicy = {
   // HAMI branches start every drawer at zero and empty it at each close.
   defaultOpeningFloat: '0',
-  varianceTolerance: '100000',
-  blindClose: true,
 };
 
 const isAmount = (value: unknown): value is string | number =>
@@ -31,9 +22,5 @@ export function resolveShiftPolicy(raw: unknown): ShiftPolicy {
     defaultOpeningFloat: isAmount(value.defaultOpeningFloat)
       ? String(value.defaultOpeningFloat)
       : SHIFT_POLICY_DEFAULTS.defaultOpeningFloat,
-    varianceTolerance: isAmount(value.varianceTolerance)
-      ? String(value.varianceTolerance)
-      : SHIFT_POLICY_DEFAULTS.varianceTolerance,
-    blindClose: typeof value.blindClose === 'boolean' ? value.blindClose : SHIFT_POLICY_DEFAULTS.blindClose,
   };
 }

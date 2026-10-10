@@ -12,26 +12,17 @@ import { CashMovement, CashMovementType } from '../../entities/CashMovement.enti
 import { Terminal } from '../../entities/Terminal.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
-import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
+import { Branch } from '../../entities/Branch.entity';
 import { Refund } from '../../entities/Refund.entity';
 import { AdminUser } from '../../entities/AdminUser.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
-import { AuditEvent } from '../../entities/AuditEvent.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { currentTillTerminalId } from '../../common/utils/till-context';
-import { isApprover } from '../../common/utils/user-scope.util';
-import { ApprovalService } from '../approval/approval.service';
 import { ShiftPolicy, resolveShiftPolicy } from './shift-policy';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
-import {
-  ShiftOpenDto,
-  CashMovementDto,
-  ShiftBeginCloseDto,
-  ShiftReturnToOpenDto,
-  ShiftCloseDto,
-} from './dtos/shift.dto';
+import { ShiftOpenDto, CashMovementDto, ShiftCloseDto } from './dtos/shift.dto';
 import {
   OPEN_ORDER_STATES,
   FINISHED_ORDER_STATES,
@@ -52,11 +43,7 @@ const TILL_OPEN_ORDER_ISSUES: OpenOrderIssue[] = ['NOT_SUBMITTED', 'UNPAID', 'AW
 /** Orders that never became a sale: held, waiting to be accepted, cancelled or turned down. */
 const UNSOLD_ORDER_STATES: string[] = ['DRAFT', 'PENDING_ACCEPTANCE', 'CANCELLED', 'REJECTED'];
 
-/**
- * What one register did in a shift, for the cashier to read on screen. A null amount is one the
- * reader may not see yet: under a blind count, what the drawer should hold, and any total it
- * could be worked out from, waits for the count.
- */
+/** What one register did in a shift, for the cashier to read on screen. */
 export interface ShiftSalesSummary {
   shiftId: string;
   shiftNumber: string;
@@ -65,28 +52,26 @@ export interface ShiftSalesSummary {
   openedAt: Date;
   closedAt: Date | null;
   closed: boolean;
-  blind: boolean;
   orderCount: number;
   cancelledCount: number;
-  salesTotal: string | null;
-  discountTotal: string | null;
-  deliveryFeeTotal: string | null;
-  unpaidTotal: string | null;
-  byType: Array<{ type: string; count: number; total: string | null }>;
-  /** Money taken at this register, by kind of payment. Cash is left out under a blind count. */
+  salesTotal: string;
+  discountTotal: string;
+  deliveryFeeTotal: string;
+  unpaidTotal: string;
+  byType: Array<{ type: string; count: number; total: string }>;
+  /** Money taken at this register, by kind of payment. */
   tenders: Array<{ kind: string; count: number; amount: string }>;
   refundCount: number;
-  refundTotal: string | null;
-  /** Refunds by how the money went back: cash from this drawer, a card-to-card transfer... */
-  refunds: Array<{ kind: string; count: number; amount: string | null }>;
+  refundTotal: string;
+  /** Refunds by how the money went back: cash from this drawer, back to the card... */
+  refunds: Array<{ kind: string; count: number; amount: string }>;
   cash: {
     openingFloat: string;
-    cashSales: string | null;
-    cashRefunds: string | null;
+    cashSales: string;
+    cashRefunds: string;
     paidIn: string;
     paidOut: string;
-    safeDrops: string;
-    expectedCash: string | null;
+    expectedCash: string;
     actualCash: string | null;
     shortOver: string | null;
     leftInDrawer: string | null;
@@ -111,11 +96,11 @@ export interface ShiftCloseCheck {
   branchId: string;
   businessDate: string;
   currencyCode: string;
-  /** This till's open orders; leaving them open takes a manager's PIN. */
+  /** This till's open orders. Closing leaves them open; the screen says so, nothing blocks. */
   openOrders: DayCloseOpenOrder[];
   /**
-   * Open orders an earlier shift on this register already left open, on a manager's PIN when
-   * it closed. Shown, but not asked about again: the day close answers for them.
+   * Open orders an earlier shift on this register already left open. Shown, but not asked
+   * about again: the day close answers for them.
    */
   carriedOrders: DayCloseOpenOrder[];
   /** Cash payments on this drawer that must be finished or cancelled before it closes. */
@@ -134,68 +119,20 @@ export class ShiftService {
     @InjectRepository(Terminal) private readonly terminalRepo: Repository<Terminal>,
     @InjectRepository(Payment) private readonly paymentRepo: Repository<Payment>,
     @InjectRepository(OrderHeader) private readonly orderRepo: Repository<OrderHeader>,
-    @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     private readonly auditWriter: AuditWriter,
     private readonly dataSource: DataSource,
-    private readonly approvalService: ApprovalService,
   ) {}
 
   /**
    * The drawer rules in force at a branch: its own override when it has one, else head
-   * office's, else the defaults. Read at the till and at the count, not only by the
-   * settings screen, or an override would show there and change nothing.
+   * office's, else the defaults. Read at the till, not only by the settings screen, or an
+   * override would show there and change nothing.
    */
   async policyFor(tenantId: string, branchId?: string | null): Promise<ShiftPolicy> {
     const rows = await this.dataSource
       .getRepository(TenantSetting)
       .find({ where: { tenant_id: tenantId, key: 'SHIFT_POLICY' } });
     return resolveShiftPolicy(pickSettingValue(rows, branchId));
-  }
-
-  /**
-   * What someone counting down a drawer may see of it before they have counted.
-   *
-   * Showing the expected cash beforehand invites typing it in, and the count then proves
-   * nothing — the old dialog even filled it in. So while a shift is open, a caller who is not
-   * an approver gets the float and their own pay-ins and pay-outs, but not the sales, the
-   * refunds or the total the drawer should hold. `blind` tells the screen which it has.
-   */
-  async redactForBlindCount<T extends Record<string, any> | null>(
-    tenantId: string,
-    payload: T,
-    viewer: { role?: string | null },
-  ): Promise<T> {
-    if (!payload || isApprover(viewer.role)) return payload;
-    const state = payload.state || payload.status;
-    if (state === 'CLOSED') return payload;
-    const branchId = payload.branch_id || payload.branchId;
-    if (!(await this.policyFor(tenantId, branchId)).blindClose) return payload;
-
-    const visible = new Set(['OPENING_FLOAT', 'PAID_IN', 'PAID_OUT', 'SAFE_DROP']);
-    const copy: Record<string, any> = { ...payload, blind: true };
-    if (Array.isArray(copy.movements)) copy.movements = copy.movements.filter((m: any) => visible.has(m.type));
-    for (const key of ['expectedCash', 'cashSales', 'cashRefunds', 'shortOver', 'expected_cash', 'short_over', 'over_short_amount']) {
-      if (key in copy) copy[key] = null;
-    }
-    return copy as T;
-  }
-
-  /**
-   * The count the register operator first gave for this close, read back from the
-   * SHIFT_COUNT_SUBMITTED audit a refused close leaves behind (written outside the close's
-   * transaction, so it survives the refusal). A return to open starts a fresh count.
-   */
-  private async recordedBlindCount(em: EntityManager, tenantId: string, shiftId: string): Promise<string | null> {
-    const events = await em.find(AuditEvent, {
-      where: { tenant_id: tenantId, entity_id: shiftId, action: In(['SHIFT_COUNT_SUBMITTED', 'SHIFT_RETURN_TO_OPEN']) },
-      order: { occurred_at: 'ASC' },
-    });
-    let recorded: string | null = null;
-    for (const e of events) {
-      if (e.action === 'SHIFT_RETURN_TO_OPEN') recorded = null;
-      else if (recorded === null && e.details?.actualCash !== undefined) recorded = MoneyUtil.format(e.details.actualCash);
-    }
-    return recorded;
   }
 
   async getShifts(tenantId: string, query: any) {
@@ -240,7 +177,7 @@ export class ShiftService {
       .createQueryBuilder('s')
       .leftJoinAndSelect('s.movements', 'm')
       .where('s.tenant_id = :tenantId', { tenantId })
-      .andWhere('s.state IN (:...states)', { states: ['OPEN', 'CLOSING_REVIEW'] });
+      .andWhere("s.state = 'OPEN'");
 
     if (terminalId) {
       qb.andWhere('s.terminal_id = :terminalId', { terminalId });
@@ -322,10 +259,7 @@ export class ShiftService {
 
     if (!branchId) return null;
     const open = await this.shiftRepo.find({
-      where: [
-        { tenant_id: tenantId, branch_id: branchId, state: 'OPEN' },
-        { tenant_id: tenantId, branch_id: branchId, state: 'CLOSING_REVIEW' },
-      ],
+      where: { tenant_id: tenantId, branch_id: branchId, state: 'OPEN' },
       order: { opened_at: 'DESC' },
     });
     if (open.length > 1) {
@@ -373,7 +307,7 @@ export class ShiftService {
     const shift = await (entityManager ?? this.shiftRepo.manager).findOne(CashierShift, {
       where: { id: shiftId, tenant_id: tenantId },
     });
-    if (!shift || (shift.state !== 'OPEN' && shift.state !== 'CLOSING_REVIEW')) {
+    if (!shift || shift.state !== 'OPEN') {
       throw new ConflictException({
         code: 'NO_OPEN_SHIFT',
         title: 'Drawer Closed',
@@ -459,12 +393,9 @@ export class ShiftService {
 
       const currencyCode = dto.currencyCode || 'IRR';
 
-      // Check if an open/closing_review shift already exists on terminal/currency
+      // Check if an open shift already exists on terminal/currency
       const existing = await em.findOne(CashierShift, {
-        where: [
-          { tenant_id: tenantId, terminal_id: dto.terminalId, currency_code: currencyCode, state: 'OPEN' },
-          { tenant_id: tenantId, terminal_id: dto.terminalId, currency_code: currencyCode, state: 'CLOSING_REVIEW' },
-        ],
+        where: { tenant_id: tenantId, terminal_id: dto.terminalId, currency_code: currencyCode, state: 'OPEN' },
       });
 
       if (existing) {
@@ -545,15 +476,12 @@ export class ShiftService {
       if (MoneyUtil.lessThanOrEqual(dto.amount, '0.0000')) {
         throw new BadRequestException('Cash movement amount must be positive');
       }
-      // Money paid out of a drawer is spent; the count needs to know on what. A safe drop
-      // only moves cash to the safe, so it needs no reason.
+      // Money paid out of a drawer is spent; the count needs to know on what.
       if (dto.type === 'PAID_OUT' && !dto.reasonCodeId && !(dto.reason || dto.reasonText)?.trim()) {
         throw new BadRequestException('A pay-out needs a reason');
       }
 
-      // A safe drop leaves the drawer like a pay-out does. It used to be posted as one, and
-      // the screen's safe-drop total was hardcoded to zero.
-      const leavesDrawer = dto.type === 'PAID_OUT' || dto.type === 'SAFE_DROP';
+      const leavesDrawer = dto.type === 'PAID_OUT';
       // Cash cannot leave a drawer that does not hold it. A slipped zero posted a pay-out of
       // a trillion rial and left the shift expecting a negative count at close.
       if (leavesDrawer) {
@@ -650,83 +578,14 @@ export class ShiftService {
     return await this.dataSource.transaction(execute);
   }
 
-  async beginClose(tenantId: string, shiftId: string, userId?: string, correlationId?: string) {
-    return await this.dataSource.transaction(async (em) => {
-      const shift = await em.findOne(CashierShift, {
-        where: { id: shiftId, tenant_id: tenantId },
-        relations: ['movements'],
-      });
-      if (!shift) throw new NotFoundException(`Shift ${shiftId} not found`);
-      if (shift.state !== 'OPEN') {
-        throw new BadRequestException(`Shift is in state ${shift.state}; only OPEN shifts can begin close`);
-      }
-
-      // Generate immutable preview version
-      const previewVer = `prev-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-      shift.state = 'CLOSING_REVIEW';
-      shift.status = 'CLOSING_REVIEW';
-      shift.preview_version = previewVer;
-      await em.save(CashierShift, shift);
-
-      await this.auditWriter.write({
-        tenantId,
-        actorType: userId ? 'ADMIN' : 'SYSTEM',
-        actorId: userId,
-        action: 'SHIFT_BEGIN_CLOSE',
-        entityType: 'CashierShift',
-        entityId: shiftId,
-        correlationId,
-      });
-
-      return await this.getShiftStatement(tenantId, shiftId, em);
-    });
-  }
-
-  async returnToOpen(tenantId: string, shiftId: string, dto: ShiftReturnToOpenDto, userId?: string, correlationId?: string) {
-    return await this.dataSource.transaction(async (em) => {
-      const shift = await em.findOne(CashierShift, { where: { id: shiftId, tenant_id: tenantId } });
-      if (!shift) throw new NotFoundException(`Shift ${shiftId} not found`);
-      if (shift.state !== 'CLOSING_REVIEW') {
-        throw new BadRequestException(`Shift is in state ${shift.state}; only CLOSING_REVIEW shifts can return to open`);
-      }
-
-      shift.state = 'OPEN';
-      shift.status = 'OPEN';
-      shift.preview_version = null as any;
-      await em.save(CashierShift, shift);
-
-      await this.auditWriter.write({
-        tenantId,
-        actorType: userId ? 'ADMIN' : 'SYSTEM',
-        actorId: userId,
-        action: 'SHIFT_RETURN_TO_OPEN',
-        entityType: 'CashierShift',
-        entityId: shiftId,
-        correlationId,
-      });
-
-      return shift;
-    });
-  }
-
   /**
-   * Counting a drawer down.
-   *
-   * The count is taken blind (see `redactForBlindCount`), so the first the closer learns of
-   * a difference is this call refusing with `SHIFT_COUNT_NEEDS_SIGNOFF`, which carries the
-   * figures: any difference needs a reason, and one beyond the branch's tolerance needs an
-   * approver's pin as well — the same `verifyApproverPin` a refund goes through. An approver
-   * closing a drawer carries that authority already. The refused count is audited, so a
-   * recount after seeing the difference leaves a trail.
+   * Counting a drawer down, in one step: the cashier gives the cash they counted and the shift
+   * closes. The expected cash is worked out from the drawer's movements and the difference is
+   * stored as a number, nothing more; no reason, no manager. What the till leaves behind is
+   * checked first: cash payments begun and never finished block the close, the till's open
+   * orders do not (they are listed by the close check and noted in the audit).
    */
-  async closeShift(
-    tenantId: string,
-    shiftId: string,
-    dto: ShiftCloseDto,
-    userId?: string,
-    correlationId?: string,
-    closer?: { role?: string | null },
-  ) {
+  async closeShift(tenantId: string, shiftId: string, dto: ShiftCloseDto, userId?: string, correlationId?: string) {
     return await this.dataSource.transaction(async (em) => {
       // Loaded without its movements on purpose. `movements` cascades, so saving a shift
       // that carries the list read here treats the CLOSE_ADJUSTMENT written below as removed
@@ -741,8 +600,6 @@ export class ShiftService {
         throw new BadRequestException('Shift is already closed');
       }
 
-      // What the till leaves behind is settled before the count, so a refusal here costs the
-      // cashier nothing: no count has been recorded yet.
       const leftBehind = await this.closeCheckFor(em, tenantId, shift);
       if (leftBehind.pendingCash.length > 0) {
         // Its intent names this drawer, and taking it later needs this drawer open: closed, the
@@ -752,37 +609,6 @@ export class ShiftService {
           title: 'Cash Payment Not Finished',
           detail: `${leftBehind.pendingCash.length} cash payment(s) on this drawer were started and never finished. Take or cancel them before closing.`,
           context: { pendingCash: leftBehind.pendingCash },
-        });
-      }
-      let openOrdersApprovedBy: string | null = null;
-      if (leftBehind.openOrders.length > 0) {
-        if (isApprover(closer?.role)) {
-          openOrdersApprovedBy = userId || null;
-        } else if (!dto.openOrdersPin) {
-          throw new BadRequestException({
-            code: 'SHIFT_HAS_OPEN_ORDERS',
-            title: 'Orders Left Open',
-            detail: `${leftBehind.openOrders.length} order(s) from this till are held, unpaid or not accepted. Settle them, or a manager PIN is needed to leave them open.`,
-            context: { openOrders: leftBehind.openOrders },
-          });
-        } else {
-          const approval = await this.approvalService.verifyApproverPin(
-            tenantId,
-            dto.openOrdersPin,
-            'SHIFT_CLOSE_OPEN_ORDERS',
-            userId || '',
-            shift.branch_id,
-          );
-          openOrdersApprovedBy = approval.approver_user_id;
-        }
-      }
-
-      // Check stale preview version if provided
-      if (dto.previewVersion && shift.preview_version && dto.previewVersion !== shift.preview_version) {
-        throw new ConflictException({
-          statusCode: 409,
-          error: 'STALE_PREVIEW',
-          message: 'Shift closing preview is stale; please re-fetch statement preview',
         });
       }
 
@@ -806,73 +632,6 @@ export class ShiftService {
         });
       }
 
-      const policy = await this.policyFor(tenantId, shift.branch_id);
-
-      // A blind count is the first number the register operator puts down. A refused close
-      // shows them what the drawer should hold, and they used to be able to type that back
-      // in and close balanced with no reason and no manager. A recount needs an approver.
-      if (policy.blindClose && !isApprover(closer?.role)) {
-        const recorded = await this.recordedBlindCount(em, tenantId, shiftId);
-        if (recorded !== null && MoneyUtil.notEqual(recorded, actualCash)) {
-          if (!dto.pin) {
-            throw new BadRequestException({
-              code: 'BLIND_COUNT_RECORDED',
-              title: 'Drawer Already Counted',
-              detail: `This drawer was counted at ${MoneyUtil.formatCurrency(recorded)}. A recount needs a manager PIN.`,
-              context: { recordedCount: recorded },
-            });
-          }
-          await this.approvalService.verifyApproverPin(tenantId, dto.pin, 'SHIFT_RECOUNT', userId || '', shift.branch_id);
-        }
-      }
-
-      const hasDifference = MoneyUtil.notEqual(shortOver, '0.0000');
-      const beyondTolerance = MoneyUtil.greaterThan(MoneyUtil.abs(shortOver), MoneyUtil.format(policy.varianceTolerance));
-      const needsReason = hasDifference && !dto.reasonCodeId && !dto.reason;
-      const needsApproval = beyondTolerance && !isApprover(closer?.role);
-
-      if (needsReason || (needsApproval && !dto.pin)) {
-        await this.auditWriter.write({
-          tenantId,
-          actorType: userId ? 'ADMIN' : 'SYSTEM',
-          actorId: userId,
-          action: 'SHIFT_COUNT_SUBMITTED',
-          entityType: 'CashierShift',
-          entityId: shiftId,
-          correlationId,
-          details: { actualCash, expectedCash, shortOver },
-        });
-        throw new BadRequestException({
-          code: 'SHIFT_COUNT_NEEDS_SIGNOFF',
-          title: 'Drawer Does Not Balance',
-          detail: needsApproval
-            ? 'The count is further out than this branch allows. Give a reason and a manager PIN to close.'
-            : 'The count differs from what the drawer should hold. Give a reason to close.',
-          context: {
-            expectedCash,
-            actualCash,
-            shortOver,
-            varianceTolerance: MoneyUtil.format(policy.varianceTolerance),
-            needsReason: hasDifference,
-            needsApproval,
-          },
-        });
-      }
-
-      let approverId: string | null = null;
-      if (needsApproval) {
-        const approval = await this.approvalService.verifyApproverPin(
-          tenantId,
-          dto.pin || '',
-          'SHIFT_CLOSE_VARIANCE',
-          userId || '',
-          shift.branch_id,
-        );
-        approverId = approval.approver_user_id;
-      } else if (beyondTolerance) {
-        approverId = userId || null;
-      }
-
       // If discrepancy exists, record CLOSE_ADJUSTMENT movement
       if (MoneyUtil.notEqual(shortOver, '0.0000')) {
         const adjMove = em.create(CashMovement, {
@@ -881,8 +640,6 @@ export class ShiftService {
           type: 'CLOSE_ADJUSTMENT',
           amount: shortOver,
           currency_code: shift.currency_code,
-          reason_code_id: dto.reasonCodeId || null,
-          reason_text: dto.reason || null,
           posted_by: userId || null,
           reference: 'Shift Close Adjustment',
         });
@@ -894,8 +651,6 @@ export class ShiftService {
       shift.left_in_drawer = leftInDrawer;
       shift.short_over = shortOver;
       shift.over_short_amount = shortOver;
-      shift.closing_note = dto.reason || null;
-      shift.approval_request_id = dto.approvalRequestId || null;
       shift.state = 'CLOSED';
       shift.status = 'CLOSED';
       shift.closed_at = new Date();
@@ -912,15 +667,7 @@ export class ShiftService {
         entityId: shiftId,
         correlationId,
         afterData: savedShift,
-        details:
-          approverId || leftBehind.openOrders.length > 0
-            ? {
-                ...(approverId ? { varianceApprovedBy: approverId, shortOver } : {}),
-                ...(leftBehind.openOrders.length > 0
-                  ? { openOrderIds: leftBehind.openOrders.map((o) => o.id), openOrdersApprovedBy }
-                  : {}),
-              }
-            : undefined,
+        details: leftBehind.openOrders.length > 0 ? { openOrderIds: leftBehind.openOrders.map((o) => o.id) } : undefined,
       });
 
       return await this.getShiftStatement(tenantId, shiftId, em);
@@ -983,7 +730,7 @@ export class ShiftService {
         branch_id: shift.branch_id,
         business_date: shift.business_date,
         currency_code: shift.currency_code,
-        state: In(['OPEN', 'CLOSING_REVIEW']),
+        state: 'OPEN',
       },
     });
     const dayClosed: unknown[] = await em.query(
@@ -1018,7 +765,6 @@ export class ShiftService {
       let cashRefunds = '0.0000';
       let paidIn = '0.0000';
       let paidOut = '0.0000';
-      let safeDrops = '0.0000';
       let expectedCash = '0.0000';
 
       for (const m of movements) {
@@ -1041,9 +787,6 @@ export class ShiftService {
           case 'PAID_OUT':
             paidOut = MoneyUtil.add(paidOut, MoneyUtil.abs(m.amount));
             break;
-          case 'SAFE_DROP':
-            safeDrops = MoneyUtil.add(safeDrops, MoneyUtil.abs(m.amount));
-            break;
         }
       }
 
@@ -1064,14 +807,12 @@ export class ShiftService {
         cashRefunds,
         paidIn,
         paidOut,
-        safeDrops,
         expectedCash,
         actualCash: shift.actual_cash || null,
         shortOver: shift.short_over || '0.0000',
         // What the close kept for the next shift, and what it handed over (safe or central cash).
         leftInDrawer: shift.left_in_drawer ?? null,
         handedOver: shift.actual_cash ? MoneyUtil.subtract(shift.actual_cash, shift.left_in_drawer || '0') : null,
-        previewVersion: shift.preview_version || null,
         orderCount: orders.length,
         movements,
       };
@@ -1085,19 +826,15 @@ export class ShiftService {
    * What one register sold in a shift, for the cashier's shift summary: its orders by type, the
    * money it took by kind of payment, its refunds and its drawer.
    *
-   * The same blind-count rule as the statement: while the shift is open and the branch counts
-   * blind, someone who is not an approver gets no cash figure, and no sales total either,
-   * since the total less the card and other payments is the cash. The card figures stay, as
-   * checking them against the card terminal's slip is what a cashier reads this for.
+   * The cashier sees every figure, open shift or closed, and checks the card ones against the
+   * card terminal's slip before closing.
    */
-  async getSalesSummary(tenantId: string, shiftId: string, viewer: { role?: string | null }): Promise<ShiftSalesSummary> {
+  async getSalesSummary(tenantId: string, shiftId: string): Promise<ShiftSalesSummary> {
     const em = this.dataSource.manager;
     const statement = await this.getShiftStatement(tenantId, shiftId, em);
     const shift = await this.shiftRepo.findOne({ where: { id: shiftId, tenant_id: tenantId } });
     if (!shift) throw new NotFoundException(`Shift ${shiftId} not found`);
     const closed = statement.state === 'CLOSED';
-    const blind = !closed && !isApprover(viewer.role) && (await this.policyFor(tenantId, shift.branch_id)).blindClose;
-    const hidden = <T>(value: T): T | null => (blind ? null : value);
 
     const orders = await this.orderRepo.find({ where: { tenant_id: tenantId, shift_id: shiftId } });
     const sold = orders.filter((o) => !UNSOLD_ORDER_STATES.includes(o.state));
@@ -1124,7 +861,6 @@ export class ShiftService {
     const tenders = new Map<string, { kind: string; count: number; amount: string }>();
     for (const p of payments) {
       const kind = p.method_kind || 'OTHER';
-      if (blind && kind === 'CASH') continue;
       const bucket = tenders.get(kind) ?? { kind, count: 0, amount: '0.0000' };
       bucket.count += 1;
       bucket.amount = MoneyUtil.add(bucket.amount, p.amount || '0');
@@ -1152,30 +888,27 @@ export class ShiftService {
       shiftNumber: shift.shift_number,
       registerName: terminal ? `${terminal.name} (${terminal.code})` : null,
       closed,
-      blind,
       openedBy: cashier?.display_name || cashier?.username || null,
       openedAt: shift.opened_at,
       closedAt: shift.closed_at || null,
       orderCount: sold.length,
       cancelledCount: orders.filter((o) => o.state === 'CANCELLED').length,
-      salesTotal: hidden(salesTotal),
-      discountTotal: hidden(discountTotal),
-      deliveryFeeTotal: hidden(deliveryFeeTotal),
-      unpaidTotal: hidden(unpaidTotal),
-      byType: [...byType.values()].map((b) => ({ ...b, total: hidden(b.total) })),
+      salesTotal,
+      discountTotal,
+      deliveryFeeTotal,
+      unpaidTotal,
+      byType: [...byType.values()].map((b) => ({ ...b, total: b.total })),
       tenders: [...tenders.values()],
       refundCount: refunds.length,
-      refundTotal: hidden(refundTotal),
-      // Cash refunds are part of the drawer's figure, so a blind count hides them with it.
-      refunds: [...refundsBy.values()].map((r) => ({ ...r, amount: r.kind === 'CASH' ? hidden(r.amount) : r.amount })),
+      refundTotal,
+      refunds: [...refundsBy.values()],
       cash: {
         openingFloat: statement.openingFloat,
-        cashSales: hidden(statement.cashSales),
-        cashRefunds: hidden(statement.cashRefunds),
+        cashSales: statement.cashSales,
+        cashRefunds: statement.cashRefunds,
         paidIn: statement.paidIn,
         paidOut: statement.paidOut,
-        safeDrops: statement.safeDrops,
-        expectedCash: hidden(statement.expectedCash),
+        expectedCash: statement.expectedCash,
         actualCash: closed ? statement.actualCash : null,
         shortOver: closed ? statement.shortOver : null,
         leftInDrawer: closed ? statement.leftInDrawer : null,
@@ -1199,144 +932,5 @@ export class ShiftService {
     const terminal = await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } });
     const policy = await this.policyFor(tenantId, terminal?.branch_id ?? last?.branch_id ?? null);
     return { amount: MoneyUtil.format(policy.defaultOpeningFloat), source: 'POLICY' };
-  }
-
-  // --- CHAIN ROLL-UP (READ ONLY) ---
-
-  /**
-   * What head office can see of the tills without standing at any one of them: one row per
-   * branch for a single operating day, and nothing to click.
-   *
-   * Counting, paying in and closing all stay on the branch's own screen — this only reads.
-   * The number that earns the page is `stale_open`: a drawer still open on a day that has
-   * already ended is invisible from inside the branch that left it open, and is exactly
-   * what a chain operator is scanning for.
-   */
-  async getShiftRollup(tenantId: string, businessDate?: string) {
-    const date = businessDate || (await loadBusinessClock(this.shiftRepo.manager, tenantId)).today();
-
-    const branches = await this.branchRepo.find({ where: { tenant_id: tenantId } });
-    const sellingBranches = branches
-      .filter((b) => SELLING_BRANCH_TYPES.includes(b.branch_type))
-      .filter((b) => b.is_active);
-
-    const shifts = await this.shiftRepo.find({ where: { tenant_id: tenantId, business_date: date } });
-    // Asked separately because these are by definition NOT on the day being reported: a
-    // till opened on Tuesday and never closed does not appear in Wednesday's rows, which
-    // is the whole reason nobody notices it. "Ended" is each branch's own business day: two
-    // shops in different time zones pass their cutoff at different instants.
-    const stillOpen = await this.shiftRepo
-      .createQueryBuilder('s')
-      .where('s.tenant_id = :tenantId', { tenantId })
-      .andWhere("(s.state <> 'CLOSED' AND s.status <> 'CLOSED')")
-      .getMany();
-    const todayAt = new Map<string, string>();
-    for (const branchId of new Set(stillOpen.map((s) => s.branch_id))) {
-      todayAt.set(branchId, (await loadBusinessClock(this.shiftRepo.manager, tenantId, branchId)).today());
-    }
-    const stale = stillOpen.filter((s) => String(s.business_date).slice(0, 10) < todayAt.get(s.branch_id)!);
-
-    type Bucket = {
-      open: number;
-      closing_review: number;
-      closed: number;
-      stale_open: number;
-      expected_cash: string;
-      counted_cash: string;
-      variance: string;
-      /** The single worst drawer, not the net: two tills 100 apart net to nothing. */
-      worst_variance: string;
-      last_closed_at: string | null;
-    };
-    const emptyBucket = (): Bucket => ({
-      open: 0,
-      closing_review: 0,
-      closed: 0,
-      stale_open: 0,
-      expected_cash: '0.00',
-      counted_cash: '0.00',
-      variance: '0.00',
-      worst_variance: '0.00',
-      last_closed_at: null,
-    });
-
-    // Seeded from the branch list so a shop that never opened a till today is a row of
-    // zeroes rather than an absence. "No shift opened all day" is a finding, not a blank.
-    const buckets = new Map<string, Bucket>();
-    for (const b of sellingBranches) buckets.set(b.id, emptyBucket());
-
-    for (const s of shifts) {
-      if (!buckets.has(s.branch_id)) buckets.set(s.branch_id, emptyBucket());
-      const bucket = buckets.get(s.branch_id)!;
-      const state = String(s.state || s.status || '').toUpperCase();
-
-      if (state === 'CLOSED') {
-        bucket.closed += 1;
-        const closedAt = s.closed_at ? new Date(s.closed_at).toISOString() : null;
-        if (closedAt && (!bucket.last_closed_at || closedAt > bucket.last_closed_at)) {
-          bucket.last_closed_at = closedAt;
-        }
-      } else if (state === 'CLOSING_REVIEW') {
-        bucket.closing_review += 1;
-      } else {
-        bucket.open += 1;
-      }
-
-      bucket.expected_cash = MoneyUtil.add(bucket.expected_cash, MoneyUtil.format(s.expected_cash || '0', 2), 2);
-      bucket.counted_cash = MoneyUtil.add(bucket.counted_cash, MoneyUtil.format(s.actual_cash || '0', 2), 2);
-
-      // short_over is only meaningful once a drawer has been counted; an open till has a
-      // null there, and treating that as a zero variance would report every branch clean
-      // until close of business.
-      if (s.actual_cash !== null && s.actual_cash !== undefined) {
-        const shortOver = MoneyUtil.format(s.short_over ?? s.over_short_amount ?? '0', 2);
-        bucket.variance = MoneyUtil.add(bucket.variance, shortOver, 2);
-        if (MoneyUtil.greaterThan(MoneyUtil.abs(shortOver, 2), MoneyUtil.abs(bucket.worst_variance, 2))) {
-          bucket.worst_variance = shortOver;
-        }
-      }
-    }
-
-    for (const s of stale) {
-      if (!buckets.has(s.branch_id)) buckets.set(s.branch_id, emptyBucket());
-      buckets.get(s.branch_id)!.stale_open += 1;
-    }
-
-    const byId = new Map(branches.map((b) => [b.id, b]));
-    const rows = Array.from(buckets.entries())
-      .map(([id, b]) => {
-        const branch = byId.get(id);
-        return {
-          branch_id: id,
-          branch: branch ? branch.name : id,
-          branch_code: branch ? branch.code : '—',
-          ...b,
-        };
-      })
-      // Worst first, same reasoning as the fleet roll-up: a till left open from a previous
-      // day beats a large variance, because it is still counting up.
-      .sort(
-        (a, z) =>
-          z.stale_open - a.stale_open ||
-          (MoneyUtil.greaterThan(MoneyUtil.abs(z.worst_variance, 2), MoneyUtil.abs(a.worst_variance, 2)) ? 1 : -1) ||
-          a.branch.localeCompare(z.branch),
-      );
-
-    return {
-      business_date: date,
-      generated_at: new Date().toISOString(),
-      rows,
-      totals: {
-        branch_count: rows.length,
-        branches_not_trading: rows.filter((r) => r.open + r.closing_review + r.closed === 0).length,
-        open: rows.reduce((sum, r) => sum + r.open, 0),
-        closing_review: rows.reduce((sum, r) => sum + r.closing_review, 0),
-        closed: rows.reduce((sum, r) => sum + r.closed, 0),
-        stale_open: rows.reduce((sum, r) => sum + r.stale_open, 0),
-        expected_cash: MoneyUtil.sum(rows.map((r) => r.expected_cash), 2),
-        counted_cash: MoneyUtil.sum(rows.map((r) => r.counted_cash), 2),
-        variance: MoneyUtil.sum(rows.map((r) => r.variance), 2),
-      },
-    };
   }
 }

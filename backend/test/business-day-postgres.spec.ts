@@ -102,7 +102,7 @@ describe('the overnight business day (PostgreSQL)', () => {
   };
   const closeShift = async (shiftId: string) => {
     const statement: any = await shifts.getShiftStatement(tenantId, shiftId);
-    return await shifts.closeShift(tenantId, shiftId, { actualCash: String(statement.expectedCash) } as any, undefined, 'bday-close', { role: 'MANAGER' });
+    return await shifts.closeShift(tenantId, shiftId, { actualCash: String(statement.expectedCash) } as any, undefined, 'bday-close');
   };
 
   let nightShift: CashierShift;

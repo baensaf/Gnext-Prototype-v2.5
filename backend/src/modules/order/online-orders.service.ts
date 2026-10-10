@@ -249,10 +249,7 @@ export class OnlineOrdersService {
 
   private async isShiftOpen(tenantId: string, branchId: string, today: string): Promise<boolean> {
     const open = await this.dataSource.manager.find(CashierShift, {
-      where: [
-        { tenant_id: tenantId, branch_id: branchId, state: 'OPEN' },
-        { tenant_id: tenantId, branch_id: branchId, state: 'CLOSING_REVIEW' },
-      ],
+      where: { tenant_id: tenantId, branch_id: branchId, state: 'OPEN' },
     });
     return open.some((shift) => !shift.business_date || String(shift.business_date).slice(0, 10) >= today);
   }

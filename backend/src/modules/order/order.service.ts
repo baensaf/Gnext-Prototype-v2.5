@@ -481,10 +481,7 @@ export class OrderService {
     if (!terminal || terminal.branch_id !== dto.branch_id) return { terminalId: null, shiftId: null };
 
     const shift = await em.findOne(CashierShift, {
-      where: [
-        { tenant_id: tenantId, terminal_id: terminal.id, state: 'OPEN' },
-        { tenant_id: tenantId, terminal_id: terminal.id, state: 'CLOSING_REVIEW' },
-      ],
+      where: { tenant_id: tenantId, terminal_id: terminal.id, state: 'OPEN' },
     });
     return { terminalId: terminal.id, shiftId: shift?.id ?? null };
   }
@@ -1215,10 +1212,7 @@ export class OrderService {
    */
   private async assertShiftOpenAtBranch(em: EntityManager, tenantId: string, order: OrderHeader) {
     const open = await em.find(CashierShift, {
-      where: [
-        { tenant_id: tenantId, branch_id: order.branch_id, state: 'OPEN' },
-        { tenant_id: tenantId, branch_id: order.branch_id, state: 'CLOSING_REVIEW' },
-      ],
+      where: { tenant_id: tenantId, branch_id: order.branch_id, state: 'OPEN' },
     });
     if (open.length) {
       const today = (await loadBusinessClock(em, tenantId, order.branch_id)).today();

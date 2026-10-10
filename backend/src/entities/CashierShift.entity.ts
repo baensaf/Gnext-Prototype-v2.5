@@ -10,7 +10,7 @@ import {
 } from 'typeorm';
 import { CashMovement } from './CashMovement.entity';
 
-export type ShiftState = 'OPEN' | 'CLOSING_REVIEW' | 'CLOSED';
+export type ShiftState = 'OPEN' | 'CLOSED';
 
 @Entity('cashier_shift')
 @Index(['tenant_id', 'branch_id', 'business_date', 'state'])
@@ -80,16 +80,7 @@ export class CashierShift {
   over_short_amount: string; // legacy alias
 
   @Column({ type: 'text', nullable: true })
-  closing_note: string;
-
-  @Column({ type: 'text', nullable: true })
   notes: string; // legacy alias
-
-  @Column({ type: 'uuid', nullable: true })
-  approval_request_id: string;
-
-  @Column({ type: 'varchar', length: 40, nullable: true })
-  preview_version: string;
 
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;

@@ -238,7 +238,7 @@ export class TenantService {
       ? await this.branchRepo.manager.transaction(async (em) => {
           await em.findOne(Branch, { where: { id: branchId, tenant_id: tenantId }, lock: { mode: 'pessimistic_write' } });
           const openShifts = await em.count(CashierShift, {
-            where: { tenant_id: tenantId, branch_id: branchId, state: In(['OPEN', 'CLOSING_REVIEW']) },
+            where: { tenant_id: tenantId, branch_id: branchId, state: 'OPEN' },
           });
           if (openShifts > 0) {
             throw new ConflictException({
@@ -333,7 +333,7 @@ export class TenantService {
       `SELECT * FROM (
          SELECT 'SHIFT' AS kind, COALESCE(s.shift_number, s.id::text) AS label, 1 AS ord
            FROM cashier_shift s
-          WHERE s.tenant_id = $1 AND s.branch_id = $2 AND s.state IN ('OPEN', 'CLOSING_REVIEW')
+          WHERE s.tenant_id = $1 AND s.branch_id = $2 AND s.state = 'OPEN'
          UNION ALL
          SELECT 'ORDER', o.order_number, 2 FROM order_header o
           WHERE o.tenant_id = $1 AND o.branch_id = $2
@@ -608,7 +608,7 @@ export class TenantService {
     // Archiving a register mid-shift stranded its drawer: the shift could no longer be
     // found by terminal, so it could be neither traded on nor counted down.
     const openShifts = await this.terminalRepo.manager.count(CashierShift, {
-      where: { tenant_id: tenantId, terminal_id: terminalId, state: In(['OPEN', 'CLOSING_REVIEW']) },
+      where: { tenant_id: tenantId, terminal_id: terminalId, state: 'OPEN' },
     });
     if (openShifts > 0) {
       throw new ConflictException({
