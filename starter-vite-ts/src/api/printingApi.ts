@@ -17,14 +17,33 @@ export interface PrinterDevice {
   is_active: boolean;
   /** The branch's one printer for kitchen lines nothing routes anywhere else. */
   kitchen_default?: boolean;
+  /** Prints every order whole on one more chit, for the pass. */
+  prints_whole_order?: boolean;
   agent_connection?: PrinterConnection | null;
 }
 
-/** What one printer prints: whole categories, and single products. */
+/** What one printer prints: whole categories, and single products. A null printer is the "not printed" list. */
 export interface PrinterRoutes {
-  printer_id: string;
+  printer_id: string | null;
   category_ids: string[];
   product_ids: string[];
+}
+
+/** Why a menu item prints where it does. */
+export type RouteSource = 'PRODUCT' | 'CATEGORY' | 'DEFAULT' | 'NOT_PRINTED' | 'NOWHERE';
+
+export interface ProductRouting {
+  product_id: string;
+  source: RouteSource;
+  printer_ids: string[];
+}
+
+export interface KitchenChitPreview {
+  printer_id: string | null;
+  printer_name: string | null;
+  label: string;
+  whole_order: boolean;
+  html: string;
 }
 
 export interface PrintJob {
@@ -83,6 +102,25 @@ export const printingApi = {
   /** Replaces everything the printer prints. */
   setPrinterRoutes: async (printerId: string, data: { category_ids: string[]; product_ids: string[] }): Promise<PrinterRoutes> => {
     const res = await httpClient.put(`/api/v1/printers/${printerId}/routes`, data);
+    return res.data;
+  },
+  /** Replaces what prints in no kitchen at the branch. */
+  setNotPrinted: async (branchId: string, data: { category_ids: string[]; product_ids: string[] }): Promise<PrinterRoutes> => {
+    const res = await httpClient.put('/api/v1/print-routes/not-printed', { branch_id: branchId, ...data });
+    return res.data;
+  },
+  getMenuRouting: async (branchId: string): Promise<ProductRouting[]> => {
+    const res = await httpClient.get('/api/v1/print-routes/by-product', { params: { branchId } });
+    return res.data;
+  },
+  /** The chits a made-up order would print. Nothing is printed or queued. */
+  previewKitchenChits: async (data: {
+    branch_id: string;
+    product_ids: string[];
+    order_type?: string;
+    notes?: string;
+  }): Promise<{ chits: KitchenChitPreview[]; not_printed: string[] }> => {
+    const res = await httpClient.post('/api/v1/print-routes/preview', data);
     return res.data;
   },
   setKitchenDefault: async (printerId: string): Promise<PrinterDevice> => {

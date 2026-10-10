@@ -2987,7 +2987,7 @@
         },
         "hardware": {
           "title": "Hardware & Peripherals",
-          "description": "POS hardware terminals, network receipt printers, kitchen routing, and bump screens."
+          "description": "POS terminals, card terminals, printers and print routing."
         },
         "orderPos": {
           "title": "Order & POS Workflows",
@@ -3048,8 +3048,8 @@
           "badge": "Gateways Ready"
         },
         "printers": {
-          "title": "Printers & Print Routing",
-          "description": "Network receipt printers, kitchen ticket routing, print templates, and queue failover.",
+          "title": "Printers",
+          "description": "Receipt and kitchen printers, how the branch agent reaches them, test pages and the print queue.",
           "badge": "Printers"
         },
         "pricing": {
@@ -3540,7 +3540,7 @@
       "receiptError": "Could not save where the receipts print"
     },
     "printers": {
-      "title": "Printers & Print Routing",
+      "title": "Printers",
       "v5PreviewBanner": "Printers with a network connection print for real through this branch's agent. Printers without one are simulated: their jobs are marked printed and nothing comes out.",
       "quickLinks": {
         "queue": "Print Queue & Jobs",
@@ -3710,7 +3710,7 @@
     },
     "printRouting": {
       "title": "Print routing",
-      "hint": "Send whole categories, or single products, to each kitchen printer. A product sent to a printer of its own prints only there. Anything not sent anywhere prints on the default kitchen printer.",
+      "hint": "Send whole categories, or single products, to each kitchen printer, or keep them off kitchen paper altogether. A product sent somewhere of its own goes only there. Anything not sent anywhere prints on the default kitchen printer.",
       "loadError": "Could not load print routing",
       "saveError": "Could not save print routing",
       "saved": "{{name}} saved",
@@ -3727,7 +3727,46 @@
       "defaultChip": "Default",
       "edit": "Edit what {{name}} prints",
       "dialogTitle": "What {{name}} prints",
-      "productHint": "A product picked here prints only on its own printers, not where its category goes."
+      "productHint": "A product picked here prints only on its own printers, not where its category goes.",
+      "notPrintedRow": "Not printed in the kitchen",
+      "notPrintedHint": "Drinks, sauces and anything else taken off the shelf. Putting a category or product here takes it off its printers.",
+      "dialogNotPrintedTitle": "What prints in no kitchen",
+      "colWholeOrder": "Whole order",
+      "wholeOrderHint": "Prints every order whole on one more chit, for whoever bags it at the pass.",
+      "wholeOrderOn": "{{name}} now prints every order whole",
+      "wholeOrderOff": "{{name}} prints only its own items",
+      "tabPrinters": "By printer",
+      "tabItems": "By item",
+      "search": "Find an item",
+      "colItem": "Item",
+      "colCategory": "Category",
+      "colPrintsOn": "Prints on",
+      "colWhy": "Why",
+      "noItems": "No items match.",
+      "wholeOrderNote": "Every order also prints whole at {{names}}.",
+      "source": {
+        "PRODUCT": "Its own route",
+        "CATEGORY": "Its category's route",
+        "DEFAULT": "Default kitchen printer",
+        "NOT_PRINTED": "Not printed",
+        "NOWHERE": "Nowhere: the branch has no kitchen printer"
+      },
+      "preview": "Preview chits",
+      "previewTitle": "Preview kitchen chits",
+      "previewHint": "Pick items as if ringing up an order to see which chits come out where. Nothing is printed or queued.",
+      "previewItems": "Items",
+      "previewType": "Order type",
+      "previewNotes": "Order note",
+      "previewRun": "Show chits",
+      "previewNotPrinted": "Not printed in the kitchen: {{names}}",
+      "previewNone": "These items print no kitchen chit.",
+      "previewError": "Could not preview the chits",
+      "orderTypes": {
+        "DINE_IN": "Dine-in",
+        "TAKEAWAY": "Takeaway",
+        "DELIVERY": "Delivery",
+        "AGGREGATOR": "Snappfood"
+      }
     }
   },
   "tools": {
