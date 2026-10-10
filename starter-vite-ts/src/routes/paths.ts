@@ -94,8 +94,6 @@ export const paths = {
       root: `${ROOTS.APP}/reports`,
       code: (code: string) => `${ROOTS.APP}/reports/${code}`,
     },
-    audit: `${ROOTS.APP}/audit`,
-    moadian: `${ROOTS.APP}/moadian`,
     customerClub: {
       discounts: `${ROOTS.APP}/discounts/customer-rates`,
       wallet: `${ROOTS.APP}/discounts/wallet`,

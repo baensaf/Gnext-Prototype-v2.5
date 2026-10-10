@@ -40,7 +40,6 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/kiosk': 'V3',
   // V1's one very basic report is the dashboard; the reports page comes in V2.
   '/app/reports': 'V2',
-  '/app/audit': 'F',
   // Settings: users, roles, general, calendar, business day, shift policy, order workflow,
   // discount limits, payment methods, reason codes, note templates
   '/app/settings': 'V1',
@@ -51,7 +50,6 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   // Full delivery is V1; head office's fleet roll-up is not.
   '/app/delivery': 'V1',
   '/app/delivery/rollup': 'V4',
-  '/app/moadian': 'F',
   // Categories, products with sizes, add-on groups and combos, availability, today's stock
   // and the product and category import
   '/app/catalog': 'V1',
@@ -154,7 +152,6 @@ export const FEATURE_LABELS = {
   // Dashboard: head office's view across branches
   'dashboard.branchHealth': 'V4',
   // Moadian e-invoices on an order
-  moadian: 'F',
 } satisfies Record<string, PhaseLabel>;
 
 export type LabelledFeature = keyof typeof FEATURE_LABELS;

@@ -7,7 +7,7 @@ import { BusinessDateUtil } from '../common/utils/business-date.util';
  *
  * Walking through a day of admin work on 2026-09-22 found screens with nothing on them: no
  * branch price list, no bank account or card terminal, no kitchen stations at
- * Valiasr, no closed business days, every Moadian invoice accepted and no duplicate customer
+ * Valiasr, no closed business days and no duplicate customer
  * to merge. Each block below is idempotent and only adds what is missing, so re-running the
  * seed on the VPS leaves anybody's own changes alone.
  */
@@ -185,28 +185,6 @@ export async function seedAdminDemo(
       }),
     );
     console.log('Seeded a duplicate of CUST-1001 for the merge screen');
-  }
-
-  // One invoice the tax office turned down, so the Moadian screen has a rejection to fix and
-  // send again. Every simulated invoice had been accepted.
-  const invoiceRepo = ds.getRepository('TaxInvoice');
-  if (valiasr && !(await invoiceRepo.findOne({ where: { tenant_id: tenantId, status: 'FAILED' } }))) {
-    const latest: any = await invoiceRepo.findOne({
-      where: { tenant_id: tenantId, branch_id: valiasr.id, status: 'SUCCESS', subject: 1, order_number: Like('HIS-%') },
-      order: { issued_at: 'DESC' },
-    });
-    if (latest) {
-      await invoiceRepo.update(
-        { id: latest.id },
-        {
-          status: 'FAILED',
-          reference_number: null,
-          resolved_at: new Date(),
-          errors: [{ code: '0301', message: 'شناسه کالا/خدمت (sstid) برای یکی از ردیف‌ها معتبر نیست' }],
-        },
-      );
-      console.log(`Marked Moadian invoice for ${latest.order_number} as rejected, for the retry demo`);
-    }
   }
 
   // Valiasr's closed business days, one for each day of the seeded history except the last

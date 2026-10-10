@@ -44,7 +44,7 @@ export interface SettingItem {
   scope: SettingScope;
   /**
    * A card that is only a setting at head office. Inside a branch the page behind it is
-   * something else (Moadian: that branch's invoices, already under Reports & Compliance),
+   * something else,
    * so the hub leaves it out there rather than promise a setting the branch cannot change.
    */
   headOfficeScopeOnly?: boolean;
@@ -284,20 +284,6 @@ export function useSettingsCatalogue(): SettingCategory[] {
           icon: <PaymentsIcon sx={{ color: 'success.main' }} />,
           badge: { color: 'success', label: t('settings.hub.items.payments.badge', 'Gateways Ready') },
           tags: ['payments', 'refunds', 'gateways', 'eft', 'cash drawer', 'cards', 'transactions', 'پرداخت', 'استرداد', 'کارتخوان', 'پوز', 'مرجوعی'],
-        },
-        {
-          id: 'moadian',
-          scope: 'ORG',
-          headOfficeScopeOnly: true,
-          title: t('settings.hub.items.moadian.title', 'Moadian e-invoicing'),
-          description: t(
-            'settings.hub.items.moadian.description',
-            'Tax memory ID, economic code and the simulated tax office; every e-invoice and where it stands.'
-          ),
-          path: '/app/moadian',
-          icon: <ReceiptLongIcon sx={{ color: 'info.main' }} />,
-          badge: { color: 'info', label: t('settings.hub.items.moadian.badge', 'Simulated') },
-          tags: ['moadian', 'tax', 'e-invoice', 'vat', 'مودیان', 'مالیات', 'صورتحساب الکترونیکی'],
         },
         {
           id: 'customerFields',
