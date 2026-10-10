@@ -116,7 +116,6 @@ export class ProfilesService {
                   COUNT(*) FILTER (WHERE state = 'DELIVERED')::int AS delivered_count,
                   COUNT(*) FILTER (WHERE state = 'FAILED')::int AS failed_count,
                   COUNT(*) FILTER (WHERE state IN ('ASSIGNED', 'PICKED_UP', 'EN_ROUTE'))::int AS active_count,
-                  COALESCE(SUM(compensation_amount) FILTER (WHERE state = 'DELIVERED'), 0)::text AS compensation_earned,
                   MAX(delivered_at) AS last_delivered_at
              FROM delivery
             WHERE tenant_id = $1 AND courier_id = $2`,
@@ -131,7 +130,7 @@ export class ProfilesService {
         ),
         this.dataSource.query(
           `SELECT id, settlement_number, status, settlement_date, expected_cash_amount, actual_cash_amount,
-                  cash_discrepancy_amount, total_compensation_amount, net_settlement_amount, closed_at
+                  cash_discrepancy_amount, net_settlement_amount, closed_at
              FROM courier_settlement
             WHERE tenant_id = $1 AND courier_id = $2
             ORDER BY settlement_date DESC, created_at DESC

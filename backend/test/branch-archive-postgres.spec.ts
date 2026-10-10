@@ -96,7 +96,7 @@ describe('Archiving a branch (PostgreSQL)', () => {
        VALUES ($1, $2, $3, 'DELIVERED', now(), now(), false)`,
       [tenantId, done.id, courierId],
     );
-    expect((await blockers())?.context.items).toEqual([{ kind: 'COURIER_PAY', label: 'ARC-UNSETTLED' }]);
+    expect((await blockers())?.context.items).toEqual([{ kind: 'COURIER_CASH', label: 'ARC-UNSETTLED' }]);
     await dataSource.query(`UPDATE delivery_assignment SET is_settled = true WHERE order_id = $1`, [done.id]);
   });
 

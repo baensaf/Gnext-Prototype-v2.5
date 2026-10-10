@@ -40,14 +40,14 @@ export interface OpeningHoursInput {
 }
 
 /** Kinds of unfinished work that stop a branch being archived, as the refusal lists them. */
-export type ArchiveBlockerKind = 'SHIFT' | 'ORDER' | 'REFUND_DUE' | 'DELIVERY' | 'COURIER_PAY' | 'SETTLEMENT' | 'HELD_ORDER';
+export type ArchiveBlockerKind = 'SHIFT' | 'ORDER' | 'REFUND_DUE' | 'DELIVERY' | 'COURIER_CASH' | 'SETTLEMENT' | 'HELD_ORDER';
 
 const ARCHIVE_BLOCKER_WORDS: Record<string, string> = {
   SHIFT: 'cash shift(s) open',
   ORDER: 'order(s) unpaid or in progress',
   REFUND_DUE: 'cancelled order(s) with money not given back',
   DELIVERY: 'delivery(ies) not finished',
-  COURIER_PAY: 'finished delivery(ies) the courier is not settled for',
+  COURIER_CASH: 'finished delivery(ies) the courier is not settled for',
   SETTLEMENT: 'courier settlement(s) open',
   HELD_ORDER: 'held order(s)',
 };
@@ -347,7 +347,7 @@ export class TenantService {
            JOIN order_header o ON o.id = d.order_id AND o.tenant_id = d.tenant_id
           WHERE d.tenant_id = $1 AND o.branch_id = $2 AND d.state NOT IN ('DELIVERED', 'FAILED', 'CANCELLED')
          UNION ALL
-         SELECT 'COURIER_PAY', o.order_number, 5 FROM delivery_assignment a
+         SELECT 'COURIER_CASH', o.order_number, 5 FROM delivery_assignment a
            JOIN order_header o ON o.id = a.order_id AND o.tenant_id = a.tenant_id
           WHERE a.tenant_id = $1 AND o.branch_id = $2 AND a.is_settled = false
             AND a.status IN ('DELIVERED', 'FAILED', 'RETURNED')

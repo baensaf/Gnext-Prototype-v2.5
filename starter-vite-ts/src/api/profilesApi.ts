@@ -93,8 +93,6 @@ export interface CourierProfile {
     is_active: boolean;
     branch_id: string | null;
     branch_name: string | null;
-    pay_mode?: string;
-    compensation_per_delivery: string;
     currency_code: string;
     created_at: string;
     attendance?: { status: string; availability_status: string; checked_in_at?: string };
@@ -106,7 +104,6 @@ export interface CourierProfile {
     delivered_count: number;
     failed_count: number;
     active_count: number;
-    compensation_earned: string;
     last_delivered_at: string | null;
     unsettled_count: number;
     unsettled_fees: string;
@@ -120,7 +117,6 @@ export interface CourierProfile {
     expected_cash_amount: string;
     actual_cash_amount: string;
     cash_discrepancy_amount: string;
-    total_compensation_amount: string;
     net_settlement_amount: string;
     closed_at: string | null;
   }[];

@@ -1,8 +1,5 @@
 import { httpClient } from './httpClient';
 
-/** How a courier is paid per trip; mirrors `courier-pay.ts` on the server. */
-export const COURIER_PAY_MODES = ['FLAT', 'DELIVERY_FEE', 'ZONE_RATE'] as const;
-export type CourierPayMode = (typeof COURIER_PAY_MODES)[number];
 
 export interface DeliveryZone {
   id: string;
@@ -13,8 +10,6 @@ export interface DeliveryZone {
   polygon?: { type: 'Polygon'; coordinates: number[][][] } | null;
   postal_prefixes?: string[];
   fee: string;
-  /** Per-trip pay for couriers on ZONE_RATE; null means each courier's own rate. */
-  courier_pay?: string | null;
   currency_code: string;
   estimated_minutes: number;
   is_active: boolean;
@@ -43,8 +38,6 @@ export interface Courier {
   name: string;
   phone?: string;
   vehicle_type: string;
-  pay_mode?: CourierPayMode;
-  compensation_per_delivery: string;
   currency_code: string;
   status: string;
   is_active: boolean;
@@ -95,8 +88,6 @@ export interface Delivery {
   delivered_at?: string;
   cash_expected: string;
   mobile_pos_expected: string;
-  compensation_amount: string;
-  compensation_basis?: CourierPayMode | null;
   failure_reason?: string;
   created_at: string;
 }
@@ -123,7 +114,7 @@ export const deliveryApi = {
   },
   updateZone: async (
     id: string,
-    data: { name?: string; fee?: string; estimated_minutes?: number; courier_pay?: string | null; polygon?: DeliveryZone['polygon'] }
+    data: { name?: string; fee?: string; estimated_minutes?: number; polygon?: DeliveryZone['polygon'] }
   ): Promise<DeliveryZone> => {
     const res = await httpClient.patch(`/api/v1/delivery/zones/${id}`, data);
     return res.data;
@@ -148,10 +139,6 @@ export const deliveryApi = {
   /** Brings a courier on file at another branch over to `branchId`, keeping one record and one history. */
   moveCourier: async (id: string, branchId?: string): Promise<Courier> => {
     const res = await httpClient.post(`/api/v1/delivery/couriers/${id}/move`, { branch_id: branchId });
-    return res.data;
-  },
-  updateCourierPay: async (id: string, data: { pay_mode: CourierPayMode; compensation_per_delivery?: string }): Promise<Courier> => {
-    const res = await httpClient.patch(`/api/v1/delivery/couriers/${id}/pay`, data);
     return res.data;
   },
   updateCourierStatus: async (id: string, status: 'AVAILABLE' | 'ON_DELIVERY' | 'INACTIVE'): Promise<Courier> => {

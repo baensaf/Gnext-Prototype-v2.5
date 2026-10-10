@@ -65,7 +65,6 @@ interface SettlementBatch {
   expected_pos_amount: string;
   actual_pos_amount: string;
   pos_discrepancy_amount: string;
-  total_compensation_amount: string;
   total_adjustment_amount: string;
   net_settlement_amount: string;
   line_count: number;
@@ -114,7 +113,6 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [activeSettlementDetail, setActiveSettlementDetail] = useState<any>(null);
   const [editableLines, setEditableLines] = useState<SettlementLine[]>([]);
-  const [compAmount, setCompAmount] = useState('0.00');
   const [adjAmount, setAdjAmount] = useState('0.00');
 
   const [statementModalOpen, setStatementModalOpen] = useState(false);
@@ -222,7 +220,6 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
       const res = await axios.get(`/api/v1/delivery/settlements/${settlementId}`);
       setActiveSettlementDetail(res.data);
       setEditableLines(res.data.lines || []);
-      setCompAmount(res.data.total_compensation_amount || '0.00');
       setAdjAmount(res.data.total_adjustment_amount || '0.00');
       setDetailDialogOpen(true);
     } catch {
@@ -278,7 +275,6 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
 
     const res = await axios.patch(`/api/v1/delivery/settlements/${activeSettlementDetail.id}`, {
       lines: linePayload,
-      total_compensation_amount: MoneyUtil.format(compAmount || '0', 2),
       total_adjustment_amount: MoneyUtil.format(adjAmount || '0', 2),
     });
     // The update returns the batch without the courier's name; keep the one already shown.
@@ -679,7 +675,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                   <Grid size={{ xs: 12, sm: 3 }}>
                     <Paper sx={{ p: 2, bgcolor: 'background.neutral' }}>
                       <Typography variant="caption" color="text.secondary">
-                        {t('settlements.detailModal.compensationsAdjustments')}
+                        {t('settlements.detailModal.adjustments')}
                       </Typography>
                       <Typography variant="body2" dir="ltr">{t('settlements.detailModal.adj')} {MoneyUtil.formatCurrency(activeSettlementDetail.total_adjustment_amount || 0)} {currency}</Typography>
                     </Paper>
@@ -698,12 +694,6 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                 {/* Adjustments & Notes */}
                 {['DRAFT', 'UNDER_REVIEW'].includes(activeSettlementDetail.status) && (
                   <Stack direction="row" spacing={2}>
-                    <TextField
-                      label={t('settlements.detailModal.totalComp')}
-                      size="small"
-                      value={toToman(compAmount)}
-                      onChange={(e) => setCompAmount(fromToman(e.target.value))}
-                    />
                     <TextField
                       label={t('settlements.detailModal.totalAdj')}
                       size="small"

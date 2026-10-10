@@ -1093,11 +1093,9 @@
       "expectedActualCash": "Expected Cash / Actual Cash",
       "expectedActualPos": "Expected POS / Actual POS",
       "discrepancy": "Discrepancy",
-      "compensationsAdjustments": "Adjustments",
       "comp": "Comp:",
       "adj": "Adj:",
       "netSettlementTotal": "Net Settlement Total",
-      "totalComp": "Total Compensation",
       "totalAdj": "Total Adjustment",
       "recalculateSave": "Recalculate & Save Draft",
       "lineItemsTitle": "Line Items & Receipt Verification",
@@ -1115,7 +1113,8 @@
       "methodCash": "Cash",
       "methodCard": "Card",
       "methodSplit": "Card + cash",
-      "lineHint": "Enter the card amount from each order's slip; the rest is filled in as cash. Change the cash only if the courier hands over a different amount."
+      "lineHint": "Enter the card amount from each order's slip; the rest is filled in as cash. Change the cash only if the courier hands over a different amount.",
+      "adjustments": "Adjustments"
     },
     "statementModal": {
       "title": "COURIER SETTLEMENT STATEMENT",

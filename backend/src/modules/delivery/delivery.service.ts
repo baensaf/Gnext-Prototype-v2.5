@@ -30,7 +30,7 @@ import { BusinessClock, loadBusinessClock } from '../../common/utils/business-cl
 import { normalizePhone } from '../customer/customer.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
-import { CourierPayMode, computeCourierPay, courierDeliveryFee, isCourierPayMode, resolveCourierPayPolicy } from './courier-pay';
+import { courierDeliveryFee } from './delivery-fee';
 import { normalizeZonePolygon } from './zone-shape';
 
 const ACTIVE_DELIVERY_STATES: DeliveryState[] = ['ASSIGNED', 'PICKED_UP', 'EN_ROUTE'];
@@ -84,7 +84,7 @@ export class DeliveryService {
     return await this.zoneRepo.find({ where, order: { name: 'ASC' } });
   }
 
-  async createZone(tenantId: string, data: { branch_id: string; code: string; name: string; fee?: string | number; estimated_minutes?: number; courier_pay?: string | null; polygon?: any; postal_prefixes?: string[] }) {
+  async createZone(tenantId: string, data: { branch_id: string; code: string; name: string; fee?: string | number; estimated_minutes?: number; polygon?: any; postal_prefixes?: string[] }) {
     const existing = await this.zoneRepo.findOne({ where: { tenant_id: tenantId, branch_id: data.branch_id, code: data.code.toUpperCase() } });
     if (existing) throw new ConflictException(`Delivery zone code ${data.code} already exists for this branch`);
 
@@ -95,7 +95,6 @@ export class DeliveryService {
       name: data.name,
       fee: MoneyUtil.format(data.fee || '0', 4),
       estimated_minutes: data.estimated_minutes || 30,
-      courier_pay: DeliveryService.optionalAmount(data.courier_pay),
       polygon: normalizeZonePolygon(data.polygon),
       postal_prefixes: data.postal_prefixes || null,
       is_active: true,
@@ -122,17 +121,16 @@ export class DeliveryService {
   async updateZone(
     tenantId: string,
     id: string,
-    data: { name?: string; fee?: string; estimated_minutes?: number; courier_pay?: string | null; polygon?: unknown },
+    data: { name?: string; fee?: string; estimated_minutes?: number; polygon?: unknown },
     actorId?: string,
   ) {
     const zone = await this.zoneRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!zone) throw new NotFoundException('Delivery zone not found');
 
-    const before = { name: zone.name, fee: zone.fee, estimated_minutes: zone.estimated_minutes, courier_pay: zone.courier_pay, polygon: zone.polygon };
+    const before = { name: zone.name, fee: zone.fee, estimated_minutes: zone.estimated_minutes, polygon: zone.polygon };
     if (data.name !== undefined) zone.name = data.name;
     if (data.fee !== undefined) zone.fee = MoneyUtil.format(data.fee || '0', 4);
     if (data.estimated_minutes !== undefined) zone.estimated_minutes = data.estimated_minutes;
-    if (data.courier_pay !== undefined) zone.courier_pay = DeliveryService.optionalAmount(data.courier_pay);
     // Drawn on the map; null rubs it out.
     if (data.polygon !== undefined) zone.polygon = normalizeZonePolygon(data.polygon);
 
@@ -147,7 +145,7 @@ export class DeliveryService {
       branchId: saved.branch_id,
       correlationId: 'corr-zone-update',
       beforeData: before,
-      afterData: { name: saved.name, fee: saved.fee, estimated_minutes: saved.estimated_minutes, courier_pay: saved.courier_pay, polygon: saved.polygon },
+      afterData: { name: saved.name, fee: saved.fee, estimated_minutes: saved.estimated_minutes, polygon: saved.polygon },
     });
     return saved;
   }
@@ -233,7 +231,7 @@ export class DeliveryService {
 
   async createCourier(
     tenantId: string,
-    data: { branch_id?: string; code: string; name: string; phone?: string; vehicle_type?: string; compensation_per_delivery?: string | number; pay_mode?: string },
+    data: { branch_id?: string; code: string; name: string; phone?: string; vehicle_type?: string },
     correlationId: string = 'corr-courier-create',
     actorId?: string,
   ) {
@@ -278,10 +276,6 @@ export class DeliveryService {
       });
     }
 
-    const payMode = isCourierPayMode(data.pay_mode)
-      ? data.pay_mode
-      : (await this.payPolicyFor(tenantId, data.branch_id)).defaultPayMode;
-
     const account = await this.userRepo.save(
       this.userRepo.create({
         tenant_id: tenantId,
@@ -305,8 +299,6 @@ export class DeliveryService {
       name: data.name,
       phone: data.phone || null,
       vehicle_type: data.vehicle_type || 'MOTORCYCLE',
-      pay_mode: payMode,
-      compensation_per_delivery: MoneyUtil.format(data.compensation_per_delivery || '0', 4),
       status: 'AVAILABLE',
       is_active: true,
     });
@@ -410,70 +402,6 @@ export class DeliveryService {
     }
 
     return await this.getCourierById(tenantId, courierId);
-  }
-
-  async updateCourierPay(
-    tenantId: string,
-    courierId: string,
-    data: { pay_mode: string; compensation_per_delivery?: string },
-    actorId?: string,
-  ) {
-    if (!isCourierPayMode(data.pay_mode)) throw new BadRequestException('Unknown courier pay rule');
-
-    const courier = await this.courierRepo.findOne({ where: { id: courierId, tenant_id: tenantId } });
-    if (!courier) throw new NotFoundException('Courier not found');
-
-    const before = { pay_mode: courier.pay_mode, compensation_per_delivery: courier.compensation_per_delivery };
-    courier.pay_mode = data.pay_mode;
-    if (data.compensation_per_delivery !== undefined) {
-      courier.compensation_per_delivery = MoneyUtil.format(data.compensation_per_delivery || '0', 4);
-    }
-    const saved = await this.courierRepo.save(courier);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      actorId,
-      action: 'COURIER_PAY_UPDATED',
-      entityType: 'Courier',
-      entityId: saved.id,
-      branchId: saved.branch_id ?? undefined,
-      correlationId: 'corr-courier-pay',
-      beforeData: before,
-      afterData: { pay_mode: saved.pay_mode, compensation_per_delivery: saved.compensation_per_delivery },
-    });
-    return saved;
-  }
-
-  /** The COURIER_PAY policy in force at a branch: its own override, else head office's. */
-  async payPolicyFor(tenantId: string, branchId?: string | null) {
-    const rows = (await this.settingRepo.find({ where: { tenant_id: tenantId, key: 'COURIER_PAY' } })) || [];
-    return resolveCourierPayPolicy(pickSettingValue(rows, branchId));
-  }
-
-  /**
-   * What the delivery's courier earns for this trip under their own pay rule. Changing a
-   * rule or a rate later does not reprice trips already paid: callers store the result.
-   */
-  private async payForTrip(tenantId: string, delivery: Delivery, tip?: string | null): Promise<{ amount: string; basis: CourierPayMode } | null> {
-    if (!delivery.courier_id) return null;
-    const courier = await this.courierRepo.findOne({ where: { id: delivery.courier_id } });
-    if (!courier) return null;
-
-    const zone =
-      courier.pay_mode === 'ZONE_RATE' && delivery.zone_id
-        ? await this.zoneRepo.findOne({ where: { id: delivery.zone_id, tenant_id: tenantId } })
-        : null;
-
-    return computeCourierPay({
-      mode: courier.pay_mode,
-      courierRate: courier.compensation_per_delivery,
-      // Snapshotted from the zone when the delivery was created: the listed fee, before any
-      // discount the customer got.
-      listedFee: delivery.fee,
-      zoneRate: zone?.courier_pay ?? null,
-      tip,
-    });
   }
 
   async updateCourierStatus(tenantId: string, courierId: string, status: 'AVAILABLE' | 'ON_DELIVERY' | 'INACTIVE', correlationId?: string, actorId?: string) {
@@ -843,7 +771,6 @@ export class DeliveryService {
       });
       if (previous) {
         previous.status = 'REASSIGNED';
-        previous.compensation_amount = '0.00';
         await this.assignmentRepo.save(previous);
       }
     }
@@ -1041,12 +968,6 @@ export class DeliveryService {
         })
       : null;
 
-    const pay = await this.payForTrip(tenantId, delivery, assignment?.tip_amount);
-    if (pay) {
-      delivery.compensation_amount = pay.amount;
-      delivery.compensation_basis = pay.basis;
-    }
-
     const saved = await this.deliveryRepo.save(delivery);
     await this.logDeliveryEvent(tenantId, saved.id, fromState, 'DELIVERED', 'Delivery successfully completed', userId);
 
@@ -1066,7 +987,6 @@ export class DeliveryService {
         assignment.status = 'DELIVERED';
         assignment.delivered_at = new Date();
       }
-      assignment.compensation_amount = MoneyUtil.format(pay?.amount || '0', 2);
       await this.assignmentRepo.save(assignment);
     }
 
@@ -1134,20 +1054,14 @@ export class DeliveryService {
     const saved = await this.deliveryRepo.save(delivery);
     await this.logDeliveryEvent(tenantId, saved.id, fromState, 'FAILED', `Delivery failed: ${reason}`, userId);
 
-    // The courier's attempt is closed as failed, carrying its pay: a courier who rode out and
-    // came back is paid for the trip when the branch's COURIER_PAY policy says so. A courier
-    // who never left is not. No cash is expected from a failed attempt.
+    // The courier's attempt is closed as failed. No cash is expected from a failed attempt.
     if (delivery.courier_id) {
       const assignment = await this.assignmentRepo.findOne({
         where: { tenant_id: tenantId, order_id: delivery.order_id, courier_id: delivery.courier_id, status: Not('FAILED') },
       });
       if (assignment) {
-        const rodeOut = ['PICKED_UP', 'EN_ROUTE'].includes(fromState);
-        const policy = rodeOut ? await this.payPolicyFor(tenantId, order?.branch_id) : null;
-        const pay = policy?.payFailedDeliveries ? await this.payForTrip(tenantId, delivery) : null;
         assignment.status = 'FAILED';
         assignment.failure_reason = delivery.failure_reason;
-        assignment.compensation_amount = MoneyUtil.format(pay?.amount || '0', 2);
         await this.assignmentRepo.save(assignment);
       }
     }
@@ -1365,7 +1279,6 @@ export class DeliveryService {
         expected_cash: preview.expected_cash_amount,
         expected_pos: preview.expected_pos_amount,
         total_delivery_fees: preview.total_delivery_fees,
-        total_compensation: preview.total_compensation_amount,
         net_due_amount: preview.net_settlement_amount,
       });
     }
@@ -1430,7 +1343,6 @@ export class DeliveryService {
     let expCashStr = '0.00';
     let expPosStr = '0.00';
     let totalFeeStr = '0.00';
-    let compensationStr = '0.00';
     const eligibleAssignments: DeliveryAssignment[] = [];
     const lines = [];
 
@@ -1441,7 +1353,6 @@ export class DeliveryService {
       const breakdown = await this.expectedFromAttempt(a, order);
       eligibleAssignments.push(a);
       totalFeeStr = MoneyUtil.add(totalFeeStr, a.delivery_fee || '0', 2);
-      compensationStr = MoneyUtil.add(compensationStr, a.compensation_amount || '0', 2);
       expCashStr = MoneyUtil.add(expCashStr, breakdown.expCashStr, 2);
       expPosStr = MoneyUtil.add(expPosStr, breakdown.expPosStr, 2);
       lines.push({
@@ -1463,10 +1374,8 @@ export class DeliveryService {
       expected_cash_amount: expCashStr,
       expected_pos_amount: expPosStr,
       total_delivery_fees: totalFeeStr,
-      // The couriers' pay for these attempts, already priced when each was closed. The net
-      // is what they owe back once their pay is kept — the same sum updateSettlement makes.
-      total_compensation_amount: compensationStr,
-      net_settlement_amount: MoneyUtil.subtract(MoneyUtil.add(expCashStr, expPosStr, 2), compensationStr, 2),
+      // What they owe back: the same sum updateSettlement makes.
+      net_settlement_amount: MoneyUtil.add(expCashStr, expPosStr, 2),
       assignment_ids: eligibleAssignments.map((a) => a.id),
       lines,
     };
@@ -1508,7 +1417,6 @@ export class DeliveryService {
       actual_pos_amount: preview.expected_pos_amount,
       cash_discrepancy_amount: '0.00',
       pos_discrepancy_amount: '0.00',
-      total_compensation_amount: preview.total_compensation_amount,
       total_adjustment_amount: '0.00',
       net_settlement_amount: preview.net_settlement_amount,
       created_by_user_id: userId,
@@ -1703,9 +1611,6 @@ export class DeliveryService {
     if (data.actual_pos_amount !== undefined) {
       settlement.actual_pos_amount = MoneyUtil.format(data.actual_pos_amount, 2);
     }
-    if (data.total_compensation_amount !== undefined) {
-      settlement.total_compensation_amount = MoneyUtil.format(data.total_compensation_amount, 2);
-    }
     if (data.total_adjustment_amount !== undefined) {
       settlement.total_adjustment_amount = MoneyUtil.format(data.total_adjustment_amount, 2);
     }
@@ -1717,15 +1622,13 @@ export class DeliveryService {
     const actCash = settlement.actual_cash_amount || '0.00';
     const expPos = settlement.expected_pos_amount || '0.00';
     const actPos = settlement.actual_pos_amount || '0.00';
-    const comp = settlement.total_compensation_amount || '0.00';
     const adj = settlement.total_adjustment_amount || '0.00';
 
     settlement.cash_discrepancy_amount = MoneyUtil.subtract(actCash, expCash, 2);
     settlement.pos_discrepancy_amount = MoneyUtil.subtract(actPos, expPos, 2);
 
     const grossCollected = MoneyUtil.add(actCash, actPos, 2);
-    const afterComp = MoneyUtil.subtract(grossCollected, comp, 2);
-    settlement.net_settlement_amount = MoneyUtil.add(afterComp, adj, 2);
+    settlement.net_settlement_amount = MoneyUtil.add(grossCollected, adj, 2);
 
     const saved = await this.settlementRepo.save(settlement);
     await this.auditWriter.write({
@@ -1906,26 +1809,6 @@ export class DeliveryService {
         );
       }
 
-      // The courier keeps their pay out of the cash they collected (or is paid it from the
-      // till), so the drawer receives the collection less that pay. Without this the drawer
-      // expected the full collection and every shift with deliveries closed short by the pay.
-      const courierPay = MoneyUtil.format(settlement.total_compensation_amount || '0', 4);
-      if (drawer && MoneyUtil.greaterThan(courierPay, '0')) {
-        await em.save(
-          CashMovement,
-          em.create(CashMovement, {
-            tenant_id: tenantId,
-            shift_id: drawer.id,
-            type: 'PAID_OUT',
-            amount: MoneyUtil.multiply(courierPay, '-1'),
-            currency_code: drawer.currency_code,
-            reason_text: `Courier pay for ${courier?.name || settlement.courier_id} on ${settlement.settlement_number}`,
-            reference: settlement.settlement_number,
-            posted_by: userId || null,
-          }),
-        );
-      }
-
       settlement.status = 'CLOSED';
       settlement.closed_at = new Date();
       settlement.closed_by_user_id = userId;
@@ -2055,7 +1938,6 @@ export class DeliveryService {
         expected_pos_amount: detail.expected_pos_amount,
         actual_pos_amount: detail.actual_pos_amount,
         pos_discrepancy_amount: detail.pos_discrepancy_amount,
-        total_compensation_amount: detail.total_compensation_amount,
         total_adjustment_amount: detail.total_adjustment_amount,
         net_settlement_amount: detail.net_settlement_amount,
       },
