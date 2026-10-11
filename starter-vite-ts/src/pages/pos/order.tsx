@@ -14,7 +14,7 @@ import type {
   ProductAvailability,
 } from 'src/api/catalogApi';
 
-import { useSearchParams } from 'react-router';
+import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
@@ -79,6 +79,8 @@ import {
   ToggleButtonGroup,
 } from '@mui/material';
 
+import { paths } from 'src/routes/paths';
+
 import { generateUuid } from 'src/utils/uuid';
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
@@ -98,12 +100,11 @@ import { discountsApi } from 'src/api/discountsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 import { useIncomingOrders } from 'src/contexts/incoming-orders-context';
 
-import { VersionTag } from 'src/components/version-tag';
 import { CheckoutModal } from 'src/components/CheckoutModal';
+import { NewOrderPopup } from 'src/components/online-orders';
 import { toast, showErrorToast } from 'src/components/snackbar';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 import { CustomerRegisterDialog } from 'src/components/customer-register';
-import { OnlineBoard, NewOrderPopup } from 'src/components/online-orders';
 import { useRegisterShift } from 'src/components/shift/use-register-shift';
 import { PosShiftBar, PosShiftGate, PosShiftAccountLink } from 'src/components/shift/pos-shift';
 
@@ -165,6 +166,7 @@ const CATALOG_LOAD_FAILED = 'Failed to load POS catalog data';
 export function PosOrderPage() {
   const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const currency = useCurrencyLabel();
 
   const { selectedBranchId } = useBranchContext();
@@ -855,31 +857,10 @@ export function PosOrderPage() {
     toast.info(t('pos.heldDrawer.discarded'));
   };
 
-  // The URL's ?panel=online&order=<id> opens the Online tab beside the cart.
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  // The Online tab: platform orders answered beside the cart. A toast or the header badge
-  // sends the cashier here with ?panel=online&order=<id>.
+  // Platform orders are answered on the Incoming orders page (2026-10-12: no Online tab on the
+  // till). A new one still pops up over the menu, to accept in one tap or open there.
   const online = useIncomingOrders();
-  const [catalogView, setCatalogView] = useState<'menu' | 'online'>('menu');
-  const [onlineHighlight, setOnlineHighlight] = useState<string | null>(null);
   const onlineAttention = (online?.waiting.length ?? 0) + (online?.issues.filter((c) => c.issue !== 'WITH_SUPPORT').length ?? 0);
-  const panelParam = searchParams.get('panel');
-  const panelOrder = searchParams.get('order');
-  useEffect(() => {
-    if (panelParam !== 'online') return;
-    setCatalogView('online');
-    setOnlineHighlight(panelOrder);
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete('panel');
-        next.delete('order');
-        return next;
-      },
-      { replace: true }
-    );
-  }, [panelParam, panelOrder, setSearchParams]);
 
   // Cart financial math via decimal-safe MoneyUtil
   const cartSubtotal = cart.reduce((sum, item) => MoneyUtil.add(sum, item.lineSubtotal, 2), '0');
@@ -1459,28 +1440,7 @@ export function PosOrderPage() {
                 gap: 2,
               }}
             >
-              {/* Online orders are answered here, beside the cart, not on another page. */}
-              {online?.enabled && (
-                <ToggleButtonGroup
-                  exclusive
-                  size="small"
-                  value={catalogView}
-                  onChange={(_e, value) => value && setCatalogView(value)}
-                  sx={{ flexShrink: 0 }}
-                >
-                  <ToggleButton value="menu" sx={{ px: 1.5 }}>
-                    {t('online.tabMenu')}
-                  </ToggleButton>
-                  <ToggleButton value="online" sx={{ px: 1.5, gap: 1 }}>
-                    {t('online.tabOnline')}
-                    <VersionTag feature="pos.onlineTab" />
-                    {onlineAttention > 0 && (
-                      <Chip size="small" color="error" label={onlineAttention} sx={{ height: 20, fontWeight: 700 }} />
-                    )}
-                  </ToggleButton>
-                </ToggleButtonGroup>
-              )}
-              <Box sx={{ display: catalogView === 'menu' ? 'flex' : 'none', alignItems: 'center', gap: 2, flexGrow: 1, minWidth: 0 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexGrow: 1, minWidth: 0 }}>
               <TextField
                 inputRef={searchInputRef}
                 fullWidth
@@ -1525,23 +1485,10 @@ export function PosOrderPage() {
               </Box>
             </Box>
 
-            {catalogView === 'online' && (
-              <Box sx={{ flexGrow: 1, minHeight: 0, overflowY: { xs: 'visible', md: 'auto' } }}>
-                <OnlineBoard variant="panel" highlightId={onlineHighlight} />
-              </Box>
-            )}
-            {catalogView === 'menu' && (
-              <NewOrderPopup
-                onOpen={(orderId) => {
-                  setOnlineHighlight(orderId);
-                  setCatalogView('online');
-                }}
-              />
-            )}
+            <NewOrderPopup onOpen={(orderId) => navigate(`${paths.app.orders.incoming}?order=${orderId}`)} />
 
-            {/* Catalog Body: Category Rail + Product Cards Grid. Hidden, not unmounted, on the
-                Online tab, so the category and scroll survive a trip to answer an order. */}
-            <Box sx={{ display: catalogView === 'menu' ? 'flex' : 'none', flexGrow: 1, minHeight: 0, flexDirection: { xs: 'column', sm: 'row' } }}>
+            {/* Catalog Body: Category Rail + Product Cards Grid. */}
+            <Box sx={{ display: 'flex', flexGrow: 1, minHeight: 0, flexDirection: { xs: 'column', sm: 'row' } }}>
               {/* Vertical Category Rail */}
               <Box
                 sx={{
