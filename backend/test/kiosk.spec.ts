@@ -382,18 +382,22 @@ describe('KioskService (Unit)', () => {
     expect(order.total_amount).toBe('16.3500');
   });
 
-  it('should return existing order on duplicate submit with idempotency key', async () => {
-    const existingOrder = { id: 'ord-existing', order_number: 'KOS-IDEM-01', total_amount: '16.3500' };
-    orderRepo.findOne.mockResolvedValue(existingOrder);
+  it('leaves the order note empty when the guest wrote none, so nothing extra prints', async () => {
+    settingRepo.find.mockResolvedValue([{ key: 'KIOSK_CUSTOMER_IDENTITY_POLICY', value: 'OPTIONAL', branch_id: null }]);
+    productRepo.findOne.mockResolvedValue({ id: 'prod-1', name: 'Burger', base_price: '15.00', tax_rate: '0.0900' });
+    orderRepo.create.mockImplementation((dto: any) => dto);
+    orderRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'ord-kiosk-3' }));
+    orderItemRepo.create.mockImplementation((dto: any) => dto);
+    orderItemRepo.save.mockImplementation((dto: any) => Promise.resolve({ ...dto, id: 'item-3' }));
 
-    const result = await service.createKioskOrder('t-1', {
+    const order = await service.createKioskOrder('t-1', {
       branch_id: 'br-1',
       order_type: 'TAKEAWAY',
-      idempotency_key: 'KOS-IDEM-01',
-      items: [{ product_id: 'prod-1', quantity: 1 }],
+      items: [{ product_id: 'prod-1', quantity: 1, notes: 'no onion' }],
     });
 
-    expect(result.id).toBe('ord-existing');
+    expect(order.notes).toBeNull();
+    expect(orderItemRepo.create).toHaveBeenCalledWith(expect.objectContaining({ notes: 'no onion' }));
   });
 });
 

@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Query, Body, Req, Param, ParseUUIDPipe } from '@nestjs/common';
 import { Request } from 'express';
 import { KioskService } from './kiosk.service';
+import { RequireIdempotency } from '../../common/decorators/idempotency.decorator';
 
 @Controller('api/v1/kiosk')
 export class KioskController {
@@ -17,6 +18,7 @@ export class KioskController {
   }
 
   @Post('orders')
+  @RequireIdempotency('KIOSK_ORDER_CREATE', { optional: true })
   async createKioskOrder(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;

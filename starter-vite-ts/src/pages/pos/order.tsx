@@ -119,6 +119,8 @@ export interface CartItem {
   lineSubtotal: string;
   /** The product has sizes or add-on groups, so the line offers to change them. */
   hasChoices?: boolean;
+  /** What the kitchen must know about this line only ("no onion"); prints under it on the chit. */
+  notes?: string;
 }
 
 /** The address list's last entry: opens the add-address dialog. */
@@ -184,9 +186,12 @@ export function PosOrderPage() {
   const [orderNotes, setOrderNotes] = useState<string>('');
   const [notesModalOpen, setNotesModalOpen] = useState(false);
   const [tempNotesInput, setTempNotesInput] = useState<string>('');
+  // The cart line the dialog is writing a note for; null writes the order's note.
+  const [noteLineIdx, setNoteLineIdx] = useState<number | null>(null);
   // The chain's own phrases, managed in Settings. These used to be a hardcoded English
   // list, which no branch could change and which stayed English on a Persian till.
   const [noteTemplates, setNoteTemplates] = useState<NoteTemplate[]>([]);
+  const [itemNoteTemplates, setItemNoteTemplates] = useState<NoteTemplate[]>([]);
 
   // Quick Add Customer Dialog state
   const [quickAddCustomerOpen, setQuickAddCustomerOpen] = useState(false);
@@ -405,6 +410,10 @@ export function PosOrderPage() {
       .getNoteTemplates('ORDER')
       .then(setNoteTemplates)
       .catch(() => setNoteTemplates([]));
+    catalogApi
+      .getNoteTemplates('ITEM')
+      .then(setItemNoteTemplates)
+      .catch(() => setItemNoteTemplates([]));
   }, []);
 
   // Items get 86'd from other screens while the register sits open, so the grid checks each
@@ -612,6 +621,21 @@ export function PosOrderPage() {
     }
   };
 
+  /** Open the note dialog on the order's note (null) or on one cart line's. */
+  const openNotes = (lineIdx: number | null) => {
+    setNoteLineIdx(lineIdx);
+    setTempNotesInput(lineIdx === null ? orderNotes : cart[lineIdx]?.notes || '');
+    setNotesModalOpen(true);
+  };
+
+  const saveNote = (text: string) => {
+    if (noteLineIdx === null) setOrderNotes(text);
+    else setCart((prev) => prev.map((ci, i) => (i === noteLineIdx ? { ...ci, notes: text || undefined } : ci)));
+    setNotesModalOpen(false);
+  };
+
+  const dialogNoteTemplates = noteLineIdx === null ? noteTemplates : itemNoteTemplates;
+
   const addToCart = (product: Product, variant: ProductVariant | undefined, options: OptionItem[], hasChoices = false) => {
     if (placedOrder) setPlacedOrder(null);
 
@@ -622,6 +646,8 @@ export function PosOrderPage() {
     setCart((prev) => {
       const existingIndex = prev.findIndex(
         (ci) =>
+          // A line with a note is one item asked for differently; another of it is its own line.
+          !ci.notes &&
           ci.product.id === product.id &&
           ci.selectedVariant?.id === variant?.id &&
           JSON.stringify(ci.selectedOptions) === JSON.stringify(options),
@@ -843,6 +869,7 @@ export function PosOrderPage() {
           variant_name: ci.selectedVariant?.name || undefined,
           quantity: ci.quantity,
           options: ci.selectedOptions.map((o) => ({ option_item_id: o.id })),
+          notes: ci.notes || undefined,
         })),
       };
 
@@ -947,6 +974,7 @@ export function PosOrderPage() {
           selectedVariant,
           quantity: Number(item.quantity) || 1,
           selectedOptions: selectedOpts,
+          notes: item.notes || undefined,
           lineSubtotal: (item as any).subtotal || (item as any).line_total || MoneyUtil.multiply(item.unit_price, item.quantity?.toString() || '1', 2),
         };
       }));
@@ -1278,6 +1306,7 @@ export function PosOrderPage() {
           variant_name: ci.selectedVariant?.name || undefined,
           quantity: ci.quantity,
           options: ci.selectedOptions.map((o) => ({ option_item_id: o.id })),
+          notes: ci.notes || undefined,
         })),
       };
 
@@ -1399,6 +1428,7 @@ export function PosOrderPage() {
           variant_name: ci.selectedVariant?.name || undefined,
           quantity: ci.quantity,
           options: ci.selectedOptions.map((o) => ({ option_item_id: o.id })),
+          notes: ci.notes || undefined,
         })),
       };
 
@@ -2047,10 +2077,7 @@ export function PosOrderPage() {
                   <Tooltip title={t('pos.notes.title')}>
                     <IconButton
                       color={orderNotes ? "info" : "default"}
-                      onClick={() => {
-                        setTempNotesInput(orderNotes);
-                        setNotesModalOpen(true);
-                      }}
+                      onClick={() => openNotes(null)}
                       sx={{
                         bgcolor: orderNotes
                           ? (theme) => theme.palette.mode === 'dark' ? 'rgba(0, 184, 217, 0.16)' : 'info.lighter'
@@ -2191,10 +2218,7 @@ export function PosOrderPage() {
                       <Button
                         size="small"
                         color="info"
-                        onClick={() => {
-                          setTempNotesInput(orderNotes);
-                          setNotesModalOpen(true);
-                        }}
+                        onClick={() => openNotes(null)}
                         sx={{ py: 0, px: 0.75, minWidth: 0, fontSize: '0.75rem', textTransform: 'none', fontWeight: 600 }}
                       >
                         Edit
@@ -2266,6 +2290,14 @@ export function PosOrderPage() {
                                 + {item.selectedOptions.map((o) => o.name).join('، ')}
                               </Typography>
                             )}
+                            {item.notes && (
+                              <Typography
+                                variant="caption"
+                                sx={{ display: 'block', color: 'info.main', fontWeight: 600, fontSize: '0.725rem' }}
+                              >
+                                * {item.notes}
+                              </Typography>
+                            )}
                             <Stack direction="row" sx={{ alignItems: 'center', gap: 1, mt: 0.25 }}>
                               <Typography variant="caption" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
                                 {MoneyUtil.formatCurrency(item.lineSubtotal)} {currency}
@@ -2293,6 +2325,16 @@ export function PosOrderPage() {
                                   <TuneIcon sx={{ fontSize: 16 }} />
                                 </IconButton>
                               )}
+                              <IconButton
+                                size="small"
+                                color={item.notes ? 'info' : 'default'}
+                                title={t('pos.notes.lineTitle')}
+                                aria-label={t('pos.notes.lineTitle')}
+                                onClick={() => openNotes(idx)}
+                                sx={{ p: 0.25 }}
+                              >
+                                <EditNoteIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
                             </Stack>
                           </Box>
 
@@ -2932,11 +2974,13 @@ export function PosOrderPage() {
       >
         <DialogTitle sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
           <EditNoteIcon color="primary" />
-          {t('pos.notes.title')}
+          {noteLineIdx === null ? t('pos.notes.title') : t('pos.notes.lineTitle')}
         </DialogTitle>
         <DialogContent sx={{ pt: 1 }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            {t('pos.notes.help')}
+            {noteLineIdx === null
+              ? t('pos.notes.help')
+              : t('pos.notes.lineHelp', { item: cart[noteLineIdx]?.product.name || '' })}
           </Typography>
           <TextField
             multiline
@@ -2951,13 +2995,13 @@ export function PosOrderPage() {
             sx={{ mb: 2 }}
           />
 
-          {noteTemplates.length > 0 && (
+          {dialogNoteTemplates.length > 0 && (
             <>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75, display: 'block', fontWeight: 600 }}>
                 {t('pos.quickTags', 'Quick Tags')}:
               </Typography>
               <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap', gap: 0.75 }}>
-                {noteTemplates.map((template) => (
+                {dialogNoteTemplates.map((template) => (
                   <Chip
                     key={template.id}
                     label={template.text}
@@ -2986,8 +3030,7 @@ export function PosOrderPage() {
               color="error"
               onClick={() => {
                 setTempNotesInput('');
-                setOrderNotes('');
-                setNotesModalOpen(false);
+                saveNote('');
               }}
               sx={{ mr: 'auto' }}
             >
@@ -2998,8 +3041,7 @@ export function PosOrderPage() {
           <Button
             variant="contained"
             onClick={() => {
-              setOrderNotes(tempNotesInput.trim());
-              setNotesModalOpen(false);
+              saveNote(tempNotesInput.trim());
             }}
             sx={{ fontWeight: 'bold' }}
           >

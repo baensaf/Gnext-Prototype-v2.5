@@ -11,6 +11,7 @@ import { MoneyUtil } from '../../common/utils/money.util';
 import { IncomingOrderPolicy } from '../../common/utils/incoming-order-policy.util';
 import { OrderService } from './order.service';
 import { IncomingOrderPolicyService } from './incoming-order-policy.service';
+import { noteField } from './order-notes';
 import {
   ChannelAdapter,
   ChannelCapabilities,
@@ -87,12 +88,6 @@ const ACCEPTED_STATES = ['SUBMITTED', 'CONFIRMED'];
 
 /** Branch setting holding each platform's pause: { SNAPPFOOD: { until: ISO } }. */
 export const CHANNEL_PAUSE_KEY = 'CHANNEL_PAUSE';
-
-/** Lines Snappfood's webhook writes into the order's notes ("Customer: ..."). */
-function noteField(notes: string | null | undefined, label: string): string | null {
-  const line = (notes || '').split('\n').find((l) => l.startsWith(`${label}: `));
-  return line ? line.slice(label.length + 2).trim() || null : null;
-}
 
 /**
  * The till's Online panel: every order a delivery platform sent this branch that still needs
