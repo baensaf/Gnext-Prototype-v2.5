@@ -69,7 +69,6 @@ import { PrintRoutingPage } from 'src/pages/operations/print-routing';
 import { CustomerFieldsPage } from 'src/pages/settings/customer-fields';
 import { CardTerminalsPage } from 'src/pages/operations/card-terminals';
 import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
-import { BranchOverridesPage } from 'src/pages/settings/branch-overrides';
 import { ShiftPolicySettingsPage } from 'src/pages/settings/shift-policy';
 import { BusinessDaySettingsPage } from 'src/pages/settings/business-day';
 import { CustomerProfilePage } from 'src/pages/customers/customer-profile';
@@ -259,6 +258,7 @@ export const routesSection: RouteObject[] = [
       { path: 'simulation/snappfood', element: <SimulationSnappfoodPage /> },
       { path: 'simulation/payments-printers', element: <SimulationPaymentsPrintersPage /> },
       { path: 'simulation/logs', element: <SimulationLogsPage /> },
+      { path: 'simulation/media-localization', element: <MediaLocalizationDemoPage /> },
       { path: 'reports', element: <ReportsIndexPage /> },
       { path: 'reports/:reportCode', element: <ReportViewerPage /> },
       { path: 'settings', element: <SettingsHubPage /> },
@@ -269,7 +269,8 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/shift-policy', element: <ShiftPolicySettingsPage /> },
       { path: 'settings/business-day', element: <BusinessDaySettingsPage /> },
       { path: 'settings/calendar', element: <CalendarSettingsPage /> },
-      { path: 'settings/branch-overrides', element: <BranchOverridesPage /> },
+      // Order workflow and Shift policy show and reset a branch's own values in place.
+      { path: 'settings/branch-overrides', element: <Navigate to="/app/settings" replace /> },
       { path: 'settings/roles', element: <RolesMatrixPage /> },
       { path: 'settings/discount-authorizations', element: <DiscountAuthorizationsPage /> },
       { path: 'settings/payments-refunds', element: <PaymentSettingsPage /> },
@@ -278,7 +279,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/reasons', element: <ReasonCodesPage /> },
       { path: 'settings/customer-fields', element: <CustomerFieldsPage /> },
       { path: 'settings/note-templates', element: <NoteTemplatesPage /> },
-      { path: 'settings/localization', element: <MediaLocalizationDemoPage /> },
+      { path: 'settings/localization', element: <Navigate to="/app/simulation/media-localization" replace /> },
       { path: 'settings/data-reset', element: <DataResetPage /> },
       { path: 'pos/receipt/:id', element: <ReceiptPage /> },
 

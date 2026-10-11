@@ -1,333 +1,185 @@
-import type { SettingScope } from 'src/config/settings-catalogue';
+import type { SettingItem } from 'src/config/settings-catalogue';
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import TuneIcon from '@mui/icons-material/Tune';
 import SearchIcon from '@mui/icons-material/Search';
-import StorefrontIcon from '@mui/icons-material/Storefront';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import CorporateFareIcon from '@mui/icons-material/CorporateFare';
+import CallSplitIcon from '@mui/icons-material/CallSplit';
 import {
   Box,
   Card,
-  Chip,
-  Grid,
+  Link,
   Stack,
   Divider,
-  useTheme,
+  Tooltip,
   TextField,
-  ButtonBase,
   Typography,
-  CardContent,
-  ToggleButton,
   InputAdornment,
-  ToggleButtonGroup,
 } from '@mui/material';
 
 import { RouterLink } from 'src/routes/components';
 
+import { pageLabel } from 'src/config/version-labels';
 import { useWorkspaceScope } from 'src/contexts/branch-context';
 import { useIsSettingOnOffer, useSettingsCatalogue } from 'src/config/settings-catalogue';
 
+import { VersionTag } from 'src/components/version-tag';
+
+/**
+ * Every setting on one screen: a row per area, its links beside it. It replaced a grid of
+ * cards, each with a description, a scope chip and a badge, that ran to three screens and
+ * still left people unsure which settings were theirs to change. A link is listed only
+ * where it can be changed, so the scope no longer needs a chip on every line; the one case
+ * that does need saying — a chain default a branch may replace — carries a small mark.
+ */
 export function SettingsHubPage() {
-  const theme = useTheme();
   const { t } = useTranslation();
   const categories = useSettingsCatalogue();
   const onOffer = useIsSettingOnOffer();
-  // Inside a branch an organization card can be read but not changed there; "Organization"
-  // alone left staff to open the card to find that out.
   const atHeadOffice = useWorkspaceScope()?.isHeadOffice ?? true;
   const [searchQuery, setSearchQuery] = useState('');
-  const [scopeFilter, setScopeFilter] = useState<SettingScope | 'ALL'>('ALL');
-  const isRtl = theme.direction === 'rtl';
 
-  // Inside a branch everything left is per-branch, so a filter with one live option is noise.
-  const offeredScopes = new Set(categories.flatMap((c) => c.items.filter(onOffer).map((i) => i.scope)));
-  const showScopeFilter = offeredScopes.size > 1;
+  const q = searchQuery.trim().toLowerCase();
+  const matches = (item: SettingItem) =>
+    !q ||
+    item.title.toLowerCase().includes(q) ||
+    item.description.toLowerCase().includes(q) ||
+    item.tags.some((tag) => tag.toLowerCase().includes(q));
 
-  const filteredCategories = categories
-    .map((category) => {
-      const filteredItems = category.items.filter((item) => {
-        if (!onOffer(item)) return false;
-        if (showScopeFilter && scopeFilter !== 'ALL' && item.scope !== scopeFilter) return false;
-        if (!searchQuery.trim()) return true;
-        const q = searchQuery.toLowerCase();
-        return (
-          item.title.toLowerCase().includes(q) ||
-          item.description.toLowerCase().includes(q) ||
-          item.tags.some((tag) => tag.toLowerCase().includes(q))
-        );
-      });
-      return { ...category, items: filteredItems };
-    })
+  const rows = categories
+    .map((category) => ({ ...category, items: category.items.filter((item) => onOffer(item) && matches(item)) }))
     .filter((category) => category.items.length > 0);
+
+  const inheritedHelp = atHeadOffice
+    ? t('settings.hub.inherited.headOffice', 'The chain’s default. A branch may set its own.')
+    : t('settings.hub.inherited.branch', 'Follows head office unless this branch sets its own.');
+  const showsInherited = rows.some((row) => row.items.some((item) => item.scope === 'INHERITED'));
 
   return (
     <Box sx={{ pb: 6 }}>
-      {/* Header Banner */}
-      <Box
+      <Stack
+        spacing={2}
         sx={{
-          background: `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.primary.main} 60%, ${theme.palette.secondary.main} 100%)`,
-          borderRadius: 3,
-          boxShadow: 4,
-          color: 'common.white',
-          mb: 4,
-          overflow: 'hidden',
-          p: { md: 4, xs: 3 },
-          position: 'relative',
+          alignItems: { md: 'flex-end', xs: 'stretch' },
+          flexDirection: { md: 'row', xs: 'column' },
+          justifyContent: 'space-between',
+          mb: 3,
         }}
       >
-        <Stack
-          spacing={3}
-          sx={{
-            alignItems: { md: 'center', xs: 'flex-start' },
-            flexDirection: { md: 'row', xs: 'column' },
-            justifyContent: 'space-between',
+        <Box>
+          <Typography variant="h4">{t('settings.hub.title', 'Settings')}</Typography>
+          <Typography color="text.secondary" variant="body2" sx={{ mt: 0.5 }}>
+            {atHeadOffice
+              ? t('settings.hub.subtitle', 'What head office decides for the whole chain.')
+              : t('settings.hub.subtitleBranch', 'What this branch sets for itself.')}
+          </Typography>
+        </Box>
+
+        <TextField
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder={t('settings.hub.searchPlaceholder', 'Search settings...')}
+          size="small"
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon color="action" fontSize="small" />
+                </InputAdornment>
+              ),
+            },
           }}
-        >
-          <Box>
-            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 1 }}>
-              <TuneIcon sx={{ fontSize: 32 }} />
-              <Typography variant="h3" sx={{ fontWeight: 800, letterSpacing: '-0.5px' }}>
-                {t('settings.hub.title', 'Settings Hub')}
-              </Typography>
-            </Stack>
-            <Typography variant="body1" sx={{ maxWidth: 640, opacity: 0.9 }}>
-              {t(
-                'settings.hub.subtitle',
-                'Centralized configuration portal. Manage business profiles, store branches, hardware registers, security governance, and system tools in one place.'
-              )}
-            </Typography>
-            <Typography variant="body2" sx={{ maxWidth: 640, mt: 1.5, opacity: 0.75 }}>
-              {t(
-                'settings.hub.scopeLegend',
-                'Organization settings are defined once at head office and apply to every branch. Per-branch settings are configured separately at each location.'
-              )}
-            </Typography>
-          </Box>
+          sx={{ width: { md: 320, xs: '100%' } }}
+          value={searchQuery}
+        />
+      </Stack>
 
-          <Stack spacing={1.5} sx={{ width: { md: 'auto', xs: '100%' } }}>
-            {showScopeFilter && (
-              <ToggleButtonGroup
-                exclusive
-                onChange={(_, next) => next && setScopeFilter(next)}
-                size="small"
-                sx={{
-                  bgcolor: 'background.paper',
-                  borderRadius: 2,
-                  boxShadow: 2,
-                  '& .MuiToggleButton-root': { fontWeight: 700, px: 2, textTransform: 'none' },
-                }}
-                value={scopeFilter}
-              >
-                <ToggleButton value="ALL">{t('settings.hub.scope.all', 'All')}</ToggleButton>
-                <ToggleButton value="ORG">
-                  <CorporateFareIcon sx={{ fontSize: 16, mr: 0.75 }} />
-                  {t('settings.hub.scope.org', 'Organization')}
-                </ToggleButton>
-                <ToggleButton value="BRANCH">
-                  <StorefrontIcon sx={{ fontSize: 16, mr: 0.75 }} />
-                  {t('settings.hub.scope.branch', 'Per Branch')}
-                </ToggleButton>
-              </ToggleButtonGroup>
-            )}
-
-            <TextField
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t('settings.hub.searchPlaceholder', 'Search settings...')}
-            size="medium"
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon color="action" />
-                  </InputAdornment>
-                ),
-              },
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                boxShadow: 2,
-              },
-              bgcolor: 'background.paper',
-              borderRadius: 2,
-              width: { md: 320, xs: '100%' },
-            }}
-            value={searchQuery}
-            />
-          </Stack>
-        </Stack>
-      </Box>
-
-      {/* Settings Grid by Business Domains */}
-      {filteredCategories.length === 0 ? (
-        <Card sx={{ borderRadius: 3, p: 4, textAlign: 'center' }}>
+      {rows.length === 0 ? (
+        <Card variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
           <Typography color="text.secondary" variant="h6">
             {t('settings.hub.noResultsTitle', 'No setting found matching "{{query}}"', { query: searchQuery })}
           </Typography>
-          <Typography color="text.secondary" sx={{ mt: 1 }} variant="body2">
-            {t(
-              'settings.hub.noResultsHelp',
-              'Try searching for keywords like "currency", "branches", "hardware", "approvals", or "reset", or clear the scope filter.'
-            )}
-          </Typography>
         </Card>
       ) : (
-        <Grid container spacing={3}>
-          {filteredCategories.map((category) => (
-            <Grid key={category.id} size={{ md: 6, xs: 12 }}>
-              <Card
-                sx={{
-                  borderRadius: 3,
-                  boxShadow: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  height: '100%',
-                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                  '&:hover': {
-                    boxShadow: 6,
-                  },
-                }}
+        <Card variant="outlined">
+          <Stack divider={<Divider />}>
+            {rows.map((row) => (
+              <Stack
+                key={row.id}
+                spacing={{ md: 4, xs: 2 }}
+                sx={{ flexDirection: { md: 'row', xs: 'column' }, p: { md: 3, xs: 2.5 } }}
               >
-                {/* Category Header */}
+                <Stack direction="row" spacing={2} sx={{ flexShrink: 0, width: { md: 320, xs: 1 } }}>
+                  <Box
+                    sx={{
+                      alignItems: 'center',
+                      bgcolor: 'action.hover',
+                      borderRadius: 1.5,
+                      color: 'primary.main',
+                      display: 'flex',
+                      flexShrink: 0,
+                      height: 40,
+                      justifyContent: 'center',
+                      width: 40,
+                    }}
+                  >
+                    {row.icon}
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                      {row.categoryTitle}
+                    </Typography>
+                    <Typography color="text.secondary" variant="body2">
+                      {row.categoryDescription}
+                    </Typography>
+                  </Box>
+                </Stack>
+
                 <Box
                   sx={{
-                    borderBottom: 1,
-                    borderColor: 'divider',
-                    bgcolor: (tr) => (tr.palette.mode === 'dark' ? 'grey.800' : 'grey.100'),
-                    p: 2.5,
+                    alignContent: 'start',
+                    columnGap: 3,
+                    display: 'grid',
+                    flexGrow: 1,
+                    gridTemplateColumns: { md: 'repeat(3, 1fr)', sm: 'repeat(2, 1fr)', xs: '1fr' },
+                    rowGap: 1.75,
                   }}
                 >
-                  <Stack direction="row" spacing={2} sx={{ alignItems: 'center' }}>
-                    <Box
-                      sx={{
-                        alignItems: 'center',
-                        bgcolor: 'background.paper',
-                        borderRadius: 2,
-                        boxShadow: 1,
-                        display: 'flex',
-                        justifyContent: 'center',
-                        p: 1,
-                      }}
-                    >
-                      {category.icon}
-                    </Box>
-                    <Box>
-                      <Typography sx={{ fontWeight: 700 }} variant="h6">
-                        {category.categoryTitle}
-                      </Typography>
-                      <Typography color="text.secondary" variant="caption">
-                        {category.categoryDescription}
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </Box>
-
-                {/* Category Items */}
-                <CardContent sx={{ flexGrow: 1, p: 0, '&:last-child': { pb: 0 } }}>
-                  <Stack divider={<Divider />}>
-                    {category.items.map((item) => (
-                      <ButtonBase
-                        component={RouterLink}
-                        href={item.path}
-                        key={item.id}
-                        sx={{
-                          alignItems: 'center',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          p: 2.5,
-                          textAlign: isRtl ? 'right' : 'left',
-                          transition: 'background-color 0.15s ease',
-                          width: '100%',
-                          '&:hover': {
-                            bgcolor: (tr) => (tr.palette.mode === 'dark' ? 'action.hover' : 'primary.50'),
-                            '& .chevron-icon': {
-                              color: 'primary.main',
-                              transform: isRtl ? 'translateX(-4px) rotate(180deg)' : 'translateX(4px)',
-                            },
-                          },
-                        }}
-                      >
-                        <Stack
-                          direction="row"
-                          spacing={2}
-                          sx={{
-                            alignItems: 'flex-start',
-                            flexGrow: 1,
-                            mr: isRtl ? 0 : 2,
-                            ml: isRtl ? 2 : 0,
-                          }}
+                  {row.items.map((item) => (
+                    <Stack key={item.id} direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
+                      <Tooltip title={item.description} enterDelay={400} placement="bottom-start">
+                        <Link
+                          color="text.primary"
+                          component={RouterLink}
+                          href={item.path}
+                          underline="hover"
+                          variant="subtitle2"
                         >
-                          <Box
-                            sx={{
-                              bgcolor: (tr) => (tr.palette.mode === 'dark' ? 'grey.900' : 'grey.100'),
-                              borderRadius: 2,
-                              display: 'flex',
-                              mt: 0.5,
-                              p: 1,
-                            }}
-                          >
-                            {item.icon}
-                          </Box>
+                          {item.title}
+                        </Link>
+                      </Tooltip>
+                      {item.scope === 'INHERITED' && (
+                        <Tooltip title={inheritedHelp}>
+                          <CallSplitIcon
+                            aria-label={inheritedHelp}
+                            sx={{ color: 'text.disabled', cursor: 'help', fontSize: 16 }}
+                          />
+                        </Tooltip>
+                      )}
+                      <VersionTag label={pageLabel(item.path)} />
+                    </Stack>
+                  ))}
+                </Box>
+              </Stack>
+            ))}
+          </Stack>
+        </Card>
+      )}
 
-                          <Box sx={{ flexGrow: 1 }}>
-                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-                              <Typography color="text.primary" sx={{ fontWeight: 700 }} variant="subtitle1">
-                                {item.title}
-                              </Typography>
-                              <Chip
-                                color={item.scope === 'ORG' ? 'primary' : 'default'}
-                                icon={
-                                  item.scope === 'ORG' ? (
-                                    <CorporateFareIcon sx={{ fontSize: 13 }} />
-                                  ) : (
-                                    <StorefrontIcon sx={{ fontSize: 13 }} />
-                                  )
-                                }
-                                label={
-                                  item.scope === 'BRANCH'
-                                    ? t('settings.hub.scope.branch', 'Per Branch')
-                                    : atHeadOffice
-                                      ? t('settings.hub.scope.org', 'Organization')
-                                      : t('settings.hub.scope.orgViewOnly', 'Set at head office')
-                                }
-                                size="small"
-                                sx={{ fontSize: '0.65rem', fontWeight: 700, height: 20 }}
-                                variant={item.scope === 'ORG' ? 'filled' : 'outlined'}
-                              />
-                              {item.badge && (
-                                <Chip
-                                  color={item.badge.color}
-                                  label={item.badge.label}
-                                  size="small"
-                                  sx={{ fontSize: '0.7rem', fontWeight: 700, height: 20 }}
-                                />
-                              )}
-                            </Stack>
-                            <Typography color="text.secondary" sx={{ lineHeight: 1.4 }} variant="body2">
-                              {item.description}
-                            </Typography>
-                          </Box>
-                        </Stack>
-
-                        <ChevronRightIcon
-                          className="chevron-icon"
-                          color="action"
-                          sx={{
-                            transition: 'transform 0.2s ease, color 0.2s ease',
-                            transform: isRtl ? 'rotate(180deg)' : 'none',
-                          }}
-                        />
-                      </ButtonBase>
-                    ))}
-                  </Stack>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
+      {showsInherited && (
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', color: 'text.secondary', mt: 1.5, px: 0.5 }}>
+          <CallSplitIcon sx={{ fontSize: 16 }} />
+          <Typography variant="caption">{inheritedHelp}</Typography>
+        </Stack>
       )}
     </Box>
   );

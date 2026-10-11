@@ -5,14 +5,12 @@ import { TenantSetting } from '../../entities/TenantSetting.entity';
  * head office and inherited, which is the safer default for a chain: a group added later
  * stays organization-wide until someone deliberately opens it up.
  *
- * The groups here are the ones that legitimately differ between sites — local tax
- * treatment, how the register behaves, how long a cashier keeps authority over an order,
- * what a kiosk asks a customer for, and how its drawers are floated. The business day's
- * cutoff is not among them: it is one chain setting (P-07).
+ * The groups here are the ones that legitimately differ between sites — how long a cashier
+ * keeps authority over an order, how orders flow, what a kiosk asks a customer for, and how
+ * its drawers are floated. The business day's cutoff is not among them: it is one chain
+ * setting (P-07). TAX and POS were dropped: nothing ever read them.
  */
 export const BRANCH_OVERRIDABLE_SETTING_GROUPS = [
-  'TAX',
-  'POS',
   'ORDER_ACTIONS',
   'ORDER_WORKFLOW',
   'KIOSK_CUSTOMER_IDENTITY_POLICY',

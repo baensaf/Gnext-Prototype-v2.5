@@ -164,6 +164,12 @@ export function useNavData(): NavSectionProps['data'] {
               title: t('nav.availability', 'Availability & Suspensions'),
               path: '/app/catalog/availability',
             },
+            // Bulk-loading products and categories is catalogue work; it used to hide behind
+            // a card in Settings.
+            {
+              title: t('nav.importExport', 'Import & Export'),
+              path: '/app/catalog/import-export',
+            },
           ],
         },
         {
@@ -238,37 +244,17 @@ export function useNavData(): NavSectionProps['data'] {
             },
           ],
         },
-        {
-          title: t('nav.branchAgents', 'Branch Agents'),
-          path: '/app/operations/agents',
-          icon: ICONS.terminal,
-        },
       ],
     },
+    // One door. Users, roles and branch agents are links on the Settings page, which a
+    // second set of sidebar entries only duplicated.
     {
-      subheader: t('nav.settingsGroup', 'Settings & System'),
+      subheader: t('nav.settingsGroup', 'Settings'),
       items: [
         {
-          title: t('nav.settingsHub', 'Settings Hub'),
+          title: t('nav.settingsHub', 'Settings'),
           path: '/app/settings',
           icon: ICONS.settings,
-        },
-        // The label promised roles, and the role table was only reachable from a card in
-        // the settings hub. Both halves are head office's.
-        {
-          title: t('nav.users', 'Users & Roles'),
-          path: '/app/settings/users',
-          icon: ICONS.customers,
-          children: [
-            {
-              title: t('nav.userAccounts', 'User Accounts'),
-              path: '/app/settings/users',
-            },
-            {
-              title: t('rolesPage.title', 'Roles & Permissions'),
-              path: '/app/settings/roles',
-            },
-          ],
         },
       ],
     },
@@ -295,6 +281,11 @@ export function useNavData(): NavSectionProps['data'] {
             {
               title: t('nav.logsSim', 'Integration Audit Logs'),
               path: '/app/simulation/logs',
+            },
+            // A demo of uploading media and editing translations, not a setting anyone keeps.
+            {
+              title: t('nav.mediaLocalizationSim', 'Media & translations demo'),
+              path: '/app/simulation/media-localization',
             },
           ],
         },

@@ -1,22 +1,11 @@
 import { useTranslation } from 'react-i18next';
 
-import TuneIcon from '@mui/icons-material/Tune';
-import EventIcon from '@mui/icons-material/Event';
-import BadgeIcon from '@mui/icons-material/Badge';
-import GavelIcon from '@mui/icons-material/Gavel';
-import PrintIcon from '@mui/icons-material/Print';
-import ShieldIcon from '@mui/icons-material/Shield';
-import EditNoteIcon from '@mui/icons-material/EditNote';
-import PaymentsIcon from '@mui/icons-material/Payments';
-import TranslateIcon from '@mui/icons-material/Translate';
-import CreditCardIcon from '@mui/icons-material/CreditCard';
+import BuildIcon from '@mui/icons-material/Build';
+import ListAltIcon from '@mui/icons-material/ListAlt';
 import StorefrontIcon from '@mui/icons-material/Storefront';
-import FileUploadIcon from '@mui/icons-material/FileUpload';
-import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import NightsStayIcon from '@mui/icons-material/NightsStay';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
-import CountertopsIcon from '@mui/icons-material/Countertops';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
+import ManageAccountsIcon from '@mui/icons-material/ManageAccounts';
 
 import { useWorkspaceScope } from 'src/contexts/branch-context';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
@@ -24,30 +13,27 @@ import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 import { canReachPath, fitsWorkspace } from './role-access';
 
 /**
- * Every settings destination the Settings Hub lists. Kept apart from the hub page so the
- * header search can offer the same cards: most of these have no sidebar link, and a search
+ * Every settings destination the Settings page lists. Kept apart from the page so the
+ * header search can offer the same links: most of these have no sidebar link, and a search
  * that only knew the sidebar could not find Business Day or Calendar at all.
  */
 
-export type SettingScope = 'BRANCH' | 'ORG';
+/**
+ * Who decides the value.
+ * - `ORG`: head office, once, for every branch. Not listed inside a branch, which cannot
+ *   change it.
+ * - `INHERITED`: head office sets the chain's default and a branch may set its own (the
+ *   server's BRANCH_OVERRIDABLE_SETTING_GROUPS). The page itself shows which applies.
+ * - `BRANCH`: each branch keeps its own; nothing to inherit.
+ */
+export type SettingScope = 'BRANCH' | 'INHERITED' | 'ORG';
 
 export interface SettingItem {
-  badge?: {
-    color: 'default' | 'error' | 'info' | 'primary' | 'secondary' | 'success' | 'warning';
-    label: string;
-  };
+  /** Not shown on the page; the header search and the link's tooltip read it. */
   description: string;
-  icon: React.ReactNode;
   id: string;
   path: string;
-  /** ORG is defined once at head office and inherited; BRANCH is set per location. */
   scope: SettingScope;
-  /**
-   * A card that is only a setting at head office. Inside a branch the page behind it is
-   * something else,
-   * so the hub leaves it out there rather than promise a setting the branch cannot change.
-   */
-  headOfficeScopeOnly?: boolean;
   tags: string[];
   title: string;
 }
@@ -65,51 +51,79 @@ export function useSettingsCatalogue(): SettingCategory[] {
 
   return [
     {
-      id: 'organization',
-      categoryTitle: t('settings.hub.domains.organization.title', 'Organization & Stores'),
+      id: 'business',
+      categoryTitle: t('settings.hub.domains.business.title', 'Business'),
       categoryDescription: t(
-        'settings.hub.domains.organization.description',
-        'Tenant profile, branch locations, operating schedules, and multi-currency settings.'
+        'settings.hub.domains.business.description',
+        'The chain’s profile, dates and branches.'
       ),
-      icon: <StorefrontIcon color="primary" sx={{ fontSize: 28 }} />,
+      icon: <StorefrontIcon />,
       items: [
         {
           id: 'general',
           scope: 'ORG',
-          title: t('settings.hub.items.general.title', 'General Settings & Currencies'),
+          title: t('settings.hub.items.general.title', 'Business profile'),
           description: t(
             'settings.hub.items.general.description',
-            'Tenant organization name, timezone, locale defaults, base currency, and multi-currency limits.'
+            'The chain’s name and code, its default language and its time zone.'
           ),
           path: '/app/settings/general',
-          icon: <TuneIcon sx={{ color: 'primary.main' }} />,
-          badge: { color: 'info', label: t('settings.hub.items.general.badge', '9 Currencies') },
-          tags: ['general', 'tenant', 'currency', 'timezone', 'locale', 'organization', 'base currency', 'عمومی', 'ارز', 'سازمان', 'زبان', 'منطقه زمانی'],
+          tags: ['general', 'tenant', 'timezone', 'locale', 'language', 'organization', 'profile', 'عمومی', 'سازمان', 'زبان', 'منطقه زمانی', 'مشخصات'],
+        },
+        {
+          id: 'calendar',
+          scope: 'ORG',
+          title: t('settings.hub.items.calendar.title', 'Calendar'),
+          description: t(
+            'settings.hub.items.calendar.description',
+            'Jalali or Gregorian dates across the chain, and the first day of the week.'
+          ),
+          path: '/app/settings/calendar',
+          tags: ['calendar', 'jalali', 'shamsi', 'gregorian', 'date', 'week', 'تقویم', 'شمسی', 'میلادی', 'تاریخ'],
+        },
+        {
+          id: 'businessDay',
+          scope: 'ORG',
+          title: t('settings.hub.items.businessDay.title', 'Business Day'),
+          description: t(
+            'settings.hub.items.businessDay.description',
+            'When the business day turns over for the whole chain (05:00 by default). Each day closes by itself.'
+          ),
+          path: '/app/settings/business-day',
+          tags: ['business day', 'cutoff', 'overnight', 'day close', 'روز کاری', 'پایان روز', 'بستن روز'],
         },
         {
           id: 'branches',
           scope: 'ORG',
-          title: t('settings.hub.items.branches.title', 'Branches & Operating Hours'),
+          title: t('settings.hub.items.branches.title', 'Branches'),
           description: t(
             'settings.hub.items.branches.description',
-            'Store locations, operational schedules, table arrangements, tax profiles, and branch statuses.'
+            'The chain’s branches: details, opening hours, location and status.'
           ),
           path: '/app/operations/branches',
-          icon: <StorefrontIcon sx={{ color: 'warning.main' }} />,
-          badge: { color: 'success', label: t('settings.hub.items.branches.badge', '3 Locations') },
-          tags: ['branches', 'stores', 'hours', 'locations', 'tables', 'tax', 'schedules', 'شعب', 'فروشگاه', 'میزها', 'مالیات', 'ساعات کاری'],
+          tags: ['branches', 'stores', 'hours', 'locations', 'opening hours', 'شعب', 'شعبه', 'فروشگاه', 'ساعات کاری'],
         },
+      ],
+    },
+    {
+      id: 'people',
+      categoryTitle: t('settings.hub.domains.people.title', 'People & permissions'),
+      categoryDescription: t(
+        'settings.hub.domains.people.description',
+        'Who signs in, what each role may do, and what needs a manager’s PIN.'
+      ),
+      icon: <ManageAccountsIcon />,
+      items: [
         {
-          id: 'branchOverrides',
-          scope: 'BRANCH',
-          title: t('settings.hub.items.branchOverrides.title', 'Branch Overrides'),
+          id: 'users',
+          scope: 'ORG',
+          title: t('settings.hub.items.users.title', 'Users'),
           description: t(
-            'settings.hub.items.branchOverrides.description',
-            'What one location does differently from head office, and what it is not allowed to change.'
+            'settings.hub.items.users.description',
+            'Every account, its role and branch, and who may approve.'
           ),
-          path: '/app/settings/branch-overrides',
-          icon: <StorefrontIcon sx={{ color: 'info.main' }} />,
-          tags: ['override', 'inherit', 'branch', 'head office', 'scope', 'chain', 'اختصاصی', 'شعبه', 'دفتر مرکزی', 'وراثت'],
+          path: '/app/settings/users',
+          tags: ['users', 'accounts', 'staff', 'employees', 'pin', 'کاربران', 'حساب', 'کارکنان', 'پین'],
         },
         {
           id: 'roles',
@@ -120,32 +134,133 @@ export function useSettingsCatalogue(): SettingCategory[] {
             'What each role may see and do in a branch, and what stays with head office.'
           ),
           path: '/app/settings/roles',
-          icon: <ShieldIcon sx={{ color: 'primary.main' }} />,
           tags: ['roles', 'permissions', 'access', 'cashier', 'manager', 'head office', 'نقش', 'دسترسی', 'مجوز', 'صندوق‌دار'],
+        },
+        {
+          id: 'approvals',
+          scope: 'ORG',
+          title: t('settings.hub.items.approvals.title', 'Approvals'),
+          description: t(
+            'settings.hub.items.approvals.description',
+            'Which actions need a manager’s PIN, above what amount, and who may give it.'
+          ),
+          path: '/app/settings/approvals',
+          tags: ['approvals', 'manager', 'security', 'limits', 'overrides', 'policy', 'pin', 'تایید', 'مدیر', 'امنیت', 'سقف مجاز', 'پین'],
+        },
+        {
+          id: 'discountAuthorizations',
+          scope: 'ORG',
+          title: t('settings.hub.items.discountAuthorizations.title', 'Manual discount limits'),
+          description: t(
+            'settings.hub.items.discountAuthorizations.description',
+            'How much manual discount a cashier, supervisor or manager may give, as a percentage or an amount.'
+          ),
+          path: '/app/settings/discount-authorizations',
+          tags: ['discounts', 'authorizations', 'roles', 'limits', 'cashier', 'supervisor', 'manager', 'caps', 'تخفیف', 'سقف اختیارات', 'صندوق‌دار'],
         },
       ],
     },
     {
-      id: 'hardware',
-      categoryTitle: t('settings.hub.domains.hardware.title', 'Hardware & Peripherals'),
+      id: 'selling',
+      categoryTitle: t('settings.hub.domains.selling.title', 'Orders & payments'),
       categoryDescription: t(
-        'settings.hub.domains.hardware.description',
-        'POS terminals, card terminals, printers and print routing.'
+        'settings.hub.domains.selling.description',
+        'How orders flow, how drawers open, and how customers pay.'
       ),
-      icon: <PointOfSaleIcon color="info" sx={{ fontSize: 28 }} />,
+      icon: <ReceiptLongIcon />,
+      items: [
+        {
+          id: 'orderWorkflow',
+          scope: 'INHERITED',
+          title: t('settings.hub.items.orderWorkflow.title', 'Order workflow'),
+          description: t(
+            'settings.hub.items.orderWorkflow.description',
+            'Order numbers, how long a cashier may change or cancel an order, incoming online orders and sales channels.'
+          ),
+          path: '/app/settings/order-workflow',
+          tags: ['order', 'workflow', 'call number', 'auto accept', 'incoming', 'channels', 'edit window', 'سفارش', 'گردش کار', 'پذیرش خودکار', 'شماره سفارش'],
+        },
+        {
+          id: 'shiftPolicy',
+          scope: 'INHERITED',
+          title: t('settings.hub.items.shiftPolicy.title', 'Shift & Drawer Policy'),
+          description: t('settings.hub.items.shiftPolicy.description', 'The opening float a new shift is offered.'),
+          path: '/app/settings/shift-policy',
+          tags: ['shift', 'drawer', 'float', 'cash', 'شیفت', 'صندوق', 'کشو'],
+        },
+        {
+          id: 'payments',
+          scope: 'ORG',
+          title: t('settings.hub.items.payments.title', 'Payment Methods'),
+          description: t(
+            'settings.hub.items.payments.description',
+            'Payment methods, and the bank accounts the card terminals settle into.'
+          ),
+          path: '/app/settings/payments-refunds',
+          tags: ['payments', 'tender', 'eft', 'cards', 'bank account', 'پرداخت', 'کارتخوان', 'پوز', 'حساب بانکی'],
+        },
+      ],
+    },
+    {
+      id: 'lists',
+      categoryTitle: t('settings.hub.domains.lists.title', 'Lists'),
+      categoryDescription: t('settings.hub.domains.lists.description', 'The choices the register offers staff.'),
+      icon: <ListAltIcon />,
+      items: [
+        {
+          id: 'reasons',
+          scope: 'ORG',
+          title: t('settings.hub.items.reasons.title', 'Reason codes'),
+          description: t(
+            'settings.hub.items.reasons.description',
+            'The reasons staff pick when they cancel an order, give a refund or explain a cash difference.'
+          ),
+          path: '/app/settings/reasons',
+          tags: ['reasons', 'voids', 'cancel', 'refunds', 'variances', 'codes', 'علت', 'ابطال', 'دلایل'],
+        },
+        {
+          id: 'note-templates',
+          scope: 'ORG',
+          title: t('settings.hub.items.noteTemplates.title', 'Order Note Templates'),
+          description: t(
+            'settings.hub.items.noteTemplates.description',
+            'One-tap phrases the register offers when a cashier adds a note to an order or an item.'
+          ),
+          path: '/app/settings/note-templates',
+          tags: ['notes', 'templates', 'kitchen', 'instructions', 'chips', 'یادداشت', 'توضیحات', 'آشپزخانه'],
+        },
+        {
+          id: 'customerFields',
+          scope: 'ORG',
+          title: t('settings.hub.items.customerFields.title', 'Customer fields'),
+          description: t(
+            'settings.hub.items.customerFields.description',
+            'Questions asked when a customer is registered, such as gender or a wedding date.'
+          ),
+          path: '/app/settings/customer-fields',
+          tags: ['customers', 'fields', 'gender', 'birthday', 'wedding', 'مشتری', 'فیلد', 'جنسیت', 'ازدواج'],
+        },
+      ],
+    },
+    {
+      id: 'devices',
+      categoryTitle: t('settings.hub.domains.devices.title', 'Devices & printing'),
+      categoryDescription: t(
+        'settings.hub.domains.devices.description',
+        'Tills, card terminals and printers, and the branch PC that reaches them.'
+      ),
+      icon: <PointOfSaleIcon />,
       items: [
         {
           id: 'terminals',
           scope: 'BRANCH',
-          title: t('settings.hub.items.terminals.title', 'Terminals Registry'),
+          title: t('settings.hub.items.terminals.title', 'Registers'),
           description: t(
             'settings.hub.items.terminals.description',
-            'POS hardware register pairing, terminal serial numbers, peripheral setup, and device status.'
+            'The branch’s tills and kiosks, how each is paired, and whether it is online.'
           ),
           path: '/app/operations/terminals',
-          icon: <PointOfSaleIcon sx={{ color: 'info.main' }} />,
-          badge: { color: 'primary', label: t('settings.hub.items.terminals.badge', 'Active Pairs') },
-          tags: ['terminals', 'pos', 'registers', 'devices', 'hardware', 'pairing', 'serials', 'پایانه‌ها', 'صندوق', 'دستگاه‌ها', 'سخت‌افزار'],
+          tags: ['terminals', 'pos', 'registers', 'tills', 'devices', 'pairing', 'پایانه‌ها', 'صندوق', 'دستگاه‌ها'],
         },
         {
           id: 'card-terminals',
@@ -156,7 +271,6 @@ export function useSettingsCatalogue(): SettingCategory[] {
             "The counter's card terminals and the couriers' mobile card readers, and how the branch agent reaches each one."
           ),
           path: '/app/operations/card-terminals',
-          icon: <CreditCardIcon sx={{ color: 'primary.main' }} />,
           tags: ['card', 'eft', 'pos', 'terminal', 'saman', 'card reader', 'mobile pos', 'کارتخوان', 'پوز', 'پایانه پرداخت', 'سامان'],
         },
         {
@@ -168,206 +282,48 @@ export function useSettingsCatalogue(): SettingCategory[] {
             'Receipt and kitchen printers, how the branch agent reaches them, test pages and the print queue.'
           ),
           path: '/app/operations/printers',
-          icon: <PrintIcon sx={{ color: 'secondary.main' }} />,
-          badge: { color: 'secondary', label: t('settings.hub.items.printers.badge', 'Printers') },
-          tags: ['printers', 'receipts', 'kitchen tickets', 'routing', 'templates', 'queue', 'hardware', 'چاپگر', 'فیش', 'پرینتر', 'آشپزخانه'],
+          tags: ['printers', 'receipts', 'kitchen tickets', 'queue', 'چاپگر', 'فیش', 'پرینتر', 'آشپزخانه'],
         },
         {
           id: 'printRouting',
           scope: 'BRANCH',
-          title: t('settings.hub.items.printRouting.title'),
-          description: t('settings.hub.items.printRouting.description'),
+          title: t('settings.hub.items.printRouting.title', 'Print routing'),
+          description: t(
+            'settings.hub.items.printRouting.description',
+            'Which kitchen printer prints which categories and products.'
+          ),
           path: '/app/operations/print-routing',
-          icon: <CountertopsIcon sx={{ color: 'info.main' }} />,
           tags: ['print routing', 'kitchen', 'categories', 'products', 'printers', 'مسیر چاپ', 'آشپزخانه', 'چاپگر'],
         },
-      ],
-    },
-    {
-      id: 'security',
-      categoryTitle: t('settings.hub.domains.securityAudit.title', 'Security & Approvals'),
-      categoryDescription: t(
-        'settings.hub.domains.securityAudit.description',
-        'PIN escalation governance, role discount authorizations, and anti-fraud thresholds.'
-      ),
-      icon: <ShieldIcon color="error" sx={{ fontSize: 28 }} />,
-      items: [
         {
-          id: 'approvals',
+          id: 'agents',
           scope: 'ORG',
-          title: t('settings.hub.items.approvals.title', 'Approval Policies & PIN Escalation'),
+          title: t('settings.hub.items.agents.title', 'Branch agents'),
           description: t(
-            'settings.hub.items.approvals.description',
-            'Manager override thresholds, void/reprint rules, self-approval prevention, and escalation paths.'
+            'settings.hub.items.agents.description',
+            'The PC in each branch that serves the tills and reaches its printers and card terminals: pairing, health and version.'
           ),
-          path: '/app/settings/approvals',
-          icon: <ShieldIcon sx={{ color: 'info.main' }} />,
-          badge: { color: 'info', label: t('settings.hub.items.approvals.badge', 'Policy Engine') },
-          tags: ['approvals', 'manager', 'security', 'limits', 'overrides', 'policy', 'escalations', 'pin', 'تایید', 'مدیر', 'امنیت', 'سقف مجاز', 'پین'],
-        },
-        {
-          id: 'discountAuthorizations',
-          scope: 'ORG',
-          title: t('settings.hub.items.discountAuthorizations.title', 'Manual Discount Authorizations'),
-          description: t(
-            'settings.hub.items.discountAuthorizations.description',
-            'Role-based manual discount percentage and fixed amount caps for cashiers, supervisors, and managers.'
-          ),
-          path: '/app/settings/discount-authorizations',
-          icon: <GavelIcon sx={{ color: 'warning.main' }} />,
-          badge: { color: 'warning', label: t('settings.hub.items.discountAuthorizations.badge', 'Role Limits') },
-          tags: ['discounts', 'authorizations', 'roles', 'limits', 'cashier', 'supervisor', 'manager', 'caps', 'policy', 'تخفیف', 'سقف اختیارات', 'صندوق‌دار'],
+          path: '/app/operations/agents',
+          tags: ['agent', 'branch agent', 'pc', 'pairing', 'offline', 'ایجنت', 'کد اتصال'],
         },
       ],
     },
     {
-      id: 'workflow',
-      categoryTitle: t('settings.hub.domains.orderPos.title', 'Order & Financial Policies'),
-      categoryDescription: t(
-        'settings.hub.domains.orderPos.description',
-        'Order lifecycle states, auto-acceptance rules, reason codes, and payment gateways.'
-      ),
-      icon: <ReceiptLongIcon color="warning" sx={{ fontSize: 28 }} />,
+      id: 'admin',
+      categoryTitle: t('settings.hub.domains.admin.title', 'Admin tools'),
+      categoryDescription: t('settings.hub.domains.admin.description', 'For the demo environment, not daily work.'),
+      icon: <BuildIcon />,
       items: [
-        {
-          id: 'orderWorkflow',
-          scope: 'BRANCH',
-          title: t('settings.hub.items.orderWorkflow.title', 'Order Workflow Settings'),
-          description: t(
-            'settings.hub.items.orderWorkflow.description',
-            'Order lifecycle states, auto-acceptance rules, dining modes, and kitchen routing.'
-          ),
-          path: '/app/settings/order-workflow',
-          icon: <ReceiptLongIcon sx={{ color: 'warning.main' }} />,
-          badge: { color: 'warning', label: t('settings.hub.items.orderWorkflow.badge', 'Workflow V2') },
-          tags: ['order', 'workflow', 'lifecycle', 'auto accept', 'dining', 'kitchen routing', 'سفارش', 'گردش کار', 'پذیرش خودکار'],
-        },
-        {
-          id: 'shiftPolicy',
-          scope: 'BRANCH',
-          title: t('settings.hub.items.shiftPolicy.title', 'Shift & Drawer Policy'),
-          description: t(
-            'settings.hub.items.shiftPolicy.description',
-            'The opening float a new shift is offered.'
-          ),
-          path: '/app/settings/shift-policy',
-          icon: <PointOfSaleIcon sx={{ color: 'success.main' }} />,
-          tags: ['shift', 'drawer', 'float', 'cash', 'شیفت', 'صندوق', 'کشو'],
-        },
-        {
-          id: 'businessDay',
-          scope: 'BRANCH',
-          title: t('settings.hub.items.businessDay.title'),
-          description: t('settings.hub.items.businessDay.description'),
-          path: '/app/settings/business-day',
-          icon: <NightsStayIcon sx={{ color: 'primary.main' }} />,
-          tags: ['business day', 'cutoff', 'overnight', 'hours', 'day close', 'روز کاری', 'پایان روز', 'ساعت کاری', 'بستن روز'],
-        },
-        {
-          id: 'calendar',
-          scope: 'ORG',
-          title: t('settings.hub.items.calendar.title'),
-          description: t('settings.hub.items.calendar.description'),
-          path: '/app/settings/calendar',
-          icon: <EventIcon sx={{ color: 'info.main' }} />,
-          tags: ['calendar', 'jalali', 'shamsi', 'gregorian', 'date', 'week', 'تقویم', 'شمسی', 'میلادی', 'تاریخ'],
-        },
-        {
-          id: 'payments',
-          scope: 'ORG',
-          title: t('settings.hub.items.payments.title', 'Payment Methods'),
-          description: t(
-            'settings.hub.items.payments.description',
-            'Payment methods, and the bank accounts the card terminals settle into.'
-          ),
-          path: '/app/settings/payments-refunds',
-          icon: <PaymentsIcon sx={{ color: 'success.main' }} />,
-          badge: { color: 'success', label: t('settings.hub.items.payments.badge', 'Gateways Ready') },
-          tags: ['payments', 'gateways', 'eft', 'cash drawer', 'cards', 'transactions', 'پرداخت', 'کارتخوان', 'پوز'],
-        },
-        {
-          id: 'customerFields',
-          scope: 'ORG',
-          title: t('settings.hub.items.customerFields.title'),
-          description: t('settings.hub.items.customerFields.description'),
-          path: '/app/settings/customer-fields',
-          icon: <BadgeIcon sx={{ color: 'info.main' }} />,
-          tags: ['customers', 'fields', 'gender', 'birthday', 'wedding', 'مشتری', 'فیلد', 'جنسیت', 'ازدواج'],
-        },
-        {
-          id: 'reasons',
-          scope: 'ORG',
-          title: t('settings.hub.items.reasons.title', 'Reason Codes & Compliance'),
-          description: t(
-            'settings.hub.items.reasons.description',
-            'Predefined audit reason codes for order voids, customer refunds, cash variances, and discounts.'
-          ),
-          path: '/app/settings/reasons',
-          icon: <GavelIcon sx={{ color: 'error.main' }} />,
-          badge: { color: 'default', label: t('settings.hub.items.reasons.badge', 'Audit Ready') },
-          tags: ['reasons', 'audit', 'voids', 'refunds', 'variances', 'compliance', 'codes', 'علت', 'ابطال', 'ممیزی', 'دلایل'],
-        },
-        {
-          id: 'note-templates',
-          scope: 'ORG',
-          title: t('settings.hub.items.noteTemplates.title', 'Order Note Templates'),
-          description: t(
-            'settings.hub.items.noteTemplates.description',
-            'One-tap phrases the register offers when a cashier adds a note to an order or an item.'
-          ),
-          path: '/app/settings/note-templates',
-          icon: <EditNoteIcon sx={{ color: 'primary.main' }} />,
-          tags: ['notes', 'templates', 'kitchen', 'instructions', 'chips', 'یادداشت', 'توضیحات', 'آشپزخانه'],
-        },
-      ],
-    },
-    {
-      id: 'system',
-      categoryTitle: t('settings.hub.domains.localizationData.title', 'System & Localization'),
-      categoryDescription: t(
-        'settings.hub.domains.localizationData.description',
-        'Language and media localization, bulk Excel import/export, and data resets.'
-      ),
-      icon: <TranslateIcon color="secondary" sx={{ fontSize: 28 }} />,
-      items: [
-        {
-          id: 'localization',
-          scope: 'ORG',
-          title: t('settings.hub.items.localization.title', 'Language & Media Localization'),
-          description: t(
-            'settings.hub.items.localization.description',
-            'English/Persian language switcher, RTL/LTR layout controls, and media asset localization.'
-          ),
-          path: '/app/settings/localization',
-          icon: <TranslateIcon sx={{ color: 'secondary.main' }} />,
-          badge: { color: 'secondary', label: t('settings.hub.items.localization.badge', 'EN / FA RTL') },
-          tags: ['localization', 'language', 'persian', 'english', 'rtl', 'ltr', 'media', 'i18n', 'بومی‌سازی', 'زبان', 'فارسی', 'انگلیسی', 'رسانه'],
-        },
-        {
-          id: 'importExport',
-          scope: 'ORG',
-          title: t('settings.hub.items.importExport.title', 'Data Import & Export Wizard'),
-          description: t(
-            'settings.hub.items.importExport.description',
-            'Bulk upload products, prices, modifier groups, and customers using standardized Excel templates.'
-          ),
-          path: '/app/catalog/import-export',
-          icon: <FileUploadIcon sx={{ color: 'success.main' }} />,
-          badge: { color: 'success', label: t('settings.hub.items.importExport.badge', 'Excel Wizard') },
-          tags: ['import', 'export', 'excel', 'wizard', 'bulk', 'upload', 'migration', 'data', 'واردات', 'صادرات', 'اکسل', 'مهاجرت'],
-        },
         {
           id: 'dataReset',
           scope: 'ORG',
-          title: t('settings.hub.items.dataReset.title', 'Data Reset & System Seeds'),
+          title: t('settings.hub.items.dataReset.title', 'Data reset'),
           description: t(
             'settings.hub.items.dataReset.description',
-            'Wipe transaction logs, seed mock products, reset sequence numbers, and reset environment state.'
+            'Wipe transactions, reload the demo data and reset number sequences.'
           ),
           path: '/app/settings/data-reset',
-          icon: <RestartAltIcon sx={{ color: 'error.main' }} />,
-          badge: { color: 'error', label: t('settings.hub.items.dataReset.badge', 'Admin Tools') },
-          tags: ['data reset', 'reset', 'seed', 'wipe', 'maintenance', 'database', 'environment', 'بازنشانی', 'پاکسازی', 'داده‌ها'],
+          tags: ['data reset', 'reset', 'seed', 'wipe', 'demo', 'بازنشانی', 'پاکسازی', 'داده‌ها'],
         },
       ],
     },
@@ -376,15 +332,18 @@ export function useSettingsCatalogue(): SettingCategory[] {
 
 /**
  * The same test the sidebar applies: the account may open it, and it belongs in the scope
- * the header is set to. Offering a card the menu had taken away made a promise the page
- * then refused.
+ * the header is set to. Offering a link the menu had taken away made a promise the page
+ * then refused. Inside a branch, head office's own settings are left out too: the branch
+ * cannot change them, and listing them only to say so made the page long and the scope
+ * hard to read.
  */
 export function useIsSettingOnOffer(): (item: SettingItem) => boolean {
   const role = useAuthStore((state) => state.user?.role);
   const isHeadOffice = useIsHeadOffice();
   const workspace = useWorkspaceScope();
+  const insideBranch = !!workspace && !workspace.isHeadOffice;
   return (item) =>
     canReachPath(role, item.path, isHeadOffice) &&
     fitsWorkspace(item.path, workspace) &&
-    !(item.headOfficeScopeOnly && workspace && !workspace.isHeadOffice);
+    !(insideBranch && item.scope === 'ORG');
 }
