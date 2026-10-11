@@ -15,7 +15,6 @@ import { useCurrencyLabel } from 'src/utils/currency';
 
 const ISSUE_FALLBACK: Record<string, string> = {
   UNPAID: 'Unpaid',
-  NOT_SUBMITTED: 'Draft, never sent',
   AWAITING_ACCEPTANCE: 'Waiting for acceptance',
   DELIVERY_NOT_FINISHED: 'Delivery not finished',
 };

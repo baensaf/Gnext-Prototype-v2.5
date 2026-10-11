@@ -15,7 +15,7 @@ import { OrderHeader } from '../../entities/OrderHeader.entity';
  * counts add up to All. A completed order that gave money back is filed under REFUNDED, not
  * COMPLETED. How far the kitchen or courier has got is a detail of OPEN, not a group.
  */
-export const LIFECYCLE_GROUPS = ['WAITING', 'OPEN', 'HELD', 'COMPLETED', 'REFUNDED', 'CANCELLED', 'OTHER'] as const;
+export const LIFECYCLE_GROUPS = ['WAITING', 'OPEN', 'COMPLETED', 'REFUNDED', 'CANCELLED', 'OTHER'] as const;
 export type LifecycleGroup = (typeof LIFECYCLE_GROUPS)[number];
 
 export const OPEN_STATUSES = ['SUBMITTED', 'CONFIRMED', 'OUT_FOR_DELIVERY'];
@@ -25,7 +25,7 @@ export const OPEN_STATUSES = ['SUBMITTED', 'CONFIRMED', 'OUT_FOR_DELIVERY'];
  * picks which finished orders to look at; it must not hide a COD delivery waiting on its
  * courier, an order carried past day close, or one rung up at 23:50 once the clock turns.
  */
-const CURRENT_GROUPS: LifecycleGroup[] = ['WAITING', 'OPEN', 'HELD'];
+const CURRENT_GROUPS: LifecycleGroup[] = ['WAITING', 'OPEN'];
 
 const inList = (values: string[]) => values.map((v) => `'${v}'`).join(', ');
 
@@ -33,7 +33,6 @@ const inList = (values: string[]) => values.map((v) => `'${v}'`).join(', ');
 export const LIFECYCLE_SQL = `CASE
   WHEN o.status = 'PENDING_ACCEPTANCE' THEN 'WAITING'
   WHEN o.status IN (${inList(OPEN_STATUSES)}) THEN 'OPEN'
-  WHEN o.status = 'DRAFT' THEN 'HELD'
   WHEN o.status = 'REFUNDED' OR (o.status = 'COMPLETED' AND o.refunded_total > 0) THEN 'REFUNDED'
   WHEN o.status = 'COMPLETED' THEN 'COMPLETED'
   WHEN o.status IN ('CANCELLED', 'REJECTED') THEN 'CANCELLED'
@@ -45,7 +44,6 @@ export function lifecycleGroupOf(order: { status: string; refunded_total?: strin
   const status = order.status;
   if (status === 'PENDING_ACCEPTANCE') return 'WAITING';
   if (OPEN_STATUSES.includes(status)) return 'OPEN';
-  if (status === 'DRAFT') return 'HELD';
   if (status === 'REFUNDED' || (status === 'COMPLETED' && Number(order.refunded_total || 0) > 0)) return 'REFUNDED';
   if (status === 'COMPLETED') return 'COMPLETED';
   if (status === 'CANCELLED' || status === 'REJECTED') return 'CANCELLED';
@@ -92,7 +90,7 @@ function validDate(value: unknown): Date | null {
 /**
  * Applies every filter the list understands. `group` is left out when counting the tabs,
  * since each tab counts its own group under the same other filters. `currentAnyDate` lets
- * waiting, open and held orders through whatever the date range says, as the Orders page
+ * waiting and open orders through whatever the date range says, as the Orders page
  * wants; the CSV export keeps the range strict.
  */
 export function applyOrderFilters(
@@ -101,10 +99,14 @@ export function applyOrderFilters(
   options: { withGroup?: boolean; currentAnyDate?: boolean } = {},
 ) {
   const { withGroup = true, currentAnyDate = false } = options;
+  // A draft is a Place that did not finish sending, not an order anyone looks up. A cart on hold
+  // never reaches the server at all: it lives in its register's browser.
+  qb.andWhere("o.status <> 'DRAFT'");
+
   const branchVal = query.branch || query.branch_id || query.branchId;
   if (branchVal) qb.andWhere('o.branch_id = :branch', { branch: branchVal });
 
-  // A single raw state, as the POS held-orders list asks for. The tabs use `group`.
+  // A single raw state. The tabs use `group`.
   const stateVal = query.state || query.status;
   if (stateVal) qb.andWhere('(o.state = :state OR o.status = :state)', { state: stateVal });
 
@@ -343,8 +345,8 @@ export function parseGridFilters(raw: unknown): GridFilters | null {
 
 /**
  * Adds the grid's filters as one bracketed condition, so "or" between them never loosens the
- * tenant, branch or tab around it. With `currentAnyDate`, a date filter lets waiting, open and
- * held orders through, as the list's date range does.
+ * tenant, branch or tab around it. With `currentAnyDate`, a date filter lets waiting and open
+ * orders through, as the list's date range does.
  */
 export function applyGridFilters(qb: SelectQueryBuilder<OrderHeader>, filters: GridFilters | null, currentAnyDate = false) {
   if (!filters) return;

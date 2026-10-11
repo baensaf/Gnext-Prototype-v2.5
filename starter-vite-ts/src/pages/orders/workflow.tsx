@@ -22,7 +22,6 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import ScheduleIcon from '@mui/icons-material/Schedule';
 import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import RestaurantIcon from '@mui/icons-material/Restaurant';
-import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import TakeoutDiningIcon from '@mui/icons-material/TakeoutDining';
 import DeliveryDiningIcon from '@mui/icons-material/DeliveryDining';
@@ -116,7 +115,7 @@ import {
   DEFAULT_FILTER_MODEL,
 } from './order-grid-filters';
 
-// An order is waiting, open, held, completed, refunded or cancelled. How far the kitchen or
+// An order is waiting, open, completed, refunded or cancelled. How far the kitchen or
 // the courier has got is shown beside that rather than as a stage of its own: most branches
 // print tickets and have no screen that would ever move an order to "preparing" or "ready".
 // The server files every order under one of these (see `order-list.ts`), so the tab counts
@@ -129,9 +128,8 @@ type TabKey = Lifecycle | 'ALL';
 type ReprintDocumentType = 'CUSTOMER_RECEIPT' | 'KITCHEN_TICKET' | 'GUEST_BILL' | 'COURIER_SLIP';
 
 // No Waiting tab: a waiting order is answered on Incoming Orders, and nothing here can answer
-// it. A line above the tabs points there while one waits. No Held tab either: a held order is
-// picked up from the till's own held list, or from All, where it says Held and offers Resume.
-// Both still count in All. All comes first and is where the page opens: the whole day.
+// it. A line above the tabs points there while one waits, and it still counts in All. A cart
+// on hold never reaches the server: it lives in its register's held list until placed. All comes first and is where the page opens: the whole day.
 // Each tab's count sits in a label coloured like the orders' own status chips.
 const TABS: Array<{ key: TabKey; label: string; color: LabelColor }> = [
   { key: 'ALL', label: 'all', color: 'default' },
@@ -213,7 +211,6 @@ const lifecycleOf = (order: { status: string; refunded_total?: string | null }):
   const { status } = order;
   if (status === 'PENDING_ACCEPTANCE') return 'WAITING';
   if (OPEN_STATUSES.includes(status)) return 'OPEN';
-  if (status === 'DRAFT') return 'HELD';
   if (status === 'REFUNDED' || (status === 'COMPLETED' && MoneyUtil.greaterThan(order.refunded_total || '0', '0'))) {
     return 'REFUNDED';
   }
@@ -409,8 +406,6 @@ export function OrdersWorkflowPage() {
   // Some money back is not all of it: a partly refunded order says so, as Toast's checks do.
   const getOrderStatusLabel = (status: string, refundedTotal?: string | null, orderTotal?: string | null) => {
     switch (status) {
-      case 'DRAFT':
-        return t('orders.statuses.draft');
       case 'REJECTED':
         return t('orders.statuses.rejected');
       default:
@@ -489,7 +484,7 @@ export function OrdersWorkflowPage() {
     !readOnly &&
     !isSnappfoodOrder(order) &&
     order.status !== 'OUT_FOR_DELIVERY' &&
-    (lifecycleOf(order) === 'OPEN' || order.status === 'DRAFT');
+    lifecycleOf(order) === 'OPEN';
 
   // A platform collects for its orders, so the till takes no money for one, except a cash order
   // the customer collects: they pay at the counter.
@@ -508,7 +503,7 @@ export function OrdersWorkflowPage() {
     !readOnly &&
     !isSnappfoodOrder(order) &&
     order.status !== 'OUT_FOR_DELIVERY' &&
-    (lifecycleOf(order) === 'OPEN' || order.status === 'DRAFT');
+    lifecycleOf(order) === 'OPEN';
 
   const canEditLines = (order: OrderHeader) =>
     !readOnly && !isSnappfoodOrder(order) && !['COMPLETED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(order.status);
@@ -842,32 +837,10 @@ export function OrdersWorkflowPage() {
 
   const activeItems = (order: OrderHeader) => (order.items || []).filter((it: any) => it.state !== 'VOID' && it.state !== 'REPLACED');
 
-  // A held order is picked up again at the till, where its lines can be changed and sent.
-  const canResume = (order: OrderHeader) => !readOnly && order.status === 'DRAFT';
-  const resumeAtTill = (order: OrderHeader) => navigate(`${paths.app.pos}?resume=${order.id}`);
-
-  /** A held order is not priced until it is placed, so its value is what its lines add up to. */
-  const displayTotalOf = (order: OrderHeader) => {
-    const priced = order.total_amount || order.grand_total || '0';
-    if (order.status !== 'DRAFT' || MoneyUtil.greaterThan(priced, '0')) return priced;
-    return activeItems(order).reduce(
-      (sum, it: any) => MoneyUtil.add(sum, it.total_amount || it.line_total || MoneyUtil.multiply(it.unit_price, it.quantity, 2), 2),
-      '0'
-    );
-  };
+  const displayTotalOf = (order: OrderHeader) => order.total_amount || order.grand_total || '0';
 
   /** The one thing a cashier most likely wants to do next with this order, if anything. */
   const primaryActionOf = (order: OrderListRow) => {
-    if (canResume(order)) {
-      return {
-        key: 'resume',
-        // Short enough for the row; the drawer says it in full.
-        label: t('orders.actions.resume'),
-        color: 'primary' as const,
-        icon: <PointOfSaleIcon />,
-        run: () => resumeAtTill(order),
-      };
-    }
     if (canPay(order)) {
       return { key: 'pay', label: t('orders.actions.pay'), color: 'success' as const, icon: <PaymentIcon />, run: () => handleOpenPayment(order) };
     }
@@ -976,7 +949,7 @@ export function OrdersWorkflowPage() {
       renderCell: ({ row }) => (
         <Box sx={{ minWidth: 0 }}>
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-            {/* With no call number (a held order, an old Snappfood one) the code alone names it. */}
+            {/* With no call number (an old Snappfood order) the code alone names it. */}
             {row.call_number ? (
               <Typography variant="subtitle1" sx={{ fontWeight: 800, lineHeight: 1.2 }}>
                 {row.call_number}
@@ -1386,8 +1359,7 @@ export function OrdersWorkflowPage() {
           </ListItemIcon>
           <ListItemText>{t('orders.actions.details')}</ListItemText>
         </MenuItem>
-        {/* A held order has printed nothing yet. */}
-        {!readOnly && menuOrder?.status !== 'DRAFT' && (
+        {!readOnly && (
           <MenuItem onClick={fromMenu(handleOpenReprintDialog)}>
             <ListItemIcon>
               <PrintIcon fontSize="small" />
@@ -1762,7 +1734,7 @@ export function OrdersWorkflowPage() {
                     <Stack spacing={1}>
                       <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                         <Typography variant="body2" color="text.secondary">{t('orders.drawer.grossSubtotal')}</Typography>
-                        <Typography variant="body2" dir="ltr">{MoneyUtil.formatCurrency(selectedDrawerOrder.status === 'DRAFT' ? displayTotalOf(selectedDrawerOrder) : selectedDrawerOrder.subtotal_amount || selectedDrawerOrder.total_amount)} {currency}</Typography>
+                        <Typography variant="body2" dir="ltr">{MoneyUtil.formatCurrency(selectedDrawerOrder.subtotal_amount || selectedDrawerOrder.total_amount)} {currency}</Typography>
                       </Stack>
                       {MoneyUtil.greaterThan(selectedDrawerOrder.discount_amount || '0', '0') && (
                         <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
@@ -1961,17 +1933,15 @@ export function OrdersWorkflowPage() {
             {/* Footer: the one thing to do next, and everything else under More, as on the row. */}
             {(() => {
               const order = selectedDrawerOrder;
-              const primary = canResume(order)
-                ? 'resume'
-                : canPay(order)
-                  ? 'pay'
-                  : canComplete(order)
-                    ? 'complete'
-                    : canReport(order)
-                      ? 'report'
-                      : null;
+              const primary = canPay(order)
+                ? 'pay'
+                : canComplete(order)
+                  ? 'complete'
+                  : canReport(order)
+                    ? 'report'
+                    : null;
               const more = [
-                !readOnly && order.status !== 'DRAFT' && { key: 'reprint', icon: <PrintIcon fontSize="small" />, label: t('orders.actions.reprint'), run: () => handleOpenReprintDialog(order) },
+                !readOnly && { key: 'reprint', icon: <PrintIcon fontSize="small" />, label: t('orders.actions.reprint'), run: () => handleOpenReprintDialog(order) },
                 // Snappfood's lines are Snappfood's: it has no call for a store to change them.
                 canEditLines(order) && { key: 'edit', icon: <EditIcon fontSize="small" />, label: t('orders.actions.editOrder', 'Edit lines'), run: () => setEditDialogOpen(true) },
                 canReport(order) && primary !== 'report' && { key: 'report', icon: <ScheduleIcon fontSize="small" />, label: t('orders.actions.reportToSnappfood'), run: () => handleOpenReport(order) },
@@ -2025,11 +1995,6 @@ export function OrdersWorkflowPage() {
                         }}
                       >
                         {t('orders.actions.completeOrder')}
-                      </Button>
-                    )}
-                    {primary === 'resume' && (
-                      <Button variant="contained" startIcon={<PointOfSaleIcon />} onClick={() => resumeAtTill(order)}>
-                        {t('orders.actions.openAtTill')}
                       </Button>
                     )}
                     {primary === 'report' && (

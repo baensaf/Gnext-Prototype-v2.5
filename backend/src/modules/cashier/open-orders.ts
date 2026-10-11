@@ -9,8 +9,12 @@ import { BusinessDateUtil } from '../../common/utils/business-date.util';
  * the orders its own till rang up.
  */
 
-/** Order states that are still open: anything not completed, cancelled or rejected. */
-export const OPEN_ORDER_STATES = ['DRAFT', 'PENDING_ACCEPTANCE', 'SUBMITTED', 'CONFIRMED', 'OUT_FOR_DELIVERY'];
+/**
+ * Order states that are still open: anything sent and not completed, cancelled or rejected. A
+ * draft is not one: a cart on hold never reaches the server, and a draft is only a Place that
+ * did not finish sending.
+ */
+export const OPEN_ORDER_STATES = ['PENDING_ACCEPTANCE', 'SUBMITTED', 'CONFIRMED', 'OUT_FOR_DELIVERY'];
 
 /** Where an order has finished; rows written straight to the table may say so only in `status`. */
 export const FINISHED_ORDER_STATES = ['COMPLETED', 'CANCELLED', 'REJECTED'];
@@ -19,7 +23,7 @@ export const FINISHED_ORDER_STATES = ['COMPLETED', 'CANCELLED', 'REJECTED'];
 const COMPLETABLE_AT_DAY_CLOSE = ['SUBMITTED', 'CONFIRMED'];
 
 /** Why an open order cannot just be completed when the day closes. */
-export type OpenOrderIssue = 'UNPAID' | 'NOT_SUBMITTED' | 'AWAITING_ACCEPTANCE' | 'DELIVERY_NOT_FINISHED';
+export type OpenOrderIssue = 'UNPAID' | 'AWAITING_ACCEPTANCE' | 'DELIVERY_NOT_FINISHED';
 
 export interface DayCloseOpenOrder {
   id: string;
@@ -50,7 +54,6 @@ export async function ordersAwaitingCourier(em: EntityManager, tenantId: string,
 }
 
 export function openOrderIssue(order: OrderHeader, awaitingCourier = false): OpenOrderIssue | null {
-  if (order.state === 'DRAFT') return 'NOT_SUBMITTED';
   if (order.state === 'PENDING_ACCEPTANCE') return 'AWAITING_ACCEPTANCE';
   if (MoneyUtil.greaterThan(order.outstanding_total || '0.0000', '0.0000')) return 'UNPAID';
   // A delivery is finished by its courier, whose cash and settlement hang off that step.

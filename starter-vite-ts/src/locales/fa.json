@@ -188,14 +188,11 @@
   },
   "pos": {
     "cartBar": {
-      "draft": "سفارش نگه‌داشته",
-      "draftCancel": "پایان ویرایش این سفارش نگه‌داشته",
       "discount": "تخفیف (F6)",
       "payNow": "تسویه / پرداخت",
       "hold": "نگه‌دار",
-      "holding": "در حال نگه‌داشتن…",
-      "heldToast": "سفارش {{number}} نگه داشته شد",
-      "resumedToast": "سفارش نگه‌داشته {{number}} به سبد برگشت",
+      "heldToast": "سبد نگه داشته شد",
+      "resumedToast": "سبد نگه‌داشته به سبد برگشت",
       "heldButton": "نگه‌داشته‌ها"
     },
     "options": {
@@ -329,12 +326,11 @@
     },
     "itemDiscount": "{{percent}}٪ تخفیف",
     "heldDrawer": {
-      "title": "سفارش‌های نگه‌داشته",
-      "subtitle": "ادامه، ویرایش یا حذف سفارش‌های نگه‌داشته",
-      "discarded": "سفارش نگه‌داشته حذف شد",
-      "resumeFailed": "سفارش نگه‌داشته باز نشد"
+      "title": "سبدهای نگه‌داشته",
+      "subtitle": "سبدهای نگه‌داشته در این صندوق. با پایان شیفت حذف می‌شوند.",
+      "discarded": "سبد نگه‌داشته حذف شد",
+      "empty": "چیزی در این صندوق نگه داشته نشده است."
     },
-    "updateAndPlace": "به‌روزرسانی و ثبت",
     "clearCart": "پاک کردن",
     "cartEmptyHint": "سبد خالی است. برای افزودن، روی یک کالا بزنید.",
     "discount": {
@@ -357,8 +353,7 @@
     },
     "held": {
       "discard": "حذف",
-      "resume": "ادامه سفارش",
-      "resuming": "در حال بازکردن…"
+      "resume": "ادامه سفارش"
     },
     "notes": {
       "lineTitle": "یادداشت این قلم",
@@ -472,7 +467,6 @@
     },
     "statuses": {
       "pendingAcceptance": "در انتظار تأیید",
-      "draft": "نگه‌داشته",
       "open": "باز",
       "completed": "تکمیل شده",
       "cancelled": "لغو شده",
@@ -521,9 +515,7 @@
       "reportToSnappfood": "گزارش به اسنپ‌فود",
       "changeType": "تغییر نوع فاکتور",
       "more": "اقدامات بیشتر",
-      "moreShort": "بیشتر",
-      "openAtTill": "باز کردن در صندوق",
-      "resume": "ادامه"
+      "moreShort": "بیشتر"
     },
     "snappfood": {
       "withSupport": "نزد پشتیبانی اسنپ‌فود",
@@ -1022,7 +1014,6 @@
       "carriedOver": "منتقل‌شده",
       "issue": {
         "UNPAID": "پرداخت‌نشده",
-        "NOT_SUBMITTED": "پیش‌نویس، ارسال‌نشده",
         "AWAITING_ACCEPTANCE": "در انتظار تأیید",
         "DELIVERY_NOT_FINISHED": "ارسال تمام نشده"
       }
@@ -1194,7 +1185,9 @@
       "handOver": "تحویل به صندوق مرکزی",
       "handedOver": "تحویل‌شده به صندوق مرکزی",
       "leftInDrawer": "باقی در کشو",
-      "backToRegister": "بازگشت به صندوق فروش"
+      "backToRegister": "بازگشت به صندوق فروش",
+      "heldCarts_one": "{{count}} سبد نگه‌داشته در این صندوق با بستن شیفت حذف می‌شود.",
+      "heldCarts_other": "{{count}} سبد نگه‌داشته در این صندوق با بستن شیفت حذف می‌شوند."
     }
   },
   "payments": {
@@ -3570,8 +3563,7 @@
         "refundDue": "سفارش لغوشده که پولش برنگشته",
         "delivery": "ارسال تمام‌نشده",
         "courierPay": "تحویل‌شده، با پیک تسویه نشده",
-        "settlement": "تسویهٔ پیک باز",
-        "heldOrder": "سفارش نگه‌داشته (اول آن را کنار بگذارید)"
+        "settlement": "تسویهٔ پیک باز"
       }
     },
     "archived": {

@@ -432,18 +432,21 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       movementRepo.find.mockResolvedValue([{ type: 'OPENING_FLOAT', amount: '50000.0000' }]);
     });
 
-    it('closes with held or unpaid orders still open, and notes them in the audit', async () => {
-      tillOrders = [order({ id: 'held', state: 'DRAFT' }), order({ id: 'owing', outstanding_total: '90000.0000' })];
+    it('closes with unpaid or unaccepted orders still open, and notes them in the audit', async () => {
+      tillOrders = [
+        order({ id: 'waiting', state: 'PENDING_ACCEPTANCE' }),
+        order({ id: 'owing', outstanding_total: '90000.0000' }),
+      ];
       const shift = openShift();
       shiftRepo.findOne.mockResolvedValue(shift);
 
       await expect(shiftService.getCloseCheck('t-1', 'shf-1')).resolves.toMatchObject({
-        openOrders: [{ id: 'held', issue: 'NOT_SUBMITTED' }, { id: 'owing', issue: 'UNPAID' }],
+        openOrders: [{ id: 'waiting', issue: 'AWAITING_ACCEPTANCE' }, { id: 'owing', issue: 'UNPAID' }],
       });
       await shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000' }, 'cashier-1');
       expect(shift.state).toBe('CLOSED');
       expect(auditWriter.write).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'SHIFT_CLOSED', details: { openOrderIds: ['held', 'owing'] } }),
+        expect.objectContaining({ action: 'SHIFT_CLOSED', details: { openOrderIds: ['waiting', 'owing'] } }),
       );
     });
 
@@ -620,7 +623,6 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       const orders = [
         order({ id: 'paid-dine-in', order_type: 'DINE_IN' }),
         order({ id: 'unpaid', outstanding_total: '50000.0000' }),
-        order({ id: 'draft', state: 'DRAFT', status: 'DRAFT' }),
         order({ id: 'snappfood', order_type: 'AGGREGATOR', state: 'PENDING_ACCEPTANCE', status: 'PENDING_ACCEPTANCE' }),
         // Paid, but a courier finishes a delivery; its cash settles off that step.
         order({ id: 'delivery', order_type: 'DELIVERY', state: 'OUT_FOR_DELIVERY', status: 'OUT_FOR_DELIVERY' }),
@@ -630,11 +632,11 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       const closed = await dayService.closeBusinessDay('t-1', 'b-1', '2026-09-10');
 
       expect(orders.filter((o) => o.state === 'COMPLETED').map((o) => o.id)).toEqual(['paid-dine-in']);
-      expect(closed.totals).toMatchObject({ autoCompletedOrders: 1, carriedOverOrders: 4 });
+      expect(closed.totals).toMatchObject({ autoCompletedOrders: 1, carriedOverOrders: 3 });
       expect(auditWriter.write).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'BUSINESS_DAY_AUTO_CLOSED',
-          details: { autoCompletedOrderIds: ['paid-dine-in'], carriedOverOrderIds: ['unpaid', 'draft', 'snappfood', 'delivery'] },
+          details: { autoCompletedOrderIds: ['paid-dine-in'], carriedOverOrderIds: ['unpaid', 'snappfood', 'delivery'] },
         }),
       );
     });

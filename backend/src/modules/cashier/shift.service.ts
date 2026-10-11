@@ -34,13 +34,13 @@ import {
 
 /**
  * What a till leaves behind that its cashier should answer for before walking away: an order
- * held and never sent, one still owing money, one nobody accepted. A paid order the kitchen
+ * still owing money, or one nobody accepted. A paid order the kitchen
  * has not marked handed over is not the cashier's to settle — the day close completes it —
  * and a paid delivery out with a courier is settled at the courier's handover.
  */
-const TILL_OPEN_ORDER_ISSUES: OpenOrderIssue[] = ['NOT_SUBMITTED', 'UNPAID', 'AWAITING_ACCEPTANCE'];
+const TILL_OPEN_ORDER_ISSUES: OpenOrderIssue[] = ['UNPAID', 'AWAITING_ACCEPTANCE'];
 
-/** Orders that never became a sale: held, waiting to be accepted, cancelled or turned down. */
+/** Orders that never became a sale: never sent, waiting to be accepted, cancelled or turned down. */
 const UNSOLD_ORDER_STATES: string[] = ['DRAFT', 'PENDING_ACCEPTANCE', 'CANCELLED', 'REJECTED'];
 
 /** What one register did in a shift, for the cashier to read on screen. */
@@ -675,11 +675,6 @@ export class ShiftService {
       })
       .andWhere('o.state IN (:...openStates)', { openStates: OPEN_ORDER_STATES })
       .andWhere('o.status NOT IN (:...finishedStates)', { finishedStates: FINISHED_ORDER_STATES })
-      // An empty cart left on hold holds nothing; discarding one takes no reason either.
-      .andWhere(
-        `NOT (o.state = 'DRAFT' AND NOT EXISTS (
-           SELECT 1 FROM order_item i WHERE i.order_id = o.id AND COALESCE(i.state, 'ACTIVE') = 'ACTIVE'))`,
-      )
       .orderBy('o.placed_at', 'ASC')
       .getMany();
     const openOrders: DayCloseOpenOrder[] = [];
