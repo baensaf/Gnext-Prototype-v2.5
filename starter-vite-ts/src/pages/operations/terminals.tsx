@@ -63,12 +63,8 @@ export function TerminalsPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   // The register being edited; null while adding a new one.
   const [editing, setEditing] = useState<Terminal | null>(null);
-  const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [terminalType, setTerminalType] = useState<'CASHIER' | 'KIOSK'>('CASHIER');
-  // The create form starts at the branch you are working in, which is nearly always
-  // the one you are registering a terminal for.
-  const [branchId, setBranchId] = useScopedBranchId();
 
   // Confirm dialog state for archive
   const [archiveConfirm, setArchiveConfirm] = useState<{ id: string; name: string; code: string; open: boolean }>({
@@ -101,14 +97,8 @@ export function TerminalsPage() {
     loadData();
   }, [loadData]);
 
-  const branchLabel = (id: string) => {
-    const b = branches.find((x) => x.id === id);
-    return b ? `${b.name} (${b.code})` : '';
-  };
-
   const openCreate = () => {
     setEditing(null);
-    setCode('');
     setName('');
     setTerminalType('CASHIER');
     setDrawerOpen(true);
@@ -116,7 +106,6 @@ export function TerminalsPage() {
 
   const openEdit = (terminal: Terminal) => {
     setEditing(terminal);
-    setCode(terminal.code);
     setName(terminal.name);
     setTerminalType(terminal.terminal_type === 'KIOSK' ? 'KIOSK' : 'CASHIER');
     setDrawerOpen(true);
@@ -128,7 +117,7 @@ export function TerminalsPage() {
     setSuccess(null);
     if (editing) {
       try {
-        await tenantApi.updateTerminal(editing.id, { code, name });
+        await tenantApi.updateTerminal(editing.id, { name });
         setDrawerOpen(false);
         setEditing(null);
         setSuccess(t('operations.terminals.editSuccess', { name }));
@@ -138,17 +127,12 @@ export function TerminalsPage() {
       }
       return;
     }
-    if (!branchId) {
-      setError(t('operations.terminals.selectBranchError', 'Please select a branch'));
-      return;
-    }
     try {
-      await tenantApi.createTerminal({ branch_id: branchId, code, name, terminal_type: terminalType });
+      // The page opens only with a branch picked in the header, and the register joins it.
+      // The server numbers it for the branch (POS-1, POS-2, KIOSK-1).
+      await tenantApi.createTerminal({ branch_id: selectedBranchId, name, terminal_type: terminalType });
       setDrawerOpen(false);
-      setCode('');
       setName('');
-      // Back to the branch in scope, not blank: a pinned manager has no other branch to pick.
-      setBranchId(selectedBranchId);
       setSuccess(t('operations.terminals.createSuccess', 'Terminal created successfully'));
       loadData();
     } catch (err: any) {
@@ -396,45 +380,12 @@ export function TerminalsPage() {
           </Typography>
           <form onSubmit={handleSubmit}>
             <Stack spacing={2.5}>
-              {/* A branch chosen in the header is the terminal's branch; only head office picks one. */}
-              {editing || selectedBranchId ? (
-                <TextField
-                  fullWidth
-                  label={t('operations.terminals.formBranch', 'Branch')}
-                  value={branchLabel(editing ? editing.branch_id : selectedBranchId)}
-                  slotProps={{ input: { readOnly: true } }}
-                />
-              ) : (
-                <FormControl fullWidth required>
-                  <InputLabel>{t('operations.terminals.formBranch', 'Branch')}</InputLabel>
-                  <Select
-                    value={branchId}
-                    label={t('operations.terminals.formBranch', 'Branch')}
-                    onChange={(e) => setBranchId(e.target.value)}
-                  >
-                    {branches.map((b) => (
-                      <MenuItem key={b.id} value={b.id}>
-                        {b.name} ({b.code})
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              )}
-
-              <TextField
-                label={t('operations.terminals.formCode', 'Terminal Code')}
-                placeholder="e.g. TEH-CENTRAL-POS-2"
-                required
-                fullWidth
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-              />
-
               <TextField
                 label={t('operations.terminals.formName', 'Terminal Name')}
                 placeholder="e.g. Cashier Counter 2"
                 required
                 fullWidth
+                autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />

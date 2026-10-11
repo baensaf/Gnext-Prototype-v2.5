@@ -135,4 +135,28 @@ describe('TenantService (Unit)', () => {
     expect(result.length).toBe(1);
     expect(terminalRepo.find).toHaveBeenCalledWith({ where: { tenant_id: 't-1', branch_id: 'b-new' }, order: { code: 'ASC' } });
   });
+
+  describe('numbering a new register', () => {
+    beforeEach(() => {
+      branchRepo.findOne.mockResolvedValue({ id: 'b-1', tenant_id: 't-1' });
+      terminalRepo.findOne.mockResolvedValue(null);
+      terminalRepo.create.mockImplementation((dto: any) => dto);
+      terminalRepo.save.mockImplementation(async (row: any) => ({ id: 'new', ...row }));
+    });
+
+    it('takes the next number for its type, past archived ones', async () => {
+      // POS-2 was archived; its number stays retired.
+      terminalRepo.find.mockResolvedValue([{ code: 'POS-1' }, { code: 'POS-2' }, { code: 'KIOSK-1' }, { code: 'TERM-TEH-ZAFAR' }]);
+      const till = await service.createTerminal('t-1', { branch_id: 'b-1', name: 'Counter 3' }, 'corr-1');
+      const kiosk = await service.createTerminal('t-1', { branch_id: 'b-1', name: 'Door kiosk', terminal_type: 'KIOSK' }, 'corr-1');
+      expect(till.code).toBe('POS-3');
+      expect(kiosk.code).toBe('KIOSK-2');
+      expect(terminalRepo.find).toHaveBeenCalledWith(expect.objectContaining({ withDeleted: true }));
+    });
+
+    it('starts a branch at 1', async () => {
+      terminalRepo.find.mockResolvedValue([]);
+      expect((await service.createTerminal('t-1', { branch_id: 'b-1', name: 'Counter 1' }, 'corr-1')).code).toBe('POS-1');
+    });
+  });
 });
