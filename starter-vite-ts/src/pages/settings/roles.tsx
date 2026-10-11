@@ -92,7 +92,7 @@ const GROUPS: { titleKey: string; title: string; rows: Capability[] }[] = [
         write: { CASHIER: 'NONE', MANAGER: 'FULL', HEAD_OFFICE: 'FULL' },
       },
       {
-        path: '/app/settings/branch-overrides',
+        path: '/app/settings/order-workflow',
         labelKey: 'rolesPage.caps.overrides',
         label: 'Diverge from a head-office setting',
         write: { CASHIER: 'NONE', MANAGER: 'FULL', HEAD_OFFICE: 'FULL' },

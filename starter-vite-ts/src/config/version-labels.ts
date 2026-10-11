@@ -40,8 +40,6 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   // discount limits, payment methods, reason codes, note templates
   '/app/settings': 'V1',
   '/app/settings/approvals': 'V2',
-  '/app/settings/branch-overrides': 'V4',
-  '/app/settings/localization': 'F',
   '/app/settings/data-reset': 'F',
   '/app/delivery': 'V1',
   // Categories, products with sizes, add-on groups and combos, availability (the 86 stop)

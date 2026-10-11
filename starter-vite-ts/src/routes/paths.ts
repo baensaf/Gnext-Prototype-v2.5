@@ -81,6 +81,7 @@ export const paths = {
       snappfood: `${ROOTS.APP}/simulation/snappfood`,
       paymentsPrinters: `${ROOTS.APP}/simulation/payments-printers`,
       logs: `${ROOTS.APP}/simulation/logs`,
+      mediaLocalization: `${ROOTS.APP}/simulation/media-localization`,
     },
     reports: {
       root: `${ROOTS.APP}/reports`,
@@ -99,7 +100,6 @@ export const paths = {
       shiftPolicy: `${ROOTS.APP}/settings/shift-policy`,
       businessDay: `${ROOTS.APP}/settings/business-day`,
       calendar: `${ROOTS.APP}/settings/calendar`,
-      branchOverrides: `${ROOTS.APP}/settings/branch-overrides`,
       roles: `${ROOTS.APP}/settings/roles`,
       discountAuthorizations: `${ROOTS.APP}/settings/discount-authorizations`,
       paymentsRefunds: `${ROOTS.APP}/settings/payments-refunds`,
@@ -107,7 +107,6 @@ export const paths = {
       reasons: `${ROOTS.APP}/settings/reasons`,
       customerFields: `${ROOTS.APP}/settings/customer-fields`,
       noteTemplates: `${ROOTS.APP}/settings/note-templates`,
-      localization: `${ROOTS.APP}/settings/localization`,
       dataReset: `${ROOTS.APP}/settings/data-reset`,
     },
   },
