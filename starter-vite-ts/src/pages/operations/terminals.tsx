@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import {
@@ -30,6 +31,7 @@ import {
   InputLabel,
   CardContent,
   FormControl,
+  FormHelperText,
   TableContainer,
   CircularProgress,
 } from '@mui/material';
@@ -59,6 +61,8 @@ export function TerminalsPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // The register being edited; null while adding a new one.
+  const [editing, setEditing] = useState<Terminal | null>(null);
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [terminalType, setTerminalType] = useState<'CASHIER' | 'KIOSK'>('CASHIER');
@@ -102,8 +106,38 @@ export function TerminalsPage() {
     return b ? `${b.name} (${b.code})` : '';
   };
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const openCreate = () => {
+    setEditing(null);
+    setCode('');
+    setName('');
+    setTerminalType('CASHIER');
+    setDrawerOpen(true);
+  };
+
+  const openEdit = (terminal: Terminal) => {
+    setEditing(terminal);
+    setCode(terminal.code);
+    setName(terminal.name);
+    setTerminalType(terminal.terminal_type === 'KIOSK' ? 'KIOSK' : 'CASHIER');
+    setDrawerOpen(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    if (editing) {
+      try {
+        await tenantApi.updateTerminal(editing.id, { code, name });
+        setDrawerOpen(false);
+        setEditing(null);
+        setSuccess(t('operations.terminals.editSuccess', { name }));
+        loadData();
+      } catch (err: any) {
+        setError(err.detail || err.message || t('operations.terminals.editError'));
+      }
+      return;
+    }
     if (!branchId) {
       setError(t('operations.terminals.selectBranchError', 'Please select a branch'));
       return;
@@ -181,7 +215,7 @@ export function TerminalsPage() {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              onClick={() => setDrawerOpen(true)}
+              onClick={openCreate}
               sx={{ fontWeight: 'bold' }}
             >
               {t('operations.terminals.addTerminal', 'Add Terminal')}
@@ -242,7 +276,7 @@ export function TerminalsPage() {
                         <TableCell sx={{ fontWeight: 'bold' }}>{item.name}</TableCell>
                         <TableCell>
                           <Chip
-                            label={t(`operations.terminals.types.${item.terminal_type}`, item.terminal_type)}
+                            label={t(`operations.terminals.types.${item.terminal_type === 'CASHIER' ? 'POS' : item.terminal_type}`, item.terminal_type)}
                             color={getTypeChipColor(item.terminal_type) as any}
                             size="small"
                             sx={{ fontWeight: 'bold' }}
@@ -250,8 +284,8 @@ export function TerminalsPage() {
                         </TableCell>
                         <TableCell>{branchObj ? `${branchObj.name} (${branchObj.code})` : '—'}</TableCell>
                         <TableCell>
-                          {item.terminal_type === 'KIOSK' ? (
-                            <Select
+                          {/* The card terminal (PC-POS) beside this register or kiosk: its card charges go there. */}
+                          <Select
                               size="small"
                               displayEmpty
                               value={item.payment_device_id || ''}
@@ -267,10 +301,7 @@ export function TerminalsPage() {
                                     {d.name} ({d.code})
                                   </MenuItem>
                                 ))}
-                            </Select>
-                          ) : (
-                            '—'
-                          )}
+                          </Select>
                         </TableCell>
                         <TableCell>
                             {/* Where this till's receipts, bills and courier slips come out. */}
@@ -328,7 +359,10 @@ export function TerminalsPage() {
                             size="small"
                           />
                         </TableCell>
-                        <TableCell align="center">
+                        <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
+                          <IconButton title={t('operations.terminals.edit')} onClick={() => openEdit(item)}>
+                            <EditIcon />
+                          </IconButton>
                           <IconButton
                             title={t('operations.terminals.archive', 'Archive Terminal')}
                             color="error"
@@ -351,20 +385,23 @@ export function TerminalsPage() {
       <Drawer
         anchor="right"
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={() => {
+          setDrawerOpen(false);
+          setEditing(null);
+        }}
       >
         <Box sx={{ width: { xs: 320, sm: 400 }, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            {t('operations.terminals.newTerminal', 'Add New Terminal')}
+            {editing ? t('operations.terminals.editTerminal') : t('operations.terminals.newTerminal', 'Add New Terminal')}
           </Typography>
-          <form onSubmit={handleCreate}>
+          <form onSubmit={handleSubmit}>
             <Stack spacing={2.5}>
               {/* A branch chosen in the header is the terminal's branch; only head office picks one. */}
-              {selectedBranchId ? (
+              {editing || selectedBranchId ? (
                 <TextField
                   fullWidth
                   label={t('operations.terminals.formBranch', 'Branch')}
-                  value={branchLabel(selectedBranchId)}
+                  value={branchLabel(editing ? editing.branch_id : selectedBranchId)}
                   slotProps={{ input: { readOnly: true } }}
                 />
               ) : (
@@ -402,7 +439,7 @@ export function TerminalsPage() {
                 onChange={(e) => setName(e.target.value)}
               />
 
-              <FormControl fullWidth required>
+              <FormControl fullWidth required disabled={!!editing}>
                 <InputLabel>{t('operations.terminals.formType', 'Terminal Type')}</InputLabel>
                 <Select
                   value={terminalType}
@@ -412,6 +449,7 @@ export function TerminalsPage() {
                   <MenuItem value="CASHIER">{t('operations.terminals.types.POS', 'CASHIER (POS Touch)')}</MenuItem>
                   <MenuItem value="KIOSK">{t('operations.terminals.types.KIOSK', 'KIOSK (Self-Service)')} <VersionTag feature="terminals.kiosk" sx={{ ml: 1 }} /></MenuItem>
                 </Select>
+                {editing && <FormHelperText>{t('operations.terminals.typeLocked')}</FormHelperText>}
               </FormControl>
 
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
