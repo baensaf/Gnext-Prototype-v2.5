@@ -18,6 +18,7 @@ import { markAsReprint, PrintRenderService, RenderDocOptions, TicketTemplate } f
 import { PrintRoutingService, RoutedPrinter } from './print-routing.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { AgentPrintingService } from './agent-printing.service';
+import { printableOrderNote } from '../order/order-notes';
 
 /** What changed on an order the kitchen has already been sent. */
 export type KitchenChange =
@@ -401,7 +402,8 @@ export class PrintQueueService {
       call_number: 123,
       order_type: input.order_type || 'TAKEAWAY',
       channel: input.order_type === 'AGGREGATOR' ? 'AGGREGATOR' : 'POS',
-      notes: input.notes || null,
+      // A platform order's customer note sits on its "Note:" line, which is all that prints.
+      notes: input.notes ? (input.order_type === 'AGGREGATOR' ? `Note: ${input.notes}` : input.notes) : null,
       placed_at: new Date(),
     } as unknown as OrderHeader;
     const [heading, routing, batches] = await Promise.all([
@@ -432,7 +434,7 @@ export class PrintQueueService {
       callNumber: order.call_number ?? null,
       orderType: order.order_type,
       channel: order.channel,
-      orderNotes: order.notes || undefined,
+      orderNotes: printableOrderNote(order),
       placedAt: order.placed_at || order.submitted_at || new Date(),
     };
     const em = this.orderRepo.manager;
