@@ -292,6 +292,16 @@ describe('PrintingModule (Unit & Integration)', () => {
       expect(two.template).toBe('COMPACT');
     });
 
+    it("prints a kiosk guest's receipt on the kiosk's own printer", async () => {
+      printer('prn-counter', { printer_type: 'THERMAL_RECEIPT' });
+      printer('prn-kiosk', { printer_type: 'THERMAL_RECEIPT' });
+      till('kiosk-1', { terminal_type: 'KIOSK', receipt_printer_id: 'prn-kiosk' });
+
+      const routed = await routingService.printersForDocument(T, BR, 'kiosk-1');
+
+      expect(routed.printers.map((r) => r.printer.id)).toEqual(['prn-kiosk']);
+    });
+
     it("prints on the branch's receipt printer for an order from no till, or a till with no printer working", async () => {
       printer('prn-kitchen', { printer_type: 'KITCHEN_IMPACT' });
       printer('prn-counter', { printer_type: 'THERMAL_RECEIPT' });

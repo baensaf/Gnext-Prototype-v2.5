@@ -215,8 +215,9 @@ export class PrintRoutingService {
 
   /**
    * Where a whole-order document prints: the till's receipt printer, with the till's copies and
-   * paper. An order from no till (online, an aggregator, a kiosk), or from a till with no printer
-   * of its own in service, prints on the branch's receipt printer.
+   * paper. A kiosk is a till here: its guests' receipts come out of the kiosk's own printer. An
+   * order from no till (online, an aggregator), or from a till with no printer of its own in
+   * service, prints on the branch's receipt printer.
    */
   async printersForDocument(
     tenantId: string,

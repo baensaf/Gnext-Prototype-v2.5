@@ -161,7 +161,6 @@ export class KioskService {
       simulatedCapabilities: {
         // A real Saman terminal behind the branch agent, or the kiosk's own simulator.
         simulated_card_terminal: !(await this.kioskCardTerminal(tenantId, branch?.id || '', terminalId).catch(() => true)),
-        simulated_receipt_printer: true,
       },
       categories,
       products: catalogProducts,
