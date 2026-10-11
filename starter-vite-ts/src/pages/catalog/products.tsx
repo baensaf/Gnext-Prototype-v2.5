@@ -11,6 +11,8 @@ import SearchIcon from '@mui/icons-material/Search';
 import FastfoodIcon from '@mui/icons-material/Fastfood';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import {
   Box,
   Card,
@@ -171,6 +173,24 @@ export function ProductsPage() {
     }
   };
 
+  // A category's products are put in order the way Snappfood's "ترتیب محصولات" does: one
+  // category at a time, with the whole list showing (no search or status filter).
+  const canReorder = canAuthor && !!selectedCategoryId && !search.trim() && statusFilter === 'ALL';
+
+  const handleMove = async (index: number, by: number) => {
+    const to = index + by;
+    if (to < 0 || to >= products.length) return;
+    const list = [...products];
+    [list[index], list[to]] = [list[to], list[index]];
+    setProducts(list);
+    try {
+      await catalogApi.reorderProducts(selectedCategoryId, list.map((p) => p.id));
+    } catch (err: any) {
+      setError(err.detail || t('catalog.productsPage.errors.reorderFailed'));
+      loadData();
+    }
+  };
+
   const handleArchive = async (id: string, prodName: string) => {
     if (window.confirm(t('catalog.productsPage.archiveConfirm', { name: prodName }))) {
       try {
@@ -282,6 +302,7 @@ export function ProductsPage() {
             <Table>
               <TableHead>
                 <TableRow>
+                  {canReorder && <TableCell sx={{ width: 64 }}>{t('catalog.productsPage.order')}</TableCell>}
                   <TableCell>{t('catalog.productsPage.name')}</TableCell>
                   <TableCell>{t('catalog.productsPage.category')}</TableCell>
                   <TableCell align="right">{t('catalog.productsPage.basePrice')}</TableCell>
@@ -294,10 +315,25 @@ export function ProductsPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {visibleProducts.map((p) => {
+                {visibleProducts.map((p, index) => {
                   const catObj = categories.find((c) => c.id === p.category_id);
                   return (
                     <TableRow key={p.id}>
+                      {canReorder && (
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                          <IconButton size="small" disabled={index === 0} onClick={() => handleMove(index, -1)} aria-label={t('catalog.productsPage.moveUp')}>
+                            <ArrowUpwardIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            disabled={index === visibleProducts.length - 1}
+                            onClick={() => handleMove(index, 1)}
+                            aria-label={t('catalog.productsPage.moveDown')}
+                          >
+                            <ArrowDownwardIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      )}
                       <TableCell>
                         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                           <Avatar variant="rounded" src={p.image_url || undefined} alt="" sx={{ width: 44, height: 44, bgcolor: 'action.hover' }}>
@@ -376,7 +412,7 @@ export function ProductsPage() {
                 })}
                 {visibleProducts.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                    <TableCell colSpan={canReorder ? 8 : 7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                       {t('catalog.productsPage.noMatches')}
                     </TableCell>
                   </TableRow>

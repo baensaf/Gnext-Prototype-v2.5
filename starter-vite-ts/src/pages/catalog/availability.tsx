@@ -59,7 +59,8 @@ type StopTarget =
   | { kind: 'variant'; product: Product; variant: ProductVariant }
   | { kind: 'addon'; group: OptionGroup; itemId: string; name: string };
 
-type StopMode = 'AVAILABLE' | 'MANUAL';
+/** Snappfood's three stock states: available, off until the next shift, off until further notice. */
+type StopMode = 'AVAILABLE' | 'NEXT_SHIFT' | 'MANUAL';
 
 const isLive = (a: ProductAvailability) =>
   a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date());
@@ -69,8 +70,9 @@ const isLive = (a: ProductAvailability) =>
  *
  * Head office decides what the item is; this decides whether this shop can serve it,
  * the way Snappfood's vendor panel does: an item (or one variant of it, or an add-on)
- * is available, or off until further notice, which only a person undoes. There is no
- * reason and no time limit (2026-10-10). The scope is the header switcher's.
+ * is available, off until the next shift (it comes back by itself when the next business
+ * day starts), or off until further notice, which only a person undoes. No reason is asked.
+ * The scope is the header switcher's.
  */
 export function AvailabilityPage() {
   const currency = useCurrencyLabel();
@@ -142,7 +144,7 @@ export function AvailabilityPage() {
 
   const showStop = (tg: StopTarget, ch: '' | 'SNAPPFOOD') => {
     setChannel(ch);
-    setMode('MANUAL');
+    setMode('NEXT_SHIFT');
   };
 
   const openDialog = (tg: StopTarget) => {
@@ -167,6 +169,7 @@ export function AvailabilityPage() {
           ...targetKey(target),
           branchId: branchParam,
           channel: channel || undefined,
+          until: mode === 'NEXT_SHIFT' ? 'NEXT_SHIFT' : 'FURTHER_NOTICE',
         });
       }
       setTarget(null);
@@ -186,10 +189,7 @@ export function AvailabilityPage() {
           color={stop.suspended_until ? 'warning' : 'default'}
           label={
             stop.suspended_until
-              ? t('catalog.availabilityPage.statusOffUntil', {
-                  defaultValue: 'Unavailable until {{time}}',
-                  time: fDateTime(stop.suspended_until),
-                })
+              ? t('catalog.availabilityPage.statusOffNextShift', { time: fDateTime(stop.suspended_until) })
               : t('catalog.availabilityPage.statusOffManual', 'Unavailable until further notice')
           }
         />
@@ -457,6 +457,18 @@ export function AvailabilityPage() {
                 value="AVAILABLE"
                 control={<Radio />}
                 label={t('catalog.availabilityPage.modeAvailable', 'Available')}
+              />
+              <FormControlLabel
+                value="NEXT_SHIFT"
+                control={<Radio />}
+                label={
+                  <Box>
+                    <Typography variant="body2">{t('catalog.availabilityPage.modeNextShift')}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {t('catalog.availabilityPage.modeNextShiftHelp')}
+                    </Typography>
+                  </Box>
+                }
               />
               <FormControlLabel
                 value="MANUAL"

@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Patch, Put, Delete, Param, Query, Body, Req, BadRequestException } from '@nestjs/common';
 import { Request } from 'express';
-import { CatalogService } from './catalog.service';
+import { CatalogService, StopUntil } from './catalog.service';
 import { PriceListService } from './price-lists.service';
 import { PriceChangeInput, PriceChangeService } from './price-changes.service';
 import { NoteTemplateService } from './note-template.service';
@@ -39,6 +39,13 @@ export class CatalogController {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.catalogService.createCategory(tenantId, body, correlationId);
+  }
+
+  /** Body: the ids of the category's products in their new order. */
+  @HeadOfficeOnly()
+  @Put('categories/:id/products/order')
+  async reorderProducts(@Param('id') id: string, @Body() body: { ids: string[] }, @Req() req: Request) {
+    return await this.catalogService.reorderProducts((req as any).tenantId, id, body?.ids, (req as any).correlationId);
   }
 
   /** Body: the ids of sibling categories in their new order. */
@@ -355,12 +362,12 @@ export class CatalogController {
     );
   }
 
-  // An item stays off until somebody puts it back: no reason and no time limit (2026-10-10).
-  // The stop is on the product, or on one variant of it, or on an add-on item.
+  // An item stays off until somebody puts it back, or until the next shift (Snappfood's two kinds
+  // of "ناموجود", 2026-10-12); no reason. The stop is on the product, one variant of it, or an add-on.
   @Roles(...MANAGER_AND_ABOVE)
   @Post('availability/suspend')
   async suspendProduct(
-    @Body() body: { productId?: string; variantId?: string; optionItemId?: string; branchId?: string; channel?: string },
+    @Body() body: { productId?: string; variantId?: string; optionItemId?: string; branchId?: string; channel?: string; until?: StopUntil },
     @Req() req: Request,
   ) {
     const tenantId = (req as any).tenantId;
@@ -370,7 +377,7 @@ export class CatalogController {
       body.productId,
       effectiveBranchId((req as any).userBranchId, body.branchId),
       correlationId,
-      { variantId: body.variantId, optionItemId: body.optionItemId, channel: body.channel || null },
+      { variantId: body.variantId, optionItemId: body.optionItemId, channel: body.channel || null, until: body.until || null },
       { userId: (req as any).userId, source: 'ADMIN' },
     );
   }
@@ -395,13 +402,13 @@ export class CatalogController {
   @Roles(...MANAGER_AND_ABOVE)
   @Post('availability/bulk-stop')
   async bulkStop(
-    @Body() body: { categoryId?: string; productIds?: string[]; branchIds?: string[]; channel?: string },
+    @Body() body: { categoryId?: string; productIds?: string[]; branchIds?: string[]; channel?: string; until?: StopUntil },
     @Req() req: Request,
   ) {
     return await this.catalogService.bulkStop(
       (req as any).tenantId,
       { categoryId: body.categoryId, productIds: body.productIds, branchIds: this.stopBranches(req, body.branchIds) },
-      { channel: body.channel || null },
+      { channel: body.channel || null, until: body.until || null },
       (req as any).correlationId,
       { userId: (req as any).userId, source: 'BULK' },
     );
@@ -427,18 +434,18 @@ export class CatalogController {
     return named.length ? named : [null];
   }
 
-  // 86 from the register's tile: any register user takes an item off, until somebody puts it
-  // back. No reason, no time limit and no approver (2026-10-10). The branch is the session's
-  // (or, for head office at a register, the one it is working in).
+  // 86 from the register's tile: any register user takes an item off until the next shift by
+  // default, as Snappfood's everyday stop; "until further notice" when asked. No reason and no
+  // approver. The branch is the session's (or, for head office at a register, the one it is in).
   @Post('availability/pos-stop')
-  async posStop(@Body() body: { productId: string; variantId?: string; branchId?: string }, @Req() req: Request) {
+  async posStop(@Body() body: { productId: string; variantId?: string; branchId?: string; until?: StopUntil }, @Req() req: Request) {
     const branchId = this.registerBranch(req, body.branchId);
     return await this.catalogService.suspendProduct(
       (req as any).tenantId,
       body.productId,
       branchId,
       (req as any).correlationId,
-      { variantId: body.variantId },
+      { variantId: body.variantId, until: body.until || 'NEXT_SHIFT' },
       { userId: (req as any).userId, source: 'POS' },
     );
   }

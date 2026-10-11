@@ -172,6 +172,12 @@ export function ChannelPricesPage() {
         {t('pricing.channelPrices.subtitle')}
       </Typography>
 
+      {/* Food Partner says this on every price field: Snappfood's contract fines a price that
+          differs from the in-store one, so a markup here is the chain's own risk. */}
+      <Alert severity="warning" sx={{ mb: 2 }}>
+        {t('pricing.channelPrices.parityWarning')}
+      </Alert>
+
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
           {error}
