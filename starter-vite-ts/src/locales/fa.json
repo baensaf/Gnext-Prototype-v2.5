@@ -3579,8 +3579,6 @@
   },
   "online": {
     "title": "سفارش‌های آنلاین",
-    "tabMenu": "منو",
-    "tabOnline": "آنلاین",
     "platform": {
       "SNAPPFOOD": "اسنپ‌فود"
     },

@@ -100,17 +100,12 @@ export function IncomingOrdersProvider({ children }: { children: React.ReactNode
     branchScope?.selectedBranchType === 'RESTAURANT' &&
     canReachPath(role, paths.app.orders.incoming, isHeadOfficeAccount);
 
-  // A cashier answers at the till, beside the cart; anyone without a till uses the full page.
-  const atTill = canReachPath(role, paths.app.pos, isHeadOfficeAccount);
-  const panelPath = useCallback(
-    (orderId?: string) => {
-      const query = new URLSearchParams();
-      if (atTill) query.set('panel', 'online');
-      if (orderId) query.set('order', orderId);
-      return `${atTill ? paths.app.pos : paths.app.orders.incoming}?${query.toString()}`;
-    },
-    [atTill]
-  );
+  // Everyone answers on the Incoming orders page; the till has no Online tab (2026-10-12).
+  const panelPath = useCallback((orderId?: string) => {
+    const query = new URLSearchParams();
+    if (orderId) query.set('order', orderId);
+    return `${paths.app.orders.incoming}?${query.toString()}`;
+  }, []);
 
   const [board, setBoard] = useState<OnlineBoard | null>(null);
 

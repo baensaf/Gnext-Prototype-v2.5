@@ -66,7 +66,6 @@ export const FEATURE_LABELS = {
   // POS register
   'pos.customerCredit': 'V3',
   // Delivery platforms (Snappfood) come with the incoming orders, in V3.
-  'pos.onlineTab': 'V3',
   // The pay panel saying a delivery order's remainder goes with the courier
   'pos.pay.courierCollects': 'V3',
   // Orders list and the order drawer

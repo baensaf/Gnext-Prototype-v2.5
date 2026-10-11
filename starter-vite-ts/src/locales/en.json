@@ -3579,8 +3579,6 @@
   },
   "online": {
     "title": "Online orders",
-    "tabMenu": "Menu",
-    "tabOnline": "Online",
     "platform": {
       "SNAPPFOOD": "Snappfood"
     },
