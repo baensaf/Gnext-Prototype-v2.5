@@ -509,7 +509,6 @@
     },
     "actions": {
       "details": "Details",
-      "receipt": "Receipt",
       "reprint": "Reprint",
       "pay": "Pay",
       "complete": "Complete",
@@ -565,13 +564,6 @@
       "courierSlip": "Courier slip",
       "printer": "Printer",
       "allPrinters": "Every printer"
-    },
-    "receiptModal": {
-      "title": "Receipt #{{orderNumber}}",
-      "items": "ITEMS:",
-      "total": "TOTAL:",
-      "paid": "PAID:",
-      "close": "Close"
     },
     "drawer": {
       "voided": "Voided",
@@ -653,7 +645,6 @@
       "loadFailed": "Failed to load active orders",
       "updateStatusFailed": "Failed to update order status",
       "cancelFailed": "Failed to cancel order",
-      "receiptFailed": "Failed to load receipt details",
       "typeChangeFailed": "Could not change the order type",
       "detailFailed": "Could not load this order",
       "exportFailed": "Could not export the orders"

@@ -509,7 +509,6 @@
     },
     "actions": {
       "details": "جزئیات",
-      "receipt": "فاکتور",
       "reprint": "چاپ مجدد",
       "pay": "پرداخت",
       "complete": "تکمیل",
@@ -565,13 +564,6 @@
       "courierSlip": "برگه پیک",
       "printer": "چاپگر",
       "allPrinters": "همه چاپگرها"
-    },
-    "receiptModal": {
-      "title": "فاکتور فروش #{{orderNumber}}",
-      "items": "اقلام فاکتور:",
-      "total": "مبلغ کل:",
-      "paid": "پرداخت شده:",
-      "close": "بستن"
     },
     "drawer": {
       "voided": "ابطال شده",
@@ -653,7 +645,6 @@
       "loadFailed": "خطا در بارگذاری سفارش‌های فعال",
       "updateStatusFailed": "خطا در تغییر وضعیت سفارش",
       "cancelFailed": "خطا در لغو سفارش",
-      "receiptFailed": "خطا در دریافت فاکتور سفارش",
       "typeChangeFailed": "تغییر نوع فاکتور انجام نشد",
       "detailFailed": "بارگذاری این سفارش ممکن نشد",
       "exportFailed": "خروجی گرفتن از سفارش‌ها ممکن نشد"
