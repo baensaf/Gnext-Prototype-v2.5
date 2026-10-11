@@ -12,6 +12,8 @@ import { Payment } from '../../entities/Payment.entity';
 import { PaymentAttempt } from '../../entities/PaymentAttempt.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
+import { Terminal } from '../../entities/Terminal.entity';
+import { currentTillTerminalId } from '../../common/utils/till-context';
 import { AgentCommand } from '../../entities/AgentCommand.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { AgentCommandsService, ResultOutcome } from '../agent-gateway/agent-commands.service';
@@ -79,7 +81,19 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
       const device = await em.findOne(PaymentDevice, { where: { id: payment.device_id, tenant_id: payment.tenant_id } });
       return device && isAgentTerminal(device) ? device : null;
     }
-    // One terminal per branch in v1: the first the agent drives, by code.
+    // Each register has its own card terminal beside it: charge that one, never the one at
+    // the next counter.
+    const tillId = currentTillTerminalId() || order.terminal_id;
+    const till = tillId ? await em.findOne(Terminal, { where: { id: tillId, tenant_id: payment.tenant_id } }) : null;
+    if (till?.payment_device_id) {
+      const linked = await em.findOne(PaymentDevice, { where: { id: till.payment_device_id, tenant_id: payment.tenant_id } });
+      if (!linked || !isAgentTerminal(linked)) {
+        throw new BadRequestException(`The card terminal linked to ${till.name} is not connected to the branch agent`);
+      }
+      return linked;
+    }
+    // No terminal linked: the branch's only one. With several, guessing could charge a
+    // customer on a device at another counter.
     const devices = await em.find(PaymentDevice, {
       where: {
         tenant_id: payment.tenant_id,
@@ -90,7 +104,13 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
       },
       order: { code: 'ASC' },
     });
-    return devices.find(isAgentTerminal) ?? null;
+    const agentTerminals = devices.filter(isAgentTerminal);
+    if (agentTerminals.length > 1) {
+      throw new BadRequestException(
+        `This branch has several card terminals; link one to ${till?.name || 'this register'} under Terminals`,
+      );
+    }
+    return agentTerminals[0] ?? null;
   }
 
   /** A charge may be on the terminal right now; starting another could take the money twice. */

@@ -525,22 +525,34 @@ export class TenantService {
     });
   }
 
+  /** A register at the counter, or a self-service kiosk. */
+  private terminalType(type: string) {
+    const allowed = ['CASHIER', 'KIOSK'];
+    const upper = type.trim().toUpperCase();
+    if (!allowed.includes(upper)) {
+      throw new BadRequestException(`Terminal type ${type} is invalid. Allowed: ${allowed.join(', ')}`);
+    }
+    return upper;
+  }
+
+  private async assertTerminalCodeFree(tenantId: string, branchId: string, code: string, exceptId?: string) {
+    const existing = await this.terminalRepo.findOne({ where: { tenant_id: tenantId, branch_id: branchId, code } });
+    if (existing && existing.id !== exceptId) {
+      throw new ConflictException(`Terminal code ${code} already exists for this branch`);
+    }
+  }
+
   async createTerminal(tenantId: string, data: { branch_id: string; code: string; name: string; terminal_type?: string }, correlationId: string) {
     await this.getBranchById(tenantId, data.branch_id);
-    const existing = await this.terminalRepo.findOne({ where: { tenant_id: tenantId, branch_id: data.branch_id, code: data.code } });
-    if (existing) throw new ConflictException(`Terminal code ${data.code} already exists for this branch`);
-
-    const allowedTypes = ['CASHIER', 'KITCHEN_DISPLAY', 'SELF_KIOSK', 'MOBILE_POS'];
-    const terminalType = (data.terminal_type || 'CASHIER').toUpperCase();
-    if (!allowedTypes.includes(terminalType)) {
-      throw new BadRequestException(`Terminal type ${data.terminal_type} is invalid. Allowed: ${allowedTypes.join(', ')}`);
-    }
+    const code = data.code.trim().toUpperCase();
+    await this.assertTerminalCodeFree(tenantId, data.branch_id, code);
+    const terminalType = this.terminalType(data.terminal_type || 'CASHIER');
 
     const terminal = this.terminalRepo.create({
       tenant_id: tenantId,
       branch_id: data.branch_id,
-      code: data.code.toUpperCase(),
-      name: data.name,
+      code,
+      name: data.name.trim(),
       terminal_type: terminalType,
       is_active: true,
     });
@@ -564,8 +576,17 @@ export class TenantService {
     const terminal = await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } });
     if (!terminal) throw new NotFoundException('Terminal not found');
     const before = { ...terminal };
+    if (data.code !== undefined) {
+      data.code = data.code.trim().toUpperCase();
+      if (data.code !== terminal.code) await this.assertTerminalCodeFree(tenantId, data.branch_id || terminal.branch_id, data.code, terminal.id);
+    }
+    if (data.name !== undefined) {
+      data.name = data.name.trim();
+      if (!data.name) throw new BadRequestException('A register needs a name');
+    }
+    if (data.terminal_type !== undefined) data.terminal_type = this.terminalType(data.terminal_type);
     if (data.payment_device_id) {
-      // A kiosk charges on a terminal in its own shop, which its branch's agent can reach.
+      // A register charges on a terminal in its own shop, which its branch's agent can reach.
       const device = await this.terminalRepo.manager.findOne(PaymentDevice, {
         where: { id: data.payment_device_id, tenant_id: tenantId },
       });

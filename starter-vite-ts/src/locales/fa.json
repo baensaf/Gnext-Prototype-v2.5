@@ -2943,7 +2943,12 @@
       "receiptBranchPrinter": "چاپگر رسید شعبه",
       "receiptCopies": "نسخه",
       "receiptSaved": "تنظیم چاپ رسید برای {{name}} ذخیره شد",
-      "receiptError": "ذخیره محل چاپ رسید ممکن نشد"
+      "receiptError": "ذخیره محل چاپ رسید ممکن نشد",
+      "editTerminal": "ویرایش پایانه",
+      "edit": "ویرایش",
+      "editSuccess": "{{name}} ذخیره شد.",
+      "editError": "ذخیره پایانه انجام نشد",
+      "typeLocked": "نوع پایانه هنگام افزودن تعیین می‌شود."
     },
     "printers": {
       "title": "چاپگرها",

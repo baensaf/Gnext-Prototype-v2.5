@@ -2943,7 +2943,12 @@
       "receiptBranchPrinter": "Branch's receipt printer",
       "receiptCopies": "Copies",
       "receiptSaved": "Receipt printing saved for {{name}}",
-      "receiptError": "Could not save where the receipts print"
+      "receiptError": "Could not save where the receipts print",
+      "editTerminal": "Edit register",
+      "edit": "Edit",
+      "editSuccess": "{{name}} saved.",
+      "editError": "Could not save the register",
+      "typeLocked": "A register's type is set when it is added."
     },
     "printers": {
       "title": "Printers",
