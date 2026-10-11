@@ -2,7 +2,7 @@ import type { GridColDef, GridSortModel, GridFilterModel, GridColumnVisibilityMo
 import type { RefundRecord } from 'src/api/refundApi';
 import type { ReasonCode } from 'src/api/settingsApi';
 import type { LabelColor } from 'src/components/label';
-import type { ReceiptData, PaymentRecord } from 'src/api/paymentApi';
+import type { PaymentRecord } from 'src/api/paymentApi';
 import type { OrderHeader, OrderListRow, OrderLifecycle, OrderListQuery } from 'src/api/orderApi';
 
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,6 @@ import PrintIcon from '@mui/icons-material/Print';
 import CancelIcon from '@mui/icons-material/Cancel';
 import PersonIcon from '@mui/icons-material/Person';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
-import ReceiptIcon from '@mui/icons-material/Receipt';
 import HistoryIcon from '@mui/icons-material/History';
 import PaymentIcon from '@mui/icons-material/Payment';
 import DownloadIcon from '@mui/icons-material/Download';
@@ -68,9 +67,9 @@ import {
 import { paths } from 'src/routes/paths';
 
 import { localMobile } from 'src/utils/phone';
+import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 import { useCurrencyLabel } from 'src/utils/currency';
-import { fTime, fDateTime } from 'src/utils/format-time';
 import { useLiveRefresh } from 'src/utils/use-live-refresh';
 import { orderRefOf, useShowsOrderCode } from 'src/utils/order-ref';
 import {
@@ -315,10 +314,6 @@ export function OrdersWorkflowPage() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderHeader | null>(null);
   const [reasonCodeId, setReasonCodeId] = useState('');
-
-  // Receipt Modal State
-  const [receiptModalOpen, setReceiptModalOpen] = useState(false);
-  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
 
   // Pay Existing Order (Checkout) State
   const [payModalOpen, setPayModalOpen] = useState(false);
@@ -730,16 +725,6 @@ export function OrdersWorkflowPage() {
       setTypeError(err.detail || err.message || t('orders.errors.typeChangeFailed', 'Could not change the order type'));
     } finally {
       setTypeSubmitting(false);
-    }
-  };
-
-  const handleViewReceipt = async (orderId: string) => {
-    try {
-      const data = await paymentApi.getReceipt(orderId);
-      setReceiptData(data);
-      setReceiptModalOpen(true);
-    } catch (err: any) {
-      setError(err.detail || t('orders.errors.receiptFailed'));
     }
   };
 
@@ -1401,14 +1386,6 @@ export function OrdersWorkflowPage() {
           </ListItemIcon>
           <ListItemText>{t('orders.actions.details')}</ListItemText>
         </MenuItem>
-        {menuOrder && hasReceipt(menuOrder) && (
-          <MenuItem onClick={fromMenu((o) => handleViewReceipt(o.id))}>
-            <ListItemIcon>
-              <ReceiptIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText>{t('orders.actions.receipt')}</ListItemText>
-          </MenuItem>
-        )}
         {/* A held order has printed nothing yet. */}
         {!readOnly && menuOrder?.status !== 'DRAFT' && (
           <MenuItem onClick={fromMenu(handleOpenReprintDialog)}>
@@ -1569,65 +1546,6 @@ export function OrdersWorkflowPage() {
           >
             {t('orders.reprintDialog.confirm')}
           </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Receipt Modal */}
-      <Dialog maxWidth="xs" onClose={() => setReceiptModalOpen(false)} open={receiptModalOpen} fullWidth>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 'bold' }}>
-          <ReceiptIcon color="primary" />
-          {t('orders.receiptModal.title', { orderNumber: receiptData?.receipt_header.order_number })}
-        </DialogTitle>
-        <DialogContent>
-          {receiptData && (
-            <Paper
-              variant="outlined"
-              sx={{
-                bgcolor: '#fafafa',
-                fontFamily: 'monospace',
-                fontSize: 12,
-                p: 2,
-              }}
-            >
-              <Typography align="center" sx={{ fontWeight: 800 }} variant="subtitle2">
-                {receiptData.receipt_header.tenant_name}
-              </Typography>
-              <Typography align="center" color="text.secondary" sx={{ display: 'block', mb: 1 }} variant="caption">
-                {receiptData.receipt_header.branch_name} • {receiptData.receipt_header.branch_phone}
-              </Typography>
-              <Typography align="center" color="text.secondary" sx={{ display: 'block', mb: 1.5 }} variant="caption">
-                {fDateTime(receiptData.receipt_header.placed_at)}
-              </Typography>
-
-              <Typography sx={{ borderBottom: 1, borderColor: 'divider', display: 'block', fontWeight: 700, mb: 1, pb: 0.5 }} variant="caption">
-                {t('orders.receiptModal.items')}
-              </Typography>
-              {receiptData.items.map((it, idx) => (
-                <Stack key={idx} direction="row" sx={{ justifyContent: 'space-between', mb: 0.5 }}>
-                  <Typography variant="caption">
-                    {MoneyUtil.format(it.quantity, 0)}x {it.product_name}
-                  </Typography>
-                  <Typography sx={{ fontWeight: 700 }} variant="caption">
-                    <span dir="ltr">{MoneyUtil.formatCurrency(it.total_amount)} {currency}</span>
-                  </Typography>
-                </Stack>
-              ))}
-
-              <Typography sx={{ borderTop: 1, borderColor: 'divider', display: 'block', fontWeight: 700, mt: 1.5, pt: 1 }} variant="caption">
-                <span dir="ltr">{t('orders.receiptModal.total')} {MoneyUtil.formatCurrency(receiptData.totals.total_amount)} {currency}</span>
-              </Typography>
-              <Typography color="success.main" sx={{ display: 'block', fontWeight: 700 }} variant="caption">
-                <span dir="ltr">{t('orders.receiptModal.paid')} {MoneyUtil.formatCurrency(receiptData.totals.paid_amount)} {currency}</span>
-              </Typography>
-
-              <Typography align="center" color="text.secondary" sx={{ display: 'block', mt: 2 }} variant="caption">
-                {receiptData.receipt_footer.bilingual_note_en}
-              </Typography>
-            </Paper>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReceiptModalOpen(false)}>{t('orders.receiptModal.close')}</Button>
         </DialogActions>
       </Dialog>
 
@@ -2053,7 +1971,6 @@ export function OrdersWorkflowPage() {
                       ? 'report'
                       : null;
               const more = [
-                hasReceipt(order) && { key: 'receipt', icon: <ReceiptIcon fontSize="small" />, label: t('orders.actions.receipt'), run: () => handleViewReceipt(order.id) },
                 !readOnly && order.status !== 'DRAFT' && { key: 'reprint', icon: <PrintIcon fontSize="small" />, label: t('orders.actions.reprint'), run: () => handleOpenReprintDialog(order) },
                 // Snappfood's lines are Snappfood's: it has no call for a store to change them.
                 canEditLines(order) && { key: 'edit', icon: <EditIcon fontSize="small" />, label: t('orders.actions.editOrder', 'Edit lines'), run: () => setEditDialogOpen(true) },
