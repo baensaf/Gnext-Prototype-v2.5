@@ -20,6 +20,8 @@ import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { CHANNEL_PRICING_KEY, applyChannelRule, readChannelRule, displayDiscountFor, beforeDiscountPrice } from '../../common/utils/channel-price.util';
 import { inStorePrice } from '../../common/utils/price-list.util';
+import { addDays } from '../../common/utils/business-day';
+import { loadBusinessClock } from '../../common/utils/business-clock';
 
 /** What besides a whole product a stop can be on. */
 export interface StopTarget {
@@ -30,7 +32,15 @@ export interface StopTarget {
    * store). Empty means off everywhere.
    */
   channel?: string | null;
+  /**
+   * How long the stop lasts, as Snappfood's two kinds of "ناموجود": until somebody puts it back
+   * (the default), or until the next shift, which ends by itself when the next business day starts.
+   */
+  until?: StopUntil | null;
 }
+
+export type StopUntil = 'FURTHER_NOTICE' | 'NEXT_SHIFT';
+export const STOP_UNTIL: StopUntil[] = ['FURTHER_NOTICE', 'NEXT_SHIFT'];
 
 /** The channels an item can be stopped on by itself. */
 export const STOP_CHANNELS = ['SNAPPFOOD'];
@@ -200,6 +210,26 @@ export class CatalogService {
   }
 
   /**
+   * Put a category's products in the order given, as Snappfood's "ترتیب محصولات". Every id must
+   * be one of the category's products; the ones left out keep coming after, by name.
+   */
+  async reorderProducts(tenantId: string, categoryId: string, ids: string[], correlationId: string) {
+    const unique = [...new Set(ids || [])];
+    if (!unique.length) throw new BadRequestException('No products to order');
+    const rows = await this.prodRepo.find({ where: { tenant_id: tenantId, id: In(unique) } });
+    if (rows.length !== unique.length || rows.some((p) => p.category_id !== categoryId)) {
+      throw new BadRequestException('Order the products of one category at a time');
+    }
+    await this.prodRepo.manager.transaction(async (em) => {
+      for (const [index, id] of unique.entries()) {
+        await em.update(Product, { id, tenant_id: tenantId }, { sort_order: index + 1 });
+      }
+    });
+    await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'PRODUCTS_REORDERED', entityType: 'Category', entityId: categoryId, correlationId, details: { ids: unique } });
+    return { success: true };
+  }
+
+  /**
    * Archive a category. One that still holds products is refused unless they move to another
    * category in the same step (audit C12: they used to lose their POS tab but stay orderable
    * elsewhere).
@@ -219,7 +249,7 @@ export class CatalogService {
     }
 
     await this.catRepo.manager.transaction(async (em) => {
-      if (target) await em.update(Product, { tenant_id: tenantId, category_id: id }, { category_id: target.id });
+      if (target) await em.update(Product, { tenant_id: tenantId, category_id: id }, { category_id: target.id, sort_order: null });
       cat.is_active = false;
       await em.save(cat);
       await em.softRemove(cat);
@@ -243,7 +273,8 @@ export class CatalogService {
     if (!query || (!query.page && !query.limit && !query.search)) {
       const where: any = { tenant_id: tenantId };
       if (categoryId) where.category_id = categoryId;
-      const products = await this.prodRepo.find({ where, order: { name: 'ASC' } });
+      // In each category's own order (set by hand), then by name for the ones not placed yet.
+      const products = await this.prodRepo.find({ where, order: { sort_order: 'ASC', name: 'ASC' } });
       // Variants ride along so a list can show the hot and the cold sandwich as rows of their own.
       const variants = await this.variantRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', code: 'ASC' } });
       // The main photo's address, so a list can show a thumbnail without a request per product.
@@ -270,7 +301,8 @@ export class CatalogService {
       qb.andWhere('(LOWER(p.name) LIKE :search OR LOWER(p.code) LIKE :search OR LOWER(p.barcode) LIKE :search)', { search: `%${query.search.toLowerCase()}%` });
     }
 
-    qb.orderBy('p.name', 'ASC')
+    qb.orderBy('p.sort_order', 'ASC', 'NULLS LAST')
+      .addOrderBy('p.name', 'ASC')
       .skip((page - 1) * limit)
       .take(limit);
 
@@ -359,6 +391,9 @@ export class CatalogService {
     if (!prod) throw new NotFoundException('Product not found');
     const before = { ...prod };
     if (data.code !== undefined) data.code = await this.productCode(tenantId, data.code, id);
+    // Its place is in its category; moved to another, it goes after that one's placed products.
+    if (data.category_id && data.category_id !== prod.category_id) data.sort_order = null;
+    else delete data.sort_order;
 
     if (data.base_price) {
       this.assertPrice(data.base_price, 'base_price');
@@ -866,6 +901,7 @@ export class CatalogService {
     by: StopActor = {},
   ) {
     const key = this.stopKey(productId, target);
+    const until = await this.stopEnds(tenantId, branchId, target.until);
     let avail = await this.availRepo.findOne({ where: this.stopWhere(tenantId, key, branchId) });
     if (!avail) {
       avail = this.availRepo.create({
@@ -873,12 +909,12 @@ export class CatalogService {
         ...key,
         branch_id: branchId || null,
         is_suspended: true,
-        suspended_until: null,
+        suspended_until: until,
         reason: null,
       });
     } else {
       avail.is_suspended = true;
-      avail.suspended_until = null;
+      avail.suspended_until = until;
       avail.reason = null;
     }
 
@@ -891,10 +927,22 @@ export class CatalogService {
       action: 'PRODUCT_SUSPENDED',
       branchId,
       correlationId: correlationId || '00000000-0000-0000-0000-000000000000',
-      details: { ...key, branchId, source: by.source || 'ADMIN' },
+      details: { ...key, branchId, source: by.source || 'ADMIN', until: target.until || 'FURTHER_NOTICE', endsAt: until },
     });
 
     return saved;
+  }
+
+  /**
+   * When a stop ends: never for "until further notice"; for "until next shift", when the next
+   * business day starts at the branch (the chain's cutoff on the branch's clock), as Snappfood's
+   * "ناموجود تا شیفت بعد" comes back by itself.
+   */
+  private async stopEnds(tenantId: string, branchId: string | undefined, until?: StopUntil | null): Promise<Date | null> {
+    if (!until || until === 'FURTHER_NOTICE') return null;
+    if (until !== 'NEXT_SHIFT') throw new BadRequestException('A stop lasts until further notice or until the next shift');
+    const clock = await loadBusinessClock(this.availRepo.manager, tenantId, branchId || null);
+    return clock.startOf(addDays(clock.today(), 1));
   }
 
   async resumeProduct(tenantId: string, productId: string | undefined, branchId?: string, correlationId?: string, target: StopTarget = {}, by: StopActor = {}) {
@@ -957,14 +1005,14 @@ export class CatalogService {
   async bulkStop(
     tenantId: string,
     targets: BulkStopTargets,
-    stop: { channel?: string | null },
+    stop: { channel?: string | null; until?: StopUntil | null },
     correlationId: string,
     by: StopActor = {},
   ) {
     const { products, branchIds } = await this.bulkProducts(tenantId, targets);
     for (const branchId of branchIds) {
       for (const product of products) {
-        await this.suspendProduct(tenantId, product.id, branchId || undefined, correlationId, { channel: stop.channel || null }, by);
+        await this.suspendProduct(tenantId, product.id, branchId || undefined, correlationId, { channel: stop.channel || null, until: stop.until || null }, by);
       }
     }
     return { products: products.length, branches: branchIds.length, stopped: products.length * branchIds.length };
@@ -1299,7 +1347,7 @@ export class CatalogService {
    */
   async getChannelPriceSheet(tenantId: string, channel: string, branchId: string | null = null) {
     const rule = await this.channelRule(tenantId, channel);
-    const products = await this.prodRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { code: 'ASC' } });
+    const products = await this.prodRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', name: 'ASC' } });
     const variants = await this.variantRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', code: 'ASC' } });
     const now = new Date();
     const list = await this.priceLists.listForBranch(tenantId, branchId);

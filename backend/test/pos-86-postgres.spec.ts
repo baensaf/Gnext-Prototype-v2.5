@@ -63,15 +63,24 @@ describe('86 from the POS tile (PostgreSQL)', () => {
   const manager = () => session(managerId, 'MANAGER');
   const stopped = async () => (await catalog.getSuspension(tenantId, burger, branchId)).isSuspended;
 
-  it('lets a cashier stop an item until further notice, with no reason or pin, and logs who did it', async () => {
+  it('lets a cashier stop an item until the next shift, with no reason or pin, and logs who did it', async () => {
     const stop = await controller.posStop({ productId: burger }, cashier());
-    expect(stop.suspended_until).toBeNull();
+    // Snappfood's everyday stop: it ends by itself when the next business day starts.
+    const ends = new Date(stop.suspended_until!);
+    expect(ends.getTime()).toBeGreaterThan(Date.now());
+    expect(ends.getTime()).toBeLessThanOrEqual(Date.now() + 25 * 3600_000);
     expect(stop.reason).toBeNull();
     expect(await stopped()).toBe(true);
+    expect((await catalog.getSuspension(tenantId, burger, branchId, new Date(ends.getTime() + 1000))).isSuspended).toBe(false);
 
     const log = await dataSource.getRepository(AuditEvent).findOne({ where: { tenant_id: tenantId, action: 'PRODUCT_SUSPENDED' }, order: { occurred_at: 'DESC' } });
     expect(log).toMatchObject({ actor_id: cashierId, branch_id: branchId });
-    expect(log!.details).toMatchObject({ source: 'POS' });
+    expect(log!.details).toMatchObject({ source: 'POS', until: 'NEXT_SHIFT' });
+  });
+
+  it('stops until further notice when the cashier asks for that', async () => {
+    const stop = await controller.posStop({ productId: burger, until: 'FURTHER_NOTICE' }, cashier());
+    expect(stop.suspended_until).toBeNull();
   });
 
   it('lets a cashier put an item back with no pin', async () => {

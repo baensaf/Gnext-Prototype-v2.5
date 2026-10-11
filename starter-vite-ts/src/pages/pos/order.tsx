@@ -108,6 +108,7 @@ import { useRegisterShift } from 'src/components/shift/use-register-shift';
 import { PosShiftBar, PosShiftGate, PosShiftAccountLink } from 'src/components/shift/pos-shift';
 
 import { PosStopDialog } from './pos-stop-dialog';
+import { placeOne, changeLine } from './cart-lines';
 import { useFillViewport } from './use-fill-viewport';
 import { PosCustomerPicker } from './pos-customer-picker';
 import { ClosedBranchBanner } from './closed-branch-banner';
@@ -123,6 +124,26 @@ export interface CartItem {
   hasChoices?: boolean;
   /** What the kitchen must know about this line only ("no onion"); prints under it on the chit. */
   notes?: string;
+}
+
+/** Whether a change to a stacked line ("Burger ×3") is for just one of them or all. */
+function EditScopePicker({
+  t,
+  scope,
+  quantity,
+  onChange,
+}: {
+  t: (key: string, options?: any) => string;
+  scope: 'ONE' | 'ALL';
+  quantity: number;
+  onChange: (scope: 'ONE' | 'ALL') => void;
+}) {
+  return (
+    <ToggleButtonGroup exclusive fullWidth size="small" color="primary" value={scope} onChange={(_, v) => v && onChange(v)} sx={{ mb: 2 }}>
+      <ToggleButton value="ONE">{t('pos.options.justOne')}</ToggleButton>
+      <ToggleButton value="ALL">{t('pos.options.allOfLine', { count: quantity })}</ToggleButton>
+    </ToggleButtonGroup>
+  );
 }
 
 /** The address list's last entry: opens the add-address dialog. */
@@ -166,6 +187,18 @@ export function PosOrderPage() {
       branchPrices.get(`${product.id}:${variant?.id || ''}`) ?? (variant ? variant.base_price : product.base_price || '0'),
     [branchPrices]
   );
+  /** A cart line's price for its quantity: the item at this branch's price plus its add-ons. */
+  const lineTotal = useCallback(
+    (line: CartItem) =>
+      MoneyUtil.multiply(
+        line.selectedOptions.reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), priceOf(line.product, line.selectedVariant)),
+        line.quantity.toString(),
+        2
+      ),
+    [priceOf]
+  );
+  // Changing a stacked line ("Burger ×3"): just one of them, or all of it.
+  const [editScope, setEditScope] = useState<'ONE' | 'ALL'>('ONE');
   // The picked customer itself, for the picker's label: the till no longer loads a customer
   // list, it searches the server (see PosCustomerPicker).
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -487,6 +520,7 @@ export function PosOrderPage() {
     setSelectedProduct(p);
     setCheckedOptionIds([]);
     setEditingLine(lineIndex);
+    setEditScope('ONE');
     // A failed read is not "no sizes, no add-ons": ringing the dish up bare would only be
     // refused at submit, after the cart is built. Say so here; tapping the tile tries again.
     let vList: ProductVariant[];
@@ -577,13 +611,15 @@ export function PosOrderPage() {
   /** Open the note dialog on the order's note (null) or on one cart line's. */
   const openNotes = (lineIdx: number | null) => {
     setNoteLineIdx(lineIdx);
+    setEditScope('ONE');
     setTempNotesInput(lineIdx === null ? orderNotes : cart[lineIdx]?.notes || '');
     setNotesModalOpen(true);
   };
 
   const saveNote = (text: string) => {
     if (noteLineIdx === null) setOrderNotes(text);
-    else setCart((prev) => prev.map((ci, i) => (i === noteLineIdx ? { ...ci, notes: text || undefined } : ci)));
+    // A note for one of a stacked line ("no onion" on one burger of three) moves that one to its own line.
+    else setCart((prev) => changeLine(prev, noteLineIdx, { notes: text || undefined }, editScope, lineTotal));
     setNotesModalOpen(false);
   };
 
@@ -592,43 +628,11 @@ export function PosOrderPage() {
   const addToCart = (product: Product, variant: ProductVariant | undefined, options: OptionItem[], hasChoices = false) => {
     if (placedOrder) setPlacedOrder(null);
 
-    const basePrice = priceOf(product, variant);
-    const optionsSum = options.reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), '0');
-    const itemUnitPrice = MoneyUtil.add(basePrice, optionsSum, 2);
-
-    setCart((prev) => {
-      const existingIndex = prev.findIndex(
-        (ci) =>
-          // A line with a note is one item asked for differently; another of it is its own line.
-          !ci.notes &&
-          ci.product.id === product.id &&
-          ci.selectedVariant?.id === variant?.id &&
-          JSON.stringify(ci.selectedOptions) === JSON.stringify(options),
-      );
-
-      if (existingIndex > -1) {
-        const copy = [...prev];
-        const newQty = copy[existingIndex].quantity + 1;
-        copy[existingIndex] = {
-          ...copy[existingIndex],
-          quantity: newQty,
-          lineSubtotal: MoneyUtil.multiply(itemUnitPrice, newQty.toString(), 2),
-        };
-        return copy;
-      }
-
-      return [
-        ...prev,
-        {
-          product,
-          selectedVariant: variant,
-          quantity: 1,
-          selectedOptions: options,
-          lineSubtotal: itemUnitPrice,
-          hasChoices,
-        },
-      ];
-    });
+    // The same item with the same size and add-ons (in any order) stacks onto its line; a line
+    // with a note is one item asked for differently, so another of it gets its own line.
+    setCart((prev) =>
+      placeOne(prev, { product, selectedVariant: variant, quantity: 1, selectedOptions: options, lineSubtotal: '0', hasChoices }, lineTotal)
+    );
   };
 
   // No line goes to the kitchen with a required group empty (a combo's drink, a burger's
@@ -665,20 +669,10 @@ export function PosOrderPage() {
     const hasChoices = productVariants.length > 1 || optionGroups.length > 0;
 
     if (editingLine !== null) {
-      // The line keeps its place and quantity; only its size and add-ons change.
-      const unit = chosenOptions.reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), priceOf(selectedProduct, chosenVariant));
+      // All of the line keeps its place and quantity; just one of a stacked line moves to its own.
+      const line = editingLine;
       setCart((prev) =>
-        prev.map((ci, i) =>
-          i === editingLine
-            ? {
-                ...ci,
-                selectedVariant: chosenVariant,
-                selectedOptions: chosenOptions,
-                lineSubtotal: MoneyUtil.multiply(unit, ci.quantity.toString(), 2),
-                hasChoices,
-              }
-            : ci
-        )
+        changeLine(prev, line, { selectedVariant: chosenVariant, selectedOptions: chosenOptions, hasChoices }, editScope, lineTotal)
       );
     } else {
       addToCart(selectedProduct, chosenVariant, chosenOptions, hasChoices);
@@ -2556,6 +2550,9 @@ export function PosOrderPage() {
       <Dialog open={optionDialogOpen} onClose={closeOptionDialog} maxWidth="sm" fullWidth aria-keyshortcuts="Escape">
         <DialogTitle sx={{ fontWeight: 'bold' }}>{t('pos.options.title', { name: selectedProduct?.name })}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
+          {editingLine !== null && (cart[editingLine]?.quantity || 0) > 1 && (
+            <EditScopePicker t={t} scope={editScope} onChange={setEditScope} quantity={cart[editingLine].quantity} />
+          )}
           {productVariants.length > 0 && (
             <Box sx={{ mb: 2.5 }}>
               <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -2734,6 +2731,9 @@ export function PosOrderPage() {
               ? t('pos.notes.help')
               : t('pos.notes.lineHelp', { item: cart[noteLineIdx]?.product.name || '' })}
           </Typography>
+          {noteLineIdx !== null && (cart[noteLineIdx]?.quantity || 0) > 1 && (
+            <EditScopePicker t={t} scope={editScope} onChange={setEditScope} quantity={cart[noteLineIdx].quantity} />
+          )}
           <TextField
             multiline
             rows={3}

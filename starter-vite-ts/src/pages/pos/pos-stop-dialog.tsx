@@ -1,9 +1,24 @@
-import type { Product, ProductVariant, ProductAvailability } from 'src/api/catalogApi';
+import type { Product, StopUntil, ProductVariant, ProductAvailability } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 
-import { Stack, Alert, Button, Dialog, Select, MenuItem, InputLabel, DialogTitle, FormControl, DialogActions, DialogContent } from '@mui/material';
+import {
+  Stack,
+  Alert,
+  Radio,
+  Button,
+  Dialog,
+  Select,
+  MenuItem,
+  InputLabel,
+  RadioGroup,
+  DialogTitle,
+  FormControl,
+  DialogActions,
+  DialogContent,
+  FormControlLabel,
+} from '@mui/material';
 
 import { catalogApi } from 'src/api/catalogApi';
 
@@ -22,19 +37,22 @@ type Props = {
 const isLive = (a: ProductAvailability) => a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date());
 
 /**
- * 86 an item from its tile: the whole product or one size, off until somebody puts it back.
- * Anyone at the register can do it, with no reason and no pin. One head office stopped at
+ * 86 an item from its tile: the whole product or one size, off until the next shift (the
+ * default, as on Snappfood) or until somebody puts it back. Anyone at the register can do it,
+ * with no reason and no pin. One head office stopped at
  * every branch cannot be put back from a register.
  */
 export function PosStopDialog({ product, branchId, availabilities, onClose, onDone }: Props) {
   const { t } = useTranslation();
   const [sizes, setSizes] = useState<ProductVariant[]>([]);
   const [variantId, setVariantId] = useState(WHOLE);
+  const [until, setUntil] = useState<StopUntil>('NEXT_SHIFT');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setVariantId(WHOLE);
+    setUntil('NEXT_SHIFT');
     setError(null);
     setSizes([]);
     if (!product) return;
@@ -63,7 +81,10 @@ export function PosStopDialog({ product, branchId, availabilities, onClose, onDo
     }
   };
   const stop = () =>
-    run(() => catalogApi.posStop({ productId: product.id, variantId: variantId || null, branchId }), t('pos.stop.stoppedFurtherNotice', { name: product.name }));
+    run(
+      () => catalogApi.posStop({ productId: product.id, variantId: variantId || null, branchId, until }),
+      t(until === 'NEXT_SHIFT' ? 'pos.stop.stoppedNextShift' : 'pos.stop.stoppedFurtherNotice', { name: product.name })
+    );
   const resume = () =>
     run(() => catalogApi.posResume({ productId: product.id, variantId: variantId || null, branchId }), t('pos.stop.resumed', { name: product.name }));
 
@@ -95,7 +116,10 @@ export function PosStopDialog({ product, branchId, availabilities, onClose, onDo
           {current ? (
             <Alert severity={chainStop ? 'warning' : 'info'}>{chainStop ? t('pos.stop.chainWide') : t('pos.stop.isOff')}</Alert>
           ) : (
-            <Alert severity="info">{t('pos.stop.untilFurtherNotice')}</Alert>
+            <RadioGroup value={until} onChange={(e) => setUntil(e.target.value as StopUntil)}>
+              <FormControlLabel value="NEXT_SHIFT" control={<Radio size="small" />} label={t('catalog.availabilityPage.modeNextShift')} />
+              <FormControlLabel value="FURTHER_NOTICE" control={<Radio size="small" />} label={t('catalog.availabilityPage.modeManual')} />
+            </RadioGroup>
           )}
         </Stack>
       </DialogContent>

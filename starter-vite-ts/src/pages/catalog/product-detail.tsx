@@ -148,8 +148,8 @@ export function ProductDetailPage() {
       setError(null);
 
       const aList = await catalogApi.getAvailabilities(selectedBranchId || undefined).catch(() => [] as ProductAvailability[]);
-      // The item's own stops here; a Snappfood-only stop does not take it off at the counter.
-      setStops(aList.filter((a) => a.product_id === prod.id && !a.variant_id && !a.channel));
+      // The item's and its types' own stops here; a Snappfood-only stop does not take it off at the counter.
+      setStops(aList.filter((a) => a.product_id === prod.id && !a.option_item_id && !a.channel));
     } catch (err: any) {
       setError(err.detail || err.message || t('catalog.productDetailPage.errors.loadFailed'));
     } finally {
@@ -161,9 +161,33 @@ export function ProductDetailPage() {
     loadData();
   }, [loadData]);
 
-  const liveStop = stops.find(
-    (a) => a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date())
-  );
+  /** The live stop on the product (no variant) or on one of its types, at the branch in the header. */
+  const liveStop = (variantId: string | null) =>
+    stops.find(
+      (a) =>
+        (a.variant_id || null) === variantId &&
+        a.is_suspended &&
+        (!a.suspended_until || new Date(a.suspended_until) > new Date())
+    );
+  const stockState = (variantId: string | null): 'AVAILABLE' | 'NEXT_SHIFT' | 'FURTHER_NOTICE' => {
+    const stop = liveStop(variantId);
+    if (!stop) return 'AVAILABLE';
+    return stop.suspended_until ? 'NEXT_SHIFT' : 'FURTHER_NOTICE';
+  };
+
+  /** Snappfood's "وضعیت موجودی" select, for the product or one of its types, saved at once. */
+  const handleStockChange = async (variantId: string | null, next: 'AVAILABLE' | 'NEXT_SHIFT' | 'FURTHER_NOTICE') => {
+    if (!id) return;
+    const target = { productId: id, variantId: variantId || undefined, branchId: selectedBranchId || undefined };
+    try {
+      if (next === 'AVAILABLE') await catalogApi.resumeItem(target);
+      else await catalogApi.stopItem({ ...target, until: next });
+      const aList = await catalogApi.getAvailabilities(selectedBranchId || undefined);
+      setStops(aList.filter((a) => a.product_id === id && !a.option_item_id && !a.channel));
+    } catch (err: any) {
+      setError(err.detail || err.message || t('catalog.availabilityPage.errors.suspendFailed'));
+    }
+  };
 
   /** The add-ons of a group this product offers: none when the group is not on it. */
   const offeredIds = (group: OptionGroup) => {
@@ -528,30 +552,28 @@ export function ProductDetailPage() {
                 <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                   {t('catalog.productDetailPage.onSale.title', 'On sale')}
                 </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                  {t('catalog.productDetailPage.onSale.help')}
+                </Typography>
                 <Stack spacing={1.5}>
-                  <Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('catalog.productDetailPage.onSale.status', 'Availability')}
-                    </Typography>
-                    <Box>
-                      {liveStop ? (
-                        <Chip
-                          size="small"
-                          color={liveStop.suspended_until ? 'warning' : 'default'}
-                          label={
-                            liveStop.suspended_until
-                              ? t('catalog.availabilityPage.statusOffUntil', {
-                                  defaultValue: 'Unavailable until {{time}}',
-                                  time: fDateTime(liveStop.suspended_until),
-                                })
-                              : t('catalog.availabilityPage.statusOffManual', 'Unavailable until further notice')
-                          }
-                        />
-                      ) : (
-                        <Chip size="small" color="success" label={t('catalog.availabilityPage.statusAvailable')} />
-                      )}
-                    </Box>
-                  </Box>
+                  {(variants.length ? variants.map((v) => ({ id: v.id as string | null, name: v.name })) : [{ id: null, name: product?.name || '' }]).map((row) => (
+                    <TextField
+                      key={row.id || 'whole'}
+                      select
+                      size="small"
+                      fullWidth
+                      label={row.name}
+                      value={stockState(row.id)}
+                      // A stop on the whole product covers its types; it is changed on the Availability page.
+                      disabled={!!row.id && !!liveStop(null)}
+                      onChange={(e) => handleStockChange(row.id, e.target.value as 'AVAILABLE' | 'NEXT_SHIFT' | 'FURTHER_NOTICE')}
+                      helperText={stockState(row.id) === 'NEXT_SHIFT' ? fDateTime(liveStop(row.id)!.suspended_until!) : undefined}
+                    >
+                      <MenuItem value="AVAILABLE">{t('catalog.availabilityPage.statusAvailable')}</MenuItem>
+                      <MenuItem value="NEXT_SHIFT">{t('catalog.availabilityPage.modeNextShift')}</MenuItem>
+                      <MenuItem value="FURTHER_NOTICE">{t('catalog.availabilityPage.modeManual')}</MenuItem>
+                    </TextField>
+                  ))}
                   <Button size="small" variant="outlined" onClick={() => navigate('/app/catalog/availability')}>
                     {t('catalog.productsPage.manageAvailability', 'Manage availability')}
                   </Button>

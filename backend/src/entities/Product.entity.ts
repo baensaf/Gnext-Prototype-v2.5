@@ -47,6 +47,13 @@ export class Product {
   @Column({ type: 'jsonb', default: () => "'[]'" })
   gallery_asset_ids: string[];
 
+  /**
+   * Its place in its category, set by hand. Null means not placed yet: it comes after the
+   * placed ones, by name (Postgres sorts nulls last).
+   */
+  @Column({ type: 'integer', nullable: true })
+  sort_order: number | null;
+
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

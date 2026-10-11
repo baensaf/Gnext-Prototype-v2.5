@@ -55,6 +55,8 @@ export interface Product {
   max_per_order?: number | null;
   /** Photos after the main one, in order. */
   gallery_asset_ids?: string[];
+  /** Its place in its category; null until a category is put in order. */
+  sort_order?: number | null;
   optionGroups?: OptionGroup[];
   variants?: ProductVariant[];
   /** The main photo's address; on the product list only. */
@@ -196,7 +198,12 @@ export interface StopRequest {
   branchId?: string;
   /** Off on this channel only (SNAPPFOOD); empty for everywhere. */
   channel?: string;
+  /** Until the next shift (ends by itself at the next business day) or until further notice (the default). */
+  until?: StopUntil;
 }
+
+/** Snappfood's two kinds of "ناموجود". */
+export type StopUntil = 'NEXT_SHIFT' | 'FURTHER_NOTICE';
 
 export interface ChannelPriceSheet {
   channel: string;
@@ -269,6 +276,10 @@ export const catalogApi = {
   updateProduct: async (id: string, data: Partial<Product>): Promise<Product> => {
     const res = await httpClient.patch(`/api/v1/products/${id}`, data);
     return res.data;
+  },
+  /** A category's products in their new order (Snappfood's "ترتیب محصولات"). */
+  reorderProducts: async (categoryId: string, ids: string[]): Promise<void> => {
+    await httpClient.put(`/api/v1/categories/${categoryId}/products/order`, { ids });
   },
   archiveProduct: async (id: string): Promise<void> => {
     await httpClient.delete(`/api/v1/products/${id}`);
@@ -404,7 +415,7 @@ export const catalogApi = {
     return res.data;
   },
   /** The register's own 86: off until somebody puts it back, no reason, no pin. */
-  posStop: async (body: { productId: string; variantId?: string | null; branchId?: string | null }): Promise<ProductAvailability> => {
+  posStop: async (body: { productId: string; variantId?: string | null; branchId?: string | null; until?: StopUntil }): Promise<ProductAvailability> => {
     const res = await httpClient.post('/api/v1/availability/pos-stop', { ...body, variantId: body.variantId || undefined, branchId: body.branchId || undefined });
     return res.data;
   },

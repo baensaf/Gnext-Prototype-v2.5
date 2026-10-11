@@ -79,7 +79,7 @@ export class KioskService {
 
     const listedProducts = await this.productRepo.find({
       where: { tenant_id: tenantId, is_active: true },
-      order: { name: 'ASC' },
+      order: { sort_order: 'ASC', name: 'ASC' },
     });
     // A category taken off the menu hides its products too.
     const liveCategoryIds = new Set(categories.map((c) => c.id));
