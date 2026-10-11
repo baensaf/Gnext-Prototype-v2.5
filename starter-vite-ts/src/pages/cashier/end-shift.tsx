@@ -32,6 +32,7 @@ import {
 import { MoneyUtil } from 'src/utils/money.util';
 import { serverText } from 'src/utils/server-text';
 import { useCurrencyLabel } from 'src/utils/currency';
+import { readDeviceTerminal } from 'src/utils/device-terminal';
 import { amountText, amountFromText } from 'src/utils/amount-input';
 
 import { shiftApi } from 'src/api/shiftApi';
@@ -40,6 +41,8 @@ import { paymentApi } from 'src/api/paymentApi';
 import { ShiftReport } from 'src/components/shift/shift-summary';
 import { CashMovements } from 'src/components/shift/cash-movements';
 import { OpenOrderLine } from 'src/components/shift/open-order-line';
+
+import { readHeldCarts, clearHeldCarts } from '../pos/held-carts';
 
 // ----------------------------------------------------------------------
 
@@ -137,6 +140,9 @@ export function EndShiftPage() {
   }, [load]);
 
   const closed = !!result || !!summary?.closed;
+  // Carts on hold at this register for this shift; they go when it closes.
+  const terminal = readDeviceTerminal();
+  const heldCount = terminal && !closed ? readHeldCarts(terminal.id, shiftId).length : 0;
   const openOrders = check?.openOrders ?? [];
   const pendingCash = check?.pendingCash ?? [];
   const cashDone = !!check && pendingCash.length === 0;
@@ -178,6 +184,7 @@ export function EndShiftPage() {
         actualCash: countedRials,
         leftInDrawer: leftRials,
       });
+      if (terminal) clearHeldCarts(terminal.id);
       setResult(statement);
       setMovements(statement.movements);
       setSummary(await shiftApi.getSummary(shiftId));
@@ -198,6 +205,11 @@ export function EndShiftPage() {
   const renderSteps = () => (
     <Stack spacing={2.5} divider={<Divider flexItem />}>
       <Step n={1} title={t('shift.end.stepOrders', 'Open orders')} done>
+        {heldCount > 0 && (
+          <Alert severity="warning" sx={{ mb: 1 }}>
+            {t('shift.end.heldCarts', { count: heldCount })}
+          </Alert>
+        )}
         {openOrders.length === 0 ? (
           <Typography variant="body2" color="text.secondary">
             {t('shift.end.noOpenOrders', 'Nothing rung up at this till is left open.')}

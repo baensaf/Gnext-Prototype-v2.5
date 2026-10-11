@@ -101,7 +101,7 @@ export interface OrderHeader {
 }
 
 /** Where an order sits on the Orders page. The groups don't overlap, so they add up to All. */
-export type OrderLifecycle = 'WAITING' | 'OPEN' | 'HELD' | 'COMPLETED' | 'REFUNDED' | 'CANCELLED' | 'OTHER';
+export type OrderLifecycle = 'WAITING' | 'OPEN' | 'COMPLETED' | 'REFUNDED' | 'CANCELLED' | 'OTHER';
 
 /** A row of the order book, with the names and places the list shows beside it. */
 export interface OrderListRow extends OrderHeader {
@@ -241,7 +241,7 @@ export const orderApi = {
   },
 
   /**
-   * Make a draft. `idempotencyKey` (one per press of Place or Hold) lets the branch
+   * Make a draft. `idempotencyKey` (one per press of Place) lets the branch
    * agent repeat the request after a lost answer without making a second draft (§19.11).
    */
   createOrder: async (data: any, options?: { idempotencyKey?: string }): Promise<OrderHeader> => {

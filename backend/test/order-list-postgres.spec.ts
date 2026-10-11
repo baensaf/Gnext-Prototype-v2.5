@@ -83,15 +83,17 @@ describe('order list (PostgreSQL)', () => {
   it('pages through the whole book and reports the true total', async () => {
     const first = await orders.getOrders(tenantId, { branchId: branchA, limit: '25' });
     const last = await orders.getOrders(tenantId, { branchId: branchA, limit: '25', page: '3' });
-    expect(first.total).toBe(66);
+    // The draft left by a Place that never finished sending is not in the book.
+    expect(first.total).toBe(65);
     expect(first.data).toHaveLength(25);
-    expect(last.data).toHaveLength(16);
+    expect(last.data).toHaveLength(15);
     expect(last.data[last.data.length - 1].notes).toBe('first ever');
   });
 
   it('counts each tab under the other filters, and the tabs add up to All', async () => {
     const { counts } = await orders.getOrders(tenantId, { branchId: branchA, counts: '1', limit: '1' });
-    expect(counts).toMatchObject({ ALL: 66, OPEN: 1, WAITING: 1, HELD: 1, CANCELLED: 1, REFUNDED: 1, COMPLETED: 61, OTHER: 0 });
+    expect(counts).toMatchObject({ ALL: 65, OPEN: 1, WAITING: 1, CANCELLED: 1, REFUNDED: 1, COMPLETED: 61, OTHER: 0 });
+    expect(counts).not.toHaveProperty('HELD');
   });
 
   it('filters by lifecycle group, date range, channel and type', async () => {
@@ -102,7 +104,7 @@ describe('order list (PostgreSQL)', () => {
     expect(refunded.data.map((o: any) => o.lifecycle)).toEqual(['REFUNDED']);
 
     const onThe20th = await orders.getOrders(tenantId, { branchId: branchA, from: day(20, 0).toISOString(), to: day(21, 0).toISOString() });
-    expect(onThe20th.total).toBe(5);
+    expect(onThe20th.total).toBe(4);
 
     expect((await orders.getOrders(tenantId, { branchId: branchA, channel: 'KIOSK' })).total).toBe(1);
     expect((await orders.getOrders(tenantId, { branchId: branchA, type: 'AGGREGATOR' })).total).toBe(1);
@@ -135,11 +137,11 @@ describe('order list (PostgreSQL)', () => {
     expect((await orders.getOrders(tenantId, { branchId: branchA, q: '+98912123' })).total).toBe(1);
   });
 
-  it('sorts by total, and keeps the old single-state filter for the POS held list', async () => {
+  it('sorts by total, and never lists a draft, even asked for one by state', async () => {
     const byTotal = await orders.getOrders(tenantId, { branchId: branchA, sort: 'grand_total', dir: 'desc', limit: '1' });
     expect(byTotal.data[0].grand_total).toBe('99000.0000');
-    const held = await orders.getOrders(tenantId, { branchId: branchA, state: 'DRAFT' });
-    expect(held.total).toBe(1);
+    const drafts = await orders.getOrders(tenantId, { branchId: branchA, state: 'DRAFT' });
+    expect(drafts.total).toBe(0);
   });
 
   it('exports the filtered book as CSV', async () => {
@@ -171,7 +173,7 @@ describe('order list (PostgreSQL)', () => {
       // Staff type the 09 form; the filter also finds the same mobile, and reads Persian digits.
       expect((await list([{ field: 'customer_name', operator: 'contains', value: '۰۹۱۲۱۲۳' }])).total).toBe(1);
       expect((await list([{ field: 'customer_name', operator: 'isNotEmpty' }])).total).toBe(1);
-      expect((await list([{ field: 'customer_name', operator: 'isEmpty' }])).total).toBe(65);
+      expect((await list([{ field: 'customer_name', operator: 'isEmpty' }])).total).toBe(64);
       expect((await list([{ field: 'items', operator: 'contains', value: 'PIZ' }])).total).toBe(1);
       expect((await list([{ field: 'grand_total', operator: '>=', value: '99000' }])).total).toBe(1);
       const numbered = (await orders.getOrders(tenantId, { branchId: branchA, limit: '1' })).data[0].order_number;
@@ -205,11 +207,11 @@ describe('order list (PostgreSQL)', () => {
       expect(csv.slice(1).trim().split('\r\n')).toHaveLength(2);
       // Only a start: everything from the 20th on.
       const since = [{ field: 'placed_at', operator: 'between', value: [day(20, 0).toISOString(), null] }];
-      expect((await list(since)).total).toBe(5);
+      expect((await list(since)).total).toBe(4);
     });
 
     it('ignores a filter still waiting for its value', async () => {
-      expect((await list([{ field: 'order_number', operator: 'contains', value: '' }, { field: 'channel', operator: 'isAnyOf', value: [] }])).total).toBe(66);
+      expect((await list([{ field: 'order_number', operator: 'contains', value: '' }, { field: 'channel', operator: 'isAnyOf', value: [] }])).total).toBe(65);
     });
 
     it('refuses fields, operators and values it does not know', () => {

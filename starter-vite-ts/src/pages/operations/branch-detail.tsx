@@ -66,7 +66,7 @@ const pinOf = (branch: Branch): Pin | null =>
 
 /** What the server says stops the archive: one entry per shift, order, delivery or settlement. */
 type ArchiveBlocker = {
-  kind: 'SHIFT' | 'ORDER' | 'REFUND_DUE' | 'DELIVERY' | 'COURIER_CASH' | 'SETTLEMENT' | 'HELD_ORDER';
+  kind: 'SHIFT' | 'ORDER' | 'REFUND_DUE' | 'DELIVERY' | 'COURIER_CASH' | 'SETTLEMENT';
   label: string;
 };
 
@@ -108,7 +108,6 @@ export function BranchDetailPage() {
       DELIVERY: t('branchMgmt.archive.kinds.delivery', 'Delivery not finished'),
       COURIER_CASH: t('branchMgmt.archive.kinds.courierPay', 'Delivered, courier not settled yet'),
       SETTLEMENT: t('branchMgmt.archive.kinds.settlement', 'Courier settlement open'),
-      HELD_ORDER: t('branchMgmt.archive.kinds.heldOrder', 'Held order (discard it first)'),
     })[kind] || kind;
 
   const load = useCallback(async () => {

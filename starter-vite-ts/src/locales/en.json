@@ -188,14 +188,11 @@
   },
   "pos": {
     "cartBar": {
-      "draft": "Held order",
-      "draftCancel": "Stop editing this held order",
       "discount": "Discount (F6)",
       "payNow": "Checkout / pay now",
       "hold": "Hold",
-      "holding": "Holding…",
-      "heldToast": "Order #{{number}} held",
-      "resumedToast": "Held order #{{number}} is back in the cart",
+      "heldToast": "Cart put on hold",
+      "resumedToast": "Held cart is back in the cart",
       "heldButton": "Held"
     },
     "options": {
@@ -329,12 +326,11 @@
     },
     "itemDiscount": "−{{percent}}%",
     "heldDrawer": {
-      "title": "Held orders",
-      "subtitle": "Resume, change or discard an order put on hold",
-      "discarded": "Held order discarded",
-      "resumeFailed": "Could not bring the held order back"
+      "title": "Held carts",
+      "subtitle": "Carts put on hold at this register. They are dropped when the shift ends.",
+      "discarded": "Held cart discarded",
+      "empty": "Nothing on hold at this register."
     },
-    "updateAndPlace": "Update & place",
     "clearCart": "Clear",
     "cartEmptyHint": "The cart is empty. Tap a product to add it.",
     "discount": {
@@ -357,8 +353,7 @@
     },
     "held": {
       "discard": "Discard",
-      "resume": "Resume",
-      "resuming": "Resuming…"
+      "resume": "Resume"
     },
     "notes": {
       "lineTitle": "Note for this item",
@@ -472,7 +467,6 @@
     },
     "statuses": {
       "pendingAcceptance": "AWAITING ACCEPTANCE",
-      "draft": "HELD",
       "open": "OPEN",
       "completed": "COMPLETED",
       "cancelled": "CANCELLED",
@@ -521,9 +515,7 @@
       "reportToSnappfood": "Report to Snappfood",
       "changeType": "Change type",
       "more": "More actions",
-      "moreShort": "More",
-      "openAtTill": "Open at the till",
-      "resume": "Resume"
+      "moreShort": "More"
     },
     "snappfood": {
       "withSupport": "With Snappfood support",
@@ -1022,7 +1014,6 @@
       "carriedOver": "Carried over",
       "issue": {
         "UNPAID": "Unpaid",
-        "NOT_SUBMITTED": "Draft, never sent",
         "AWAITING_ACCEPTANCE": "Waiting for acceptance",
         "DELIVERY_NOT_FINISHED": "Delivery not finished"
       }
@@ -1194,7 +1185,9 @@
       "handOver": "To hand over",
       "handedOver": "Handed over",
       "leftInDrawer": "Left in the drawer",
-      "backToRegister": "Back to the register"
+      "backToRegister": "Back to the register",
+      "heldCarts_one": "{{count}} cart on hold at this register is dropped when the shift closes.",
+      "heldCarts_other": "{{count}} carts on hold at this register are dropped when the shift closes."
     }
   },
   "payments": {
@@ -3570,8 +3563,7 @@
         "refundDue": "Cancelled order, money not given back",
         "delivery": "Delivery not finished",
         "courierPay": "Delivered, courier not settled yet",
-        "settlement": "Courier settlement open",
-        "heldOrder": "Held order (discard it first)"
+        "settlement": "Courier settlement open"
       }
     },
     "archived": {

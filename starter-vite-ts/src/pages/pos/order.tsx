@@ -1,6 +1,6 @@
 import type { Theme } from '@mui/material/styles';
+import type { HeldCart } from './held-carts';
 import type { OrderHeader } from 'src/api/orderApi';
-import type { ReasonCode } from 'src/api/settingsApi';
 import type { DeliveryZone } from 'src/api/deliveryApi';
 import type { Customer, CustomerAddress } from 'src/api/customerApi';
 import type { ManualDiscount, ManualDiscountLimits } from 'src/api/discountsApi';
@@ -79,6 +79,7 @@ import {
   ToggleButtonGroup,
 } from '@mui/material';
 
+import { generateUuid } from 'src/utils/uuid';
 import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 import { useCloudBack } from 'src/utils/cloud-back';
@@ -110,6 +111,7 @@ import { PosStopDialog } from './pos-stop-dialog';
 import { useFillViewport } from './use-fill-viewport';
 import { PosCustomerPicker } from './pos-customer-picker';
 import { ClosedBranchBanner } from './closed-branch-banner';
+import { readHeldCarts, writeHeldCarts } from './held-carts';
 
 export interface CartItem {
   product: Product;
@@ -144,7 +146,7 @@ export function PosOrderPage() {
   const { t } = useTranslation();
   const currency = useCurrencyLabel();
 
-  const { selectedBranchId, setSelectedBranchId } = useBranchContext();
+  const { selectedBranchId } = useBranchContext();
   // The register this device is and the shift open on it; the till stays shut without one.
   const register = useRegisterShift();
   // A shift whose business day has ended sells nothing more: it is counted and closed first.
@@ -248,18 +250,22 @@ export function PosOrderPage() {
     });
   }, [priceOf]);
 
-  // Held Orders Drawer state
+  // Carts on hold at this register, in its browser, for the shift running now (held-carts.ts).
   const [heldOrdersDrawerOpen, setHeldOrdersDrawerOpen] = useState(false);
-  const [heldOrders, setHeldOrders] = useState<OrderHeader[]>([]);
-  // What each held order will cost with tax, by id (rials).
-  const [heldTotals, setHeldTotals] = useState<Record<string, string>>({});
-  const [loadingHeldOrders, setLoadingHeldOrders] = useState(false);
+  const [heldCarts, setHeldCarts] = useState<HeldCart[]>([]);
   const [loadingInitialData, setLoadingInitialData] = useState(true);
-  const [holdingOrder, setHoldingOrder] = useState(false);
-  const [resumingOrderId, setResumingOrderId] = useState<string | null>(null);
-  const [discardTarget, setDiscardTarget] = useState<OrderHeader | null>(null);
-  const [discardReasonCodes, setDiscardReasonCodes] = useState<ReasonCode[]>([]);
-  const [discardReasonCodeId, setDiscardReasonCodeId] = useState('');
+  const terminalId = register.terminal?.id;
+  const shiftId = register.shift?.id;
+  useEffect(() => {
+    setHeldCarts(terminalId && shiftId ? readHeldCarts(terminalId, shiftId) : []);
+  }, [terminalId, shiftId]);
+  const saveHeldCarts = useCallback(
+    (next: HeldCart[]) => {
+      setHeldCarts(next);
+      if (terminalId) writeHeldCarts(terminalId, next);
+    },
+    [terminalId]
+  );
 
   // Manual Discount Modal state
   const [manualDiscountModalOpen, setManualDiscountModalOpen] = useState(false);
@@ -319,44 +325,6 @@ export function PosOrderPage() {
   // Re-reads the stops and prices of the minute-by-minute check below, on demand.
   const sellingRefreshRef = React.useRef<(() => void) | null>(null);
 
-  const fetchHeldOrders = useCallback(async (branchId?: string) => {
-    try {
-      setLoadingHeldOrders(true);
-      const bId = branchId || selectedBranchId;
-      const orders = await orderApi.getOrders({ branchId: bId || undefined, state: 'DRAFT' });
-      setHeldOrders(orders);
-      // A held order is priced only when it is placed, so its tax is quoted here for the drawer:
-      // the amount shown is what the customer will pay.
-      const totals = await Promise.all(
-        orders.map(async (ho) => {
-          if (!ho.items?.length) return [ho.id, '0'] as const;
-          const quote = await discountsApi
-            .quoteDiscounts({
-              orderDraft: {
-                branchId: ho.branch_id,
-                customerId: ho.customer_id || undefined,
-                orderType: ho.order_type,
-                deliveryFee: ho.delivery_fee || '0',
-                items: ho.items.map((item) => ({
-                  productId: item.product_id,
-                  variantId: item.variant_id || undefined,
-                  unitPrice: item.unit_price || '0',
-                  quantity: String(item.quantity || '1'),
-                })),
-              },
-            })
-            .catch(() => null);
-          return [ho.id, quote?.grandTotal || ''] as const;
-        })
-      );
-      setHeldTotals(Object.fromEntries(totals.filter(([, total]) => total)));
-    } catch {
-      // ignore
-    } finally {
-      setLoadingHeldOrders(false);
-    }
-  }, [selectedBranchId]);
-
   // The menu, read again. `quiet` is the read after the cloud came back (Reconnecting bar): it keeps
   // the category the cashier is on and shows no spinner, and a failed one leaves the screen as it is.
   const loadInitialData = async (quiet = false) => {
@@ -393,13 +361,12 @@ export function PosOrderPage() {
 
   // The Reconnecting bar was up and the cloud is back (agent mode): read what is on screen again,
   // quietly. The cart, the open order and the cashier's place are not touched. The open shift is
-  // re-read in useRegisterShift, and the open and held orders here.
+  // re-read in useRegisterShift.
   useCloudBack(() => {
     // "Not sent. Try again when connected." has done its job once connected.
     setError((current) => (isNotSentMessage(current) ? null : current));
     loadInitialData(true);
     sellingRefreshRef.current?.();
-    if (selectedBranchId) fetchHeldOrders(selectedBranchId);
   });
 
   // The note phrases change rarely, so they are fetched once with the till rather than each
@@ -439,12 +406,6 @@ export function PosOrderPage() {
       window.clearInterval(timer);
     };
   }, [selectedBranchId]);
-
-  useEffect(() => {
-    if (selectedBranchId) {
-      fetchHeldOrders(selectedBranchId);
-    }
-  }, [selectedBranchId, fetchHeldOrders]);
 
   useEffect(() => {
     if (orderType !== 'DELIVERY' || !selectedCustomerId) {
@@ -840,161 +801,76 @@ export function PosOrderPage() {
     }
   };
 
-  // Hold / Park Cart Order
-  const handleHoldOrder = async () => {
-    if (cart.length === 0) {
+  // The cart as it stands, ready to put on hold; null when there is nothing in it.
+  const snapshotCart = (): HeldCart | null => {
+    if (cart.length === 0 || !shiftId) return null;
+    return {
+      id: generateUuid(),
+      shiftId,
+      heldAt: new Date().toISOString(),
+      orderType,
+      customer: selectedCustomer,
+      deliveryAddressId: selectedDeliveryAddressId,
+      deliveryZoneId: selectedDeliveryZoneId,
+      manualDeliveryFee,
+      notes: orderNotes,
+      lines: cart,
+      total: cartTotalDue,
+      draftOrderId: activeDraftOrderId,
+    };
+  };
+
+  // Hold: the cart steps aside at this register until it is resumed. Nothing goes to the server.
+  const handleHoldOrder = () => {
+    const held = snapshotCart();
+    if (!held) {
       setError(t('pos.cartEmpty'));
       return;
     }
-    if (!selectedBranchId) {
-      setError('Please select an active branch first');
-      return;
-    }
-    if (!deliveryReady()) return;
-
-    try {
-      setHoldingOrder(true);
-      const orderPayload: any = {
-        branch_id: selectedBranchId,
-        order_type: orderType,
-        customer_id: selectedCustomerId || undefined,
-        delivery_address_id: orderType === 'DELIVERY' ? selectedDeliveryAddressId : undefined,
-        delivery_zone_id: orderType === 'DELIVERY' ? selectedDeliveryZoneId : undefined,
-        // Null goes back to the zone's fee on a draft that had a typed one.
-        delivery_fee: orderType === 'DELIVERY' ? typedDeliveryFee : undefined,
-        notes: orderNotes.trim() || undefined,
-        items: cart.map((ci) => ({
-          product_id: ci.product.id,
-          variant_id: ci.selectedVariant?.id || undefined,
-          variant_name: ci.selectedVariant?.name || undefined,
-          quantity: ci.quantity,
-          options: ci.selectedOptions.map((o) => ({ option_item_id: o.id })),
-          notes: ci.notes || undefined,
-        })),
-      };
-
-      // One key for this press: if the agent repeats the request after a lost answer, the cloud
-      // answers the first one's draft instead of making a second (agent-protocol §19.11).
-      const idempotencyKey = newIdempotencyKey();
-      let draft: OrderHeader;
-      if (activeDraftOrderId) {
-        draft = await orderApi.updateDraft(activeDraftOrderId, orderPayload, { idempotencyKey });
-      } else {
-        draft = await orderApi.createOrder(orderPayload, { idempotencyKey });
-      }
-
-      toast.success(t('pos.cartBar.heldToast', { number: draft.order_number }));
-      handleClearCart();
-      await fetchHeldOrders(selectedBranchId);
-      setError(null);
-    } catch (err: any) {
-      const msg = err.detail || err.message || 'Failed to hold order';
-      setError(msg);
-      showErrorToast(err, msg);
-    } finally {
-      setHoldingOrder(false);
-    }
+    saveHeldCarts([...heldCarts, held]);
+    toast.success(t('pos.cartBar.heldToast'));
+    handleClearCart();
   };
 
-  // Resume a Held Order
-  const handleResumeOrder = async (order: OrderHeader) => {
-    try {
-      setResumingOrderId(order.id);
-      const fullOrder = await orderApi.getOrderById(order.id);
-      deliveryRestoreRef.current = {
-        customerId: fullOrder.customer_id,
-        addressId: fullOrder.customer_address_id,
-        zoneId: fullOrder.delivery_zone_id,
-      };
-      setActiveDraftOrderId(fullOrder.id);
-      setSelectedBranchId(fullOrder.branch_id);
-      setOrderType((fullOrder.order_type as any) || 'DINE_IN');
-      setSelectedCustomerId(fullOrder.customer_id || '');
-      // The picker shows the customer's name; fetch it, falling back to what the order kept.
-      setSelectedCustomer(null);
-      if (fullOrder.customer_id) {
-        const customerId = fullOrder.customer_id;
-        customerApi
-          .getCustomer(customerId)
-          .then(setSelectedCustomer)
-          .catch(() =>
-            setSelectedCustomer({ id: customerId, first_name: fullOrder.customer_name || '', last_name: '', mobile: fullOrder.customer_mobile || '', code: '', is_active: true })
-          );
-      }
-      setSelectedDeliveryAddressId(fullOrder.customer_address_id || '');
-      setSelectedDeliveryZoneId(fullOrder.delivery_zone_id || '');
-      setManualDeliveryFee(fullOrder.delivery_fee_manual ? MoneyUtil.format(fullOrder.delivery_fee_manual, 0) : null);
-      setOrderNotes(fullOrder.notes || '');
-
-      // Reconstruct cart items
-      const loadedCart: CartItem[] = await Promise.all((fullOrder.items || []).map(async (item) => {
-        const prod: Product = products.find((p) => p.id === item.product_id) || ({
-          id: item.product_id,
-          name: (item as any).item_name || (item as any).product_name || (item as any).name || 'Product',
-          code: 'PROD',
-          base_price: item.unit_price,
-          category_id: '',
-          is_active: true,
-          unit_of_measure: 'PCS',
-          tax_rate: '0.10',
-        } as Product);
-
-        let selectedVariant: ProductVariant | undefined;
-        if ((item as any).variant_id) {
-          const variants = prod.variants?.length
-            ? prod.variants
-            : await catalogApi.getProductVariants(item.product_id).catch(() => [] as ProductVariant[]);
-          selectedVariant = variants.find((variant) => variant.id === (item as any).variant_id);
-          if (!selectedVariant) {
-            selectedVariant = {
-              id: (item as any).variant_id,
-              product_id: item.product_id,
-              code: 'HELD-VARIANT',
-              name: (item as any).variant_name || 'Selected variant',
-              base_price: item.unit_price,
-              is_default: false,
-              sort_order: 0,
-              is_active: true,
-            };
-          }
-        }
-
-        const selectedOpts: OptionItem[] = (item.options || []).map((opt: any) => ({
-          id: opt.option_item_id || opt.id,
-          name: opt.option_item_name || opt.option_name || opt.name || 'Modifier',
-          price_delta: opt.price_delta || '0',
-          option_group_id: '',
-          code: opt.code || 'OPT',
-          is_default: false,
-          sort_order: 0,
-        }));
-
-        return {
-          product: prod,
-          selectedVariant,
-          quantity: Number(item.quantity) || 1,
-          selectedOptions: selectedOpts,
-          notes: item.notes || undefined,
-          lineSubtotal: (item as any).subtotal || (item as any).line_total || MoneyUtil.multiply(item.unit_price, item.quantity?.toString() || '1', 2),
-        };
-      }));
-
-      setCart(loadedCart);
-      setHeldOrdersDrawerOpen(false);
-      setError(null);
-      toast.success(t('pos.cartBar.resumedToast', { number: fullOrder.order_number }));
-    } catch (err: any) {
-      setError(t('pos.heldDrawer.resumeFailed'));
-      showErrorToast(err, t('pos.heldDrawer.resumeFailed'));
-    } finally {
-      setResumingOrderId(null);
-    }
+  // Resume: the held cart comes back into the cart, priced at today's prices. A cart already
+  // being rung up goes on hold in its place, so nothing typed is lost.
+  const handleResumeOrder = (held: HeldCart) => {
+    const current = snapshotCart();
+    saveHeldCarts([...heldCarts.filter((c) => c.id !== held.id), ...(current ? [current] : [])]);
+    handleClearCart();
+    deliveryRestoreRef.current = {
+      customerId: held.customer?.id,
+      addressId: held.deliveryAddressId,
+      zoneId: held.deliveryZoneId,
+    };
+    setActiveDraftOrderId(held.draftOrderId);
+    setOrderType(held.orderType);
+    setSelectedCustomer(held.customer);
+    setSelectedCustomerId(held.customer?.id || '');
+    setSelectedDeliveryAddressId(held.deliveryAddressId);
+    setSelectedDeliveryZoneId(held.deliveryZoneId);
+    setManualDeliveryFee(held.manualDeliveryFee);
+    setOrderNotes(held.notes);
+    setCart(
+      held.lines.map((line) => {
+        const product = products.find((p) => p.id === line.product.id) || line.product;
+        const optionsSum = line.selectedOptions.reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), '0');
+        const unitPrice = MoneyUtil.add(priceOf(product, line.selectedVariant), optionsSum, 2);
+        return { ...line, product, lineSubtotal: MoneyUtil.multiply(unitPrice, line.quantity.toString(), 2) };
+      })
+    );
+    setHeldOrdersDrawerOpen(false);
+    toast.success(t('pos.cartBar.resumedToast'));
   };
 
-  // /app/pos?resume=<id> picks a held order up again; "Open at the till" on the Orders page
-  // sends the cashier here. It waits for the menu so the lines find their products.
+  // Discard: nothing was ordered or printed, so it goes in one tap with no reason.
+  const handleDiscardHeldOrder = (held: HeldCart) => {
+    saveHeldCarts(heldCarts.filter((c) => c.id !== held.id));
+    toast.info(t('pos.heldDrawer.discarded'));
+  };
+
+  // The URL's ?panel=online&order=<id> opens the Online tab beside the cart.
   const [searchParams, setSearchParams] = useSearchParams();
-  const resumeId = searchParams.get('resume');
 
   // The Online tab: platform orders answered beside the cart. A toast or the header badge
   // sends the cashier here with ?panel=online&order=<id>.
@@ -1018,67 +894,6 @@ export function PosOrderPage() {
       { replace: true }
     );
   }, [panelParam, panelOrder, setSearchParams]);
-  useEffect(() => {
-    if (!resumeId || products.length === 0) return;
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete('resume');
-        return next;
-      },
-      { replace: true }
-    );
-    handleResumeOrder({ id: resumeId } as OrderHeader);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resumeId, products.length]);
-
-  // Discard a Held Order. The backend refuses to cancel a draft with items on it
-  // without a reason code (spec 6.1), so those go through the reason dialog; an
-  // empty draft still discards in one click.
-  const handleDiscardHeldOrder = async (order: OrderHeader) => {
-    if (!order.items?.length) {
-      await discardHeldOrder(order.id);
-      return;
-    }
-    setDiscardTarget(order);
-    setDiscardReasonCodeId('');
-    if (discardReasonCodes.length === 0) {
-      try {
-        const codes = await settingsApi.getReasonCodes();
-        setDiscardReasonCodes(codes.filter((c) => c.is_active));
-      } catch (err: any) {
-        showErrorToast(err, 'Failed to load reason codes');
-      }
-    }
-  };
-
-  const handleConfirmDiscard = async () => {
-    if (!discardTarget || !discardReasonCodeId) {
-      toast.error(t('orders.cancelDialog.reasonRequired'));
-      return;
-    }
-    const discarded = await discardHeldOrder(discardTarget.id, discardReasonCodeId);
-    if (discarded) setDiscardTarget(null);
-  };
-
-  const discardHeldOrder = async (orderId: string, reasonCodeId?: string): Promise<boolean> => {
-    try {
-      await orderApi.cancelOrder(orderId, reasonCodeId, 'Discarded from held drafts');
-      if (activeDraftOrderId === orderId) {
-        handleClearCart();
-      } else if (selectedBranchId) {
-        fetchHeldOrders(selectedBranchId);
-      }
-      toast.info(t('pos.heldDrawer.discarded'));
-      setError(null);
-      return true;
-    } catch (err: any) {
-      const msg = 'Failed to discard held draft';
-      setError(msg);
-      showErrorToast(err, msg);
-      return false;
-    }
-  };
 
   // Cart financial math via decimal-safe MoneyUtil
   const cartSubtotal = cart.reduce((sum, item) => MoneyUtil.add(sum, item.lineSubtotal, 2), '0');
@@ -1320,6 +1135,8 @@ export function PosOrderPage() {
       } else {
         const draft = await orderApi.createOrder(orderPayload, { idempotencyKey });
         draftId = draft.id;
+        // Sending can still fail; pressing Place again then finishes this draft, not a second one.
+        setActiveDraftOrderId(draft.id);
       }
 
       const submitPayload = buildSubmitPayload();
@@ -1360,7 +1177,6 @@ export function PosOrderPage() {
       }
       toast.success(t('pos.orderSubmittedPaid', { number: submitted.call_number || submitted.order_number || '' }));
       handleClearCart();
-      fetchHeldOrders(selectedBranchId);
       setError(null);
     } catch (err: any) {
       const msg = err.detail || err.message || 'Direct Terminal Pay failed';
@@ -1370,7 +1186,6 @@ export function PosOrderPage() {
         setPlacedOrder(submitted);
         setCheckoutModalOpen(true);
         handleClearCart();
-        fetchHeldOrders(selectedBranchId);
       }
       setError(msg);
       showErrorToast(err, msg);
@@ -1390,7 +1205,6 @@ export function PosOrderPage() {
     deliveryReady,
     activeDraftOrderId,
     buildSubmitPayload,
-    fetchHeldOrders,
     handleClearCart,
     t,
   ]);
@@ -1441,6 +1255,8 @@ export function PosOrderPage() {
       } else {
         const draft = await orderApi.createOrder(orderPayload, { idempotencyKey });
         draftId = draft.id;
+        // Sending can still fail; pressing Place again then finishes this draft, not a second one.
+        setActiveDraftOrderId(draft.id);
       }
 
       const submitPayload = buildSubmitPayload();
@@ -1450,7 +1266,6 @@ export function PosOrderPage() {
       setCheckoutModalOpen(true);
       toast.success(t('pos.orderSubmitted', { number: submitted.call_number || submitted.order_number || '' }));
       handleClearCart();
-      fetchHeldOrders(selectedBranchId);
       setError(null);
     } catch (err: any) {
       const msg = err.detail || err.message || 'Failed to place order';
@@ -1470,7 +1285,6 @@ export function PosOrderPage() {
     deliveryReady,
     activeDraftOrderId,
     buildSubmitPayload,
-    fetchHeldOrders,
     handleClearCart,
     t,
   ]);
@@ -1605,7 +1419,7 @@ export function PosOrderPage() {
   );
 
   return (
-    <Box aria-busy={loadingInitialData || holdingOrder || Boolean(resumingOrderId)}>
+    <Box aria-busy={loadingInitialData}>
       <ClosedBranchBanner />
       {loadingInitialData && <LinearProgress sx={{ mb: 2 }} />}
       {error && (
@@ -1954,33 +1768,24 @@ export function PosOrderPage() {
                 {/* The chips take the room the buttons leave, and shorten first. */}
                 <Stack direction="row" sx={{ flex: '1 1 0', minWidth: 32, gap: 0.75, alignItems: 'center', overflow: 'hidden' }}>
                   <PosShiftAccountLink register={register} />
-                  {/* A resumed draft: holding or placing the cart updates that draft. */}
-                  {activeDraftOrderId && (
-                    <Tooltip title={t('pos.cartBar.draftCancel')}>
-                      <Chip size="small" color="warning" label={t('pos.cartBar.draft')} onDelete={handleClearCart} sx={{ fontWeight: 600 }} />
-                    </Tooltip>
-                  )}
                 </Stack>
                 <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', flexShrink: 0 }}>
-                  {heldOrders.length > 0 && (
-                  <Tooltip title="View and resume held draft orders">
+                  {heldCarts.length > 0 && (
+                  <Tooltip title={t('pos.heldDrawer.title')}>
                     <Button
                       size="small"
                       color="warning"
                       variant="outlined"
                       startIcon={
                         <Badge
-                          badgeContent={heldOrders.length}
+                          badgeContent={heldCarts.length}
                           color="warning"
                           sx={{ '& .MuiBadge-badge': { fontSize: '0.65rem', height: 16, minWidth: 16 } }}
                         >
                           <PauseIcon fontSize="small" />
                         </Badge>
                       }
-                      onClick={() => {
-                        fetchHeldOrders();
-                        setHeldOrdersDrawerOpen(true);
-                      }}
+                      onClick={() => setHeldOrdersDrawerOpen(true)}
                       aria-keyshortcuts="F4"
                       sx={{ textTransform: 'none', fontWeight: 600, py: 0.25, px: 1 }}
                     >
@@ -2287,7 +2092,7 @@ export function PosOrderPage() {
                                 variant="caption"
                                 sx={{ display: 'block', color: 'text.secondary', fontWeight: 500, fontSize: '0.725rem' }}
                               >
-                                + {item.selectedOptions.map((o) => o.name).join('، ')}
+                                + {item.selectedOptions.map((o) => o.name).join(', ')}
                               </Typography>
                             )}
                             {item.notes && (
@@ -2454,9 +2259,9 @@ export function PosOrderPage() {
                 <Button
                   variant="outlined"
                   color="warning"
-                  disabled={cart.length === 0 || holdingOrder}
+                  disabled={cart.length === 0}
                   onClick={handleHoldOrder}
-                  startIcon={holdingOrder ? <CircularProgress size={18} color="inherit" /> : <PauseIcon />}
+                  startIcon={<PauseIcon />}
                   aria-label={t('pos.cartBar.hold')}
                   title={t('pos.cartBar.hold')}
                   // On a till-sized screen the row has no room for the word beside Place and PC-POS,
@@ -2471,7 +2276,7 @@ export function PosOrderPage() {
                   }}
                 >
                   <Box component="span" sx={{ display: { xs: 'none', xl: 'inline' } }}>
-                    {holdingOrder ? t('pos.cartBar.holding') : t('pos.cartBar.hold')}
+                    {t('pos.cartBar.hold')}
                   </Box>
                 </Button>
                 <Button
@@ -2482,7 +2287,7 @@ export function PosOrderPage() {
                   aria-keyshortcuts="F8"
                   sx={{ fontWeight: 'bold', flexShrink: 0, px: 1.25, whiteSpace: 'nowrap' }}
                 >
-                  {activeDraftOrderId ? t('pos.updateAndPlace') : t('pos.placeOrder')}
+                  {t('pos.placeOrder')}
                 </Button>
                 {/* 1-Click Direct Terminal Pay (90% Standard in Iran) */}
                 <Button
@@ -2689,116 +2494,71 @@ export function PosOrderPage() {
 
         <Divider sx={{ mb: 2 }} />
 
-        {loadingHeldOrders ? (
-          <Box sx={{ py: 8, display: 'flex', justifyContent: 'center' }}>
-            <CircularProgress size={32} />
-          </Box>
-        ) : heldOrders.length === 0 ? (
+        {heldCarts.length === 0 ? (
           <Box sx={{ py: 8, textAlign: 'center' }}>
             <Typography variant="body1" color="text.secondary">
-              No draft orders currently on hold.
+              {t('pos.heldDrawer.empty')}
             </Typography>
           </Box>
         ) : (
           <Stack spacing={2} sx={{ overflowY: 'auto', flexGrow: 1, pr: 0.5 }}>
-            {heldOrders.map((ho) => (
-              <Paper
-                key={ho.id}
-                variant="outlined"
-                sx={{
-                  p: 2,
-                  borderRadius: 2.5,
-                  borderColor: ho.id === activeDraftOrderId ? 'primary.main' : 'divider',
-                  bgcolor: ho.id === activeDraftOrderId ? 'action.selected' : 'background.paper',
-                }}
-              >
-                <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
-                  <Box>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                      {ho.order_number}
+            {heldCarts.map((held) => {
+              const itemCount = held.lines.reduce((sum, line) => sum + line.quantity, 0);
+              const customerName = held.customer
+                ? `${held.customer.first_name || ''} ${held.customer.last_name || ''}`.trim() || held.customer.mobile
+                : t('pos.walkInCustomer');
+              return (
+                <Paper key={held.id} variant="outlined" sx={{ p: 2, borderRadius: 2.5 }}>
+                  <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }} noWrap>
+                        {customerName}
+                      </Typography>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5 }}>
+                        <Chip label={HELD_TYPE_KEYS[held.orderType] ? t(HELD_TYPE_KEYS[held.orderType]) : held.orderType} size="small" variant="outlined" sx={{ fontWeight: 600, height: 20, fontSize: '0.7rem' }} />
+                      </Stack>
+                    </Box>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main', flexShrink: 0 }} dir="ltr">
+                      {MoneyUtil.formatCurrency(held.total)} {currency}
                     </Typography>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5 }}>
-                      <Chip label={HELD_TYPE_KEYS[ho.order_type] ? t(HELD_TYPE_KEYS[ho.order_type]) : ho.order_type} size="small" variant="outlined" sx={{ fontWeight: 600, height: 20, fontSize: '0.7rem' }} />
-                    </Stack>
-                  </Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                    {MoneyUtil.formatCurrency(
-                      heldTotals[ho.id] ||
-                      (MoneyUtil.greaterThan(ho.total_amount || ho.grand_total || '0', '0')
-                        ? (ho.total_amount || ho.grand_total || '0')
-                        : (ho.items || []).reduce(
-                            (sum, item) => MoneyUtil.add(
-                              sum,
-                              item.line_total || item.subtotal || MoneyUtil.multiply(item.unit_price || '0', item.quantity || '0'),
-                            ),
-                            '0',
-                          ))
-                    )} {currency}
+                  </Stack>
+
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                    <AccessTimeIcon sx={{ fontSize: 14 }} />
+                    {fTime(held.heldAt)}
+                    {` • ${t('pos.itemsCount', { count: itemCount })}`}
                   </Typography>
-                </Stack>
+                  <Typography variant="body2" color="text.secondary" noWrap>
+                    {held.lines.map((line) => `${line.quantity}× ${line.product.name}`).join(', ')}
+                  </Typography>
 
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1.5 }}>
-                  <AccessTimeIcon sx={{ fontSize: 14 }} />
-                  {fTime(ho.placed_at || (ho as any).created_at)}
-                  {ho.items?.length ? ` • ${t('pos.itemsCount', { count: ho.items.length })}` : ''}
-                </Typography>
-
-                <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', mt: 1 }}>
-                  <Button
-                    size="small"
-                    color="error"
-                    variant="text"
-                    startIcon={<DeleteIcon fontSize="small" />}
-                    onClick={() => handleDiscardHeldOrder(ho)}
-                    sx={{ textTransform: 'none' }}
-                  >
-                    {t('pos.held.discard')}
-                  </Button>
-                  <Button
-                    size="small"
-                    variant="contained"
-                    disabled={Boolean(resumingOrderId)}
-                    startIcon={resumingOrderId === ho.id ? <CircularProgress size={16} color="inherit" /> : <PlayArrowIcon fontSize="small" />}
-                    onClick={() => handleResumeOrder(ho)}
-                    sx={{ textTransform: 'none', fontWeight: 'bold' }}
-                  >
-                    {resumingOrderId === ho.id ? t('pos.held.resuming') : t('pos.held.resume')}
-                  </Button>
-                </Stack>
-              </Paper>
-            ))}
+                  <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', mt: 1.5 }}>
+                    <Button
+                      size="small"
+                      color="error"
+                      variant="text"
+                      startIcon={<DeleteIcon fontSize="small" />}
+                      onClick={() => handleDiscardHeldOrder(held)}
+                      sx={{ textTransform: 'none' }}
+                    >
+                      {t('pos.held.discard')}
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="contained"
+                      startIcon={<PlayArrowIcon fontSize="small" />}
+                      onClick={() => handleResumeOrder(held)}
+                      sx={{ textTransform: 'none', fontWeight: 'bold' }}
+                    >
+                      {t('pos.held.resume')}
+                    </Button>
+                  </Stack>
+                </Paper>
+              );
+            })}
           </Stack>
         )}
       </Drawer>
-
-      {/* Discard Held Order: reason code */}
-      <Dialog open={Boolean(discardTarget)} onClose={() => setDiscardTarget(null)}>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>
-          {t('orders.cancelDialog.title', { orderNumber: discardTarget?.order_number })}
-        </DialogTitle>
-        <DialogContent sx={{ minWidth: 360, pt: 2 }}>
-          <FormControl fullWidth sx={{ mt: 1 }}>
-            <InputLabel>{t('orders.cancelDialog.reasonLabel')}</InputLabel>
-            <Select
-              label={t('orders.cancelDialog.reasonLabel')}
-              value={discardReasonCodeId}
-              onChange={(e) => setDiscardReasonCodeId(e.target.value)}
-            >
-              {discardReasonCodes.map((r) => (
-                <MenuItem key={r.id} value={r.id}>
-                  {r.name} ({r.code})
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDiscardTarget(null)}>{t('orders.cancelDialog.keepOrder')}</Button>
-          <Button color="error" variant="contained" onClick={handleConfirmDiscard} sx={{ fontWeight: 'bold' }}>
-            {t('orders.cancelDialog.confirm')}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Size & add-on dialog: choice buttons, required groups first, the price on the button. */}
       <Dialog open={optionDialogOpen} onClose={closeOptionDialog} maxWidth="sm" fullWidth aria-keyshortcuts="Escape">

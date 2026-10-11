@@ -58,8 +58,9 @@ describe('Archiving a branch (PostgreSQL)', () => {
     await app.close();
   });
 
-  it('is refused while an order is held or a prepaid delivery is still on the road, and lists them', async () => {
-    const held = await save(OrderHeader, { tenant_id: tenantId, branch_id: branchId, order_number: 'ARC-HELD', channel: 'POS', order_type: 'TAKEAWAY', state: 'DRAFT', status: 'DRAFT', currency_code: 'IRR' });
+  it('is refused while a prepaid delivery is still on the road, and lists it; a draft does not count', async () => {
+    // A Place that never finished sending. Held carts live in the register's browser.
+    const draft = await save(OrderHeader, { tenant_id: tenantId, branch_id: branchId, order_number: 'ARC-DRAFT', channel: 'POS', order_type: 'TAKEAWAY', state: 'DRAFT', status: 'DRAFT', currency_code: 'IRR' });
     const paid = await save(OrderHeader, {
       tenant_id: tenantId, branch_id: branchId, order_number: 'ARC-DELIVERY', channel: 'POS', order_type: 'DELIVERY',
       state: 'COMPLETED', status: 'COMPLETED', currency_code: 'IRR', grand_total: '500000.0000', paid_total: '500000.0000', outstanding_total: '0.0000',
@@ -68,15 +69,10 @@ describe('Archiving a branch (PostgreSQL)', () => {
 
     const refusal = await blockers();
     expect(refusal?.code).toBe('BRANCH_HAS_UNFINISHED_WORK');
-    expect(refusal?.context.items).toEqual(
-      expect.arrayContaining([
-        { kind: 'HELD_ORDER', label: 'ARC-HELD' },
-        { kind: 'DELIVERY', label: 'ARC-DELIVERY' },
-      ]),
-    );
+    expect(refusal?.context.items).toEqual([{ kind: 'DELIVERY', label: 'ARC-DELIVERY' }]);
 
-    // Discard the held order and finish the delivery: nothing is left.
-    await dataSource.query(`UPDATE order_header SET status = 'CANCELLED', state = 'CANCELLED' WHERE id = $1`, [held.id]);
+    // Finish the delivery: nothing is left. The draft goes too, so later cases start clean.
+    await dataSource.query(`UPDATE order_header SET status = 'CANCELLED', state = 'CANCELLED' WHERE id = $1`, [draft.id]);
     await dataSource.query(`UPDATE delivery SET state = 'DELIVERED' WHERE order_id = $1`, [paid.id]);
   });
 

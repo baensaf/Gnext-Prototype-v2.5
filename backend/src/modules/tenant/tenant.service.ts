@@ -40,7 +40,7 @@ export interface OpeningHoursInput {
 }
 
 /** Kinds of unfinished work that stop a branch being archived, as the refusal lists them. */
-export type ArchiveBlockerKind = 'SHIFT' | 'ORDER' | 'REFUND_DUE' | 'DELIVERY' | 'COURIER_CASH' | 'SETTLEMENT' | 'HELD_ORDER';
+export type ArchiveBlockerKind = 'SHIFT' | 'ORDER' | 'REFUND_DUE' | 'DELIVERY' | 'COURIER_CASH' | 'SETTLEMENT';
 
 const ARCHIVE_BLOCKER_WORDS: Record<string, string> = {
   SHIFT: 'cash shift(s) open',
@@ -49,7 +49,6 @@ const ARCHIVE_BLOCKER_WORDS: Record<string, string> = {
   DELIVERY: 'delivery(ies) not finished',
   COURIER_CASH: 'finished delivery(ies) the courier is not settled for',
   SETTLEMENT: 'courier settlement(s) open',
-  HELD_ORDER: 'held order(s)',
 };
 
 /**
@@ -324,8 +323,8 @@ export class TenantService {
    * counted and closed; a sent order with money owed or still in progress; a cancelled order
    * whose money has not gone back; a delivery not delivered or failed, prepaid or not; a finished
    * delivery the courier has not been settled for, with or without a settlement started; a
-   * courier settlement still open; and a held order, which is discarded first. At most 50 are
-   * listed.
+   * courier settlement still open. A cart on hold lives in its register's browser, not here.
+   * At most 50 are listed.
    */
   private async archiveBlockers(em: EntityManager, tenantId: string, branchId: string) {
     const rows: Array<{ kind: ArchiveBlockerKind; label: string }> = await em.query(
@@ -354,9 +353,6 @@ export class TenantService {
          UNION ALL
          SELECT 'SETTLEMENT', cs.settlement_number, 5 FROM courier_settlement cs
           WHERE cs.tenant_id = $1 AND cs.branch_id = $2 AND cs.status = 'DRAFT'
-         UNION ALL
-         SELECT 'HELD_ORDER', o.order_number, 6 FROM order_header o
-          WHERE o.tenant_id = $1 AND o.branch_id = $2 AND o.status = 'DRAFT'
        ) blockers ORDER BY ord, label LIMIT 50`,
       [tenantId, branchId],
     );

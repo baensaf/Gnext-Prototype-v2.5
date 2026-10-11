@@ -82,7 +82,7 @@ export interface DayCloseOpenOrder {
   placedAt: string;
   grandTotal: string;
   outstandingTotal: string;
-  issue?: 'UNPAID' | 'NOT_SUBMITTED' | 'AWAITING_ACCEPTANCE' | 'DELIVERY_NOT_FINISHED';
+  issue?: 'UNPAID' | 'AWAITING_ACCEPTANCE' | 'DELIVERY_NOT_FINISHED';
 }
 
 /** A cash payment begun at a drawer and never taken or cancelled. */
@@ -101,7 +101,7 @@ export interface ShiftCloseCheck {
   shiftId: string;
   branchId: string;
   businessDate: string;
-  /** This till's held, unpaid or unaccepted orders. Closing leaves them open; nothing blocks. */
+  /** This till's unpaid or unaccepted orders. Closing leaves them open; nothing blocks. */
   openOrders: DayCloseOpenOrder[];
   /** Cash payments on this drawer that must be finished or cancelled first. */
   pendingCash: PendingCashPayment[];
