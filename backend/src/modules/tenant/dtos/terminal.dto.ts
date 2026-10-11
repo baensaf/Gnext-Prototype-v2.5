@@ -11,9 +11,11 @@ export class CreateTerminalDto {
   @IsUUID()
   branch_id: string;
 
+  /** Left out, the register is numbered for its branch: POS-1, POS-2, KIOSK-1. */
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  code: string;
+  code?: string;
 
   @IsString()
   @IsNotEmpty()

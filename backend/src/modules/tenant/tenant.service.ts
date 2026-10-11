@@ -542,11 +542,25 @@ export class TenantService {
     }
   }
 
-  async createTerminal(tenantId: string, data: { branch_id: string; code: string; name: string; terminal_type?: string }, correlationId: string) {
+  /**
+   * The next free number for the branch: POS-3 after POS-1 and POS-2. Archived registers
+   * keep their numbers, so an old receipt's register code never comes to mean a new one.
+   */
+  private async nextTerminalCode(tenantId: string, branchId: string, terminalType: string) {
+    const prefix = terminalType === 'KIOSK' ? 'KIOSK' : 'POS';
+    const taken = await this.terminalRepo.find({ where: { tenant_id: tenantId, branch_id: branchId }, withDeleted: true, select: ['code'] });
+    const pattern = new RegExp(`^${prefix}-(\\d+)$`);
+    const highest = taken.reduce((max, t) => Math.max(max, Number(pattern.exec(t.code)?.[1] ?? 0)), 0);
+    return `${prefix}-${highest + 1}`;
+  }
+
+  async createTerminal(tenantId: string, data: { branch_id: string; code?: string; name: string; terminal_type?: string }, correlationId: string) {
     await this.getBranchById(tenantId, data.branch_id);
-    const code = data.code.trim().toUpperCase();
-    await this.assertTerminalCodeFree(tenantId, data.branch_id, code);
     const terminalType = this.terminalType(data.terminal_type || 'CASHIER');
+    const code = data.code?.trim()
+      ? data.code.trim().toUpperCase()
+      : await this.nextTerminalCode(tenantId, data.branch_id, terminalType);
+    await this.assertTerminalCodeFree(tenantId, data.branch_id, code);
 
     const terminal = this.terminalRepo.create({
       tenant_id: tenantId,
