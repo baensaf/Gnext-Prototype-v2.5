@@ -250,7 +250,6 @@ export class KioskService {
       order_type: 'DINE_IN' | 'TAKEAWAY';
       customer_name?: string;
       customer_phone?: string;
-      idempotency_key?: string;
       items: Array<{
         product_id: string;
         variant_id?: string;
@@ -269,18 +268,6 @@ export class KioskService {
   ) {
     if (!data.items || data.items.length === 0) {
       throw new BadRequestException('Kiosk order must contain at least one item');
-    }
-
-    // Idempotency check: if an order with same idempotency key exists, return it
-    if (data.idempotency_key && data.idempotency_key.trim() !== '') {
-      const existing = await this.orderRepo.findOne({
-        where: [
-          { tenant_id: tenantId, channel: 'KIOSK', order_number: data.idempotency_key },
-          { tenant_id: tenantId, channel: 'KIOSK', notes: `IDEM:${data.idempotency_key}` },
-        ],
-        relations: ['items', 'items.options'],
-      });
-      if (existing) return existing;
     }
 
     // Resolved against the branch this kiosk is standing in, exactly as the config
@@ -362,7 +349,9 @@ export class KioskService {
         status: initialState,
         fulfillment_status: 'PENDING',
         customer_id: customerId,
-        notes: data.idempotency_key ? `IDEM:${data.idempotency_key}` : (data.notes || 'Kiosk Self-Service Order'),
+        // What the guest wrote, or nothing: the note prints on the kitchen chit and the receipt.
+        // A repeated submit is caught by the Idempotency-Key header, not by a marker in here.
+        notes: data.notes?.trim() || null,
         subtotal: '0.0000',
         subtotal_amount: '0.0000',
         tax_total: '0.0000',

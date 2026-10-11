@@ -361,6 +361,8 @@
       "resuming": "Resuming…"
     },
     "notes": {
+      "lineTitle": "Note for this item",
+      "lineHelp": "For {{item}} only; prints under this line on the kitchen chit.",
       "title": "Order & kitchen note",
       "help": "Instructions for the kitchen, the courier, or what the customer asked for.",
       "label": "Note",
