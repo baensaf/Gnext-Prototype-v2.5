@@ -24,7 +24,6 @@ import { ReceiptPage } from 'src/pages/pos/receipt';
 import { UsersPage } from 'src/pages/settings/users';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { RefundsPage } from 'src/pages/orders/refunds';
-import { OptionsPage } from 'src/pages/catalog/options';
 import { SettingsHubPage } from 'src/pages/settings/hub';
 import { AgentsPage } from 'src/pages/operations/agents';
 import { homePathForRole } from 'src/config/role-access';
@@ -227,7 +226,8 @@ export const routesSection: RouteObject[] = [
       { path: 'catalog/categories', element: <CategoriesPage /> },
       { path: 'catalog/products', element: <ProductsPage /> },
       { path: 'catalog/products/:id', element: <ProductDetailPage /> },
-      { path: 'catalog/modifiers', element: <OptionsPage /> },
+      // Add-on groups are set up on each product's page, as on Snappfood.
+      { path: 'catalog/modifiers', element: <Navigate to="/app/catalog/products" replace /> },
       { path: 'catalog/availability', element: <AvailabilityPage /> },
       { path: 'catalog/import-export', element: <ImportWizardPage /> },
       { path: 'pricing/price-lists', element: <PriceListsPage /> },

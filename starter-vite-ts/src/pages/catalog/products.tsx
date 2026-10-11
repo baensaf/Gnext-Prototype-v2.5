@@ -90,7 +90,6 @@ export function ProductsPage() {
   const [name, setName] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [basePrice, setBasePrice] = useState('1500000');
-  const [productType, setProductType] = useState<'STANDARD' | 'COMBO'>('STANDARD');
   const [taxPercent, setTaxPercent] = useState(DEFAULT_TAX_PERCENT);
   const [barcode, setBarcode] = useState('');
   const [description, setDescription] = useState('');
@@ -127,7 +126,6 @@ export function ProductsPage() {
         name,
         category_id: categoryId,
         base_price: basePrice,
-        product_type: productType,
         tax_rate: percentToTaxRate(taxPercent),
         barcode: barcode.trim() || undefined,
         description,
@@ -146,7 +144,6 @@ export function ProductsPage() {
     setName('');
     setCategoryId('');
     setBasePrice('1500000');
-    setProductType('STANDARD');
     setTaxPercent(DEFAULT_TAX_PERCENT);
     setBarcode('');
     setDescription('');
@@ -309,9 +306,6 @@ export function ProductsPage() {
                           <Box>
                             <Typography variant="subtitle2">
                               {p.name}
-                              {p.product_type === 'COMBO' && (
-                                <Chip label={t('catalog.productsPage.comboBadge')} size="small" color="secondary" sx={{ ml: 1 }} />
-                              )}
                             </Typography>
                             {p.code && (
                               <Typography variant="caption" color="text.secondary" component="code">
@@ -424,23 +418,6 @@ export function ProductsPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
-
-              <FormControl fullWidth>
-                <InputLabel>{t('catalog.productsPage.productType')}</InputLabel>
-                <Select
-                  value={productType}
-                  label={t('catalog.productsPage.productType')}
-                  onChange={(e) => setProductType(e.target.value as 'STANDARD' | 'COMBO')}
-                >
-                  <MenuItem value="STANDARD">{t('catalog.productsPage.typeStandard')}</MenuItem>
-                  <MenuItem value="COMBO">
-                    {t('catalog.productsPage.typeCombo')}
-                  </MenuItem>
-                </Select>
-              </FormControl>
-              {productType === 'COMBO' && (
-                <Alert severity="info">{t('catalog.productsPage.comboHelp')}</Alert>
-              )}
 
               <TextField
                 label={t('catalog.productsPage.basePrice')}

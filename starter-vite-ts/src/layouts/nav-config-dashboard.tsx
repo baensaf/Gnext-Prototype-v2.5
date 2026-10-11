@@ -157,10 +157,6 @@ export function useNavData(): NavSectionProps['data'] {
               path: '/app/catalog/categories',
             },
             {
-              title: t('nav.modifiers', 'Modifiers & Options'),
-              path: '/app/catalog/modifiers',
-            },
-            {
               title: t('nav.availability', 'Availability & Suspensions'),
               path: '/app/catalog/availability',
             },

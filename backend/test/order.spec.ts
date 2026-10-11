@@ -347,17 +347,15 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
     });
   });
 
-  // HAMI audit gap: combo products. A combo's option groups are its slots, and each choice
-  // may be a dish of its own.
-  describe('Combo products', () => {
+  // A meal is an ordinary product whose drink and side are add-on groups, as on Snappfood.
+  describe('Add-on choices on an order line', () => {
     const order = { id: 'ord-1', tenant_id: 't-1', branch_id: 'b-1' } as any;
-    const combo = { id: 'p-combo', tenant_id: 't-1', code: 'MEAL', name: 'Burger Meal', base_price: '400000.0000', product_type: 'COMBO' };
-    const cola = { id: 'p-cola', tenant_id: 't-1', name: 'Cola' };
+    const combo = { id: 'p-combo', tenant_id: 't-1', code: 'MEAL', name: 'Burger Meal', base_price: '400000.0000' };
     const choices: Record<string, any> = {
-      'opt-cola': { id: 'opt-cola', option_group_id: 'g-drink', name: 'Cola', price_delta: '0.0000', product_id: 'p-cola' },
-      'opt-shake': { id: 'opt-shake', option_group_id: 'g-drink', name: 'Shake', price_delta: '60000.0000', product_id: null },
-      'opt-fries': { id: 'opt-fries', option_group_id: 'g-side', name: 'Fries', price_delta: '0.0000', product_id: null },
-      'opt-bacon': { id: 'opt-bacon', option_group_id: 'g-extras', name: 'Bacon', price_delta: '50000.0000', product_id: null },
+      'opt-cola': { id: 'opt-cola', option_group_id: 'g-drink', name: 'Cola', price_delta: '0.0000' },
+      'opt-shake': { id: 'opt-shake', option_group_id: 'g-drink', name: 'Shake', price_delta: '60000.0000' },
+      'opt-fries': { id: 'opt-fries', option_group_id: 'g-side', name: 'Fries', price_delta: '0.0000' },
+      'opt-bacon': { id: 'opt-bacon', option_group_id: 'g-extras', name: 'Bacon', price_delta: '50000.0000' },
     };
     const add = (options: string[]) =>
       (service as any).addItemsToDraft('t-1', order, [{ product_id: 'p-combo', quantity: '1.0000', options: options.map((id) => ({ option_item_id: id })) }], mockEntityManager);
@@ -365,7 +363,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
 
     beforeEach(() => {
       catalogService = (service as any).catalogService;
-      productRepo.findOne.mockImplementation(({ where }: any) => Promise.resolve(where.id === 'p-combo' ? combo : where.id === 'p-cola' ? cola : null));
+      productRepo.findOne.mockImplementation(({ where }: any) => Promise.resolve(where.id === 'p-combo' ? combo : null));
       optionItemRepo.findOne.mockImplementation(({ where }: any) => Promise.resolve(choices[where.id] || null));
       mockEntityManager.find.mockImplementation((entity: any) =>
         Promise.resolve(
@@ -379,7 +377,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       );
     });
 
-    it('sells a combo as one line at its price plus upcharges, keeping each choice under its slot', async () => {
+    it('sells a meal as one line at its price plus upcharges, keeping each choice under its group', async () => {
       await add(['opt-shake', 'opt-fries']);
 
       expect(mockEntityManager.save).toHaveBeenCalledWith(
@@ -390,15 +388,15 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       expect(mockEntityManager.save).toHaveBeenCalledWith(OrderItemOption, expect.objectContaining({ option_group_name: 'Side', option_item_name: 'Fries' }));
     });
 
-    it('refuses a combo with a slot left empty', async () => {
-      await expect(add(['opt-cola'])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'COMBO_CHOICES_INVALID', message: 'Burger Meal needs a Side choice' }) });
+    it('refuses a required group left empty', async () => {
+      await expect(add(['opt-cola'])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'OPTION_CHOICES_INVALID', message: 'Burger Meal needs a Side choice' }) });
     });
 
-    it('refuses two choices in a one-choice slot', async () => {
-      await expect(add(['opt-cola', 'opt-shake', 'opt-fries'])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'COMBO_CHOICES_INVALID' }) });
+    it('refuses more choices than a group allows', async () => {
+      await expect(add(['opt-cola', 'opt-shake', 'opt-fries'])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'OPTION_CHOICES_INVALID' }) });
     });
 
-    it("refuses a choice that is not one of the combo's slots", async () => {
+    it("refuses a choice that is not one of the product's groups", async () => {
       await expect(add(['opt-cola', 'opt-fries', 'opt-bacon'])).rejects.toMatchObject({ response: expect.objectContaining({ message: 'Bacon is not a choice in Burger Meal' }) });
     });
 
@@ -409,25 +407,7 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
       expect(mockEntityManager.save).not.toHaveBeenCalledWith(OrderItem, expect.anything());
     });
 
-    it('refuses a combo whose chosen drink is off sale', async () => {
-      catalogService.getSuspension.mockImplementation((_t: string, productId: string) =>
-        Promise.resolve({ isSuspended: productId === 'p-cola', reason: productId === 'p-cola' ? 'Out of stock' : null }),
-      );
-
-      await expect(add(['opt-cola', 'opt-fries'])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'PRODUCT_SUSPENDED', message: 'Cola in Burger Meal is not on sale now (Out of stock)' }) });
-    });
-
-    it('holds an ordinary product to its required add-on groups too', async () => {
-      productRepo.findOne.mockResolvedValue({ ...combo, product_type: 'STANDARD' });
-
-      await expect(add(['opt-shake'])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'OPTION_CHOICES_INVALID', message: 'Burger Meal needs a Side choice' }) });
-      await expect(add(['opt-shake', 'opt-fries', 'opt-bacon'])).rejects.toMatchObject({ response: expect.objectContaining({ message: 'Bacon is not a choice in Burger Meal' }) });
-      await add(['opt-shake', 'opt-fries']);
-      expect(mockEntityManager.save).toHaveBeenCalledWith(OrderItem, expect.objectContaining({ modifier_total: '60000.0000' }));
-    });
-
     it('refuses a product sold in sizes when no size is picked', async () => {
-      productRepo.findOne.mockResolvedValue({ ...combo, product_type: 'STANDARD' });
       variantRepo.count.mockResolvedValueOnce(2);
 
       await expect(add(['opt-shake', 'opt-fries'])).rejects.toMatchObject({ response: expect.objectContaining({ code: 'VARIANT_REQUIRED' }) });

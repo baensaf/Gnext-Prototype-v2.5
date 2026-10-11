@@ -292,7 +292,7 @@ describe('CatalogService (Unit)', () => {
     it('refuses attaching a required group with no choices', async () => {
       prodGroupRepo.findOne.mockResolvedValue(null);
       itemRepo.find.mockResolvedValue([]);
-      await expect(service.attachOptionGroupToProduct('t-1', 'p-1', 'g-bread', 0, 'c')).rejects.toEqual(unfillable);
+      await expect(service.attachOptionGroupToProduct('t-1', 'p-1', 'g-bread', 'c')).rejects.toEqual(unfillable);
     });
 
     describe("the group editor's save", () => {
@@ -317,8 +317,8 @@ describe('CatalogService (Unit)', () => {
             min_selection: 1,
             max_selection: 1,
             items: [
-              { id: 'i-white', name: 'White bun', price_delta: '0', sort_order: 0 },
-              { name: 'Rye', price_delta: '20000', sort_order: 1 },
+              { id: 'i-white', name: 'White bun', price_delta: '0' },
+              { name: 'Rye', price_delta: '20000' },
             ],
             removed_item_ids: ['i-brown'],
           },

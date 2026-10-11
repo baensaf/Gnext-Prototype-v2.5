@@ -52,7 +52,6 @@ export const paths = {
       categories: `${ROOTS.APP}/catalog/categories`,
       products: `${ROOTS.APP}/catalog/products`,
       productDetail: (id: string) => `${ROOTS.APP}/catalog/products/${id}`,
-      modifiers: `${ROOTS.APP}/catalog/modifiers`,
       availability: `${ROOTS.APP}/catalog/availability`,
       importExport: `${ROOTS.APP}/catalog/import-export`,
     },

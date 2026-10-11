@@ -176,16 +176,15 @@ export interface IranBurgerOptionGroup {
   name: string;
   min: number;
   max: number;
-  /** Rial prices; `isDefault` is ticked when the item is rung up. */
-  items: Array<{ code: string; name: string; price: number; isDefault?: boolean }>;
-  /** Categories that pass the group to every product in them. */
+  /** Rial prices. */
+  items: Array<{ code: string; name: string; price: number }>;
+  /** The seed switches the group on for every product of these categories. */
   categories: string[];
 }
 
-// The counter's usual asks: extras cost, "without" requests are free, and a combo comes with
-// cola unless the guest wants another drink. None is asked at the POS: the chain's counter
-// rings an item straight through, as HAMI's does, and the cashier adds these from the order
-// line. Migration 085 puts the same groups back on databases seeded while the menu had none.
+// The counter's usual asks: extras cost, "without" requests are free, and a combo's drink
+// is picked from three. None is required, so the POS asks nothing: the chain's counter rings
+// an item straight through, as HAMI's does, and the cashier adds these from the order line.
 export const IRANBURGER_OPTION_GROUPS: IranBurgerOptionGroup[] = [
   {
     code: 'IB-OPT-EXTRA',
@@ -219,7 +218,7 @@ export const IRANBURGER_OPTION_GROUPS: IranBurgerOptionGroup[] = [
     min: 0,
     max: 1,
     items: [
-      { code: 'IB-OPT-DRINK-COLA', name: 'نوشابه مشکی', price: 0, isDefault: true },
+      { code: 'IB-OPT-DRINK-COLA', name: 'نوشابه مشکی', price: 0 },
       { code: 'IB-OPT-DRINK-LEMON', name: 'نوشابه لیمویی', price: 0 },
       { code: 'IB-OPT-DRINK-DOOGH', name: 'دوغ', price: t(10) },
     ],

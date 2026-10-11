@@ -20,13 +20,7 @@ export class OptionItem {
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   price_delta: string;
 
-  /** The dish this choice gives, when it is one (a combo's cola); off sale when that dish is. */
-  @Column({ type: 'uuid', nullable: true })
-  product_id: string | null;
-
-  @Column({ type: 'boolean', default: false })
-  is_default: boolean;
-
+  /** The order the choices were added in. */
   @Column({ type: 'integer', default: 0 })
   sort_order: number;
 
