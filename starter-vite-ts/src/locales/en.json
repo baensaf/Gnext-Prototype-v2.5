@@ -2017,7 +2017,8 @@
         "webhook": "Webhook Generator (v4.3.0)",
         "stepper": "Order Lifecycle Stepper",
         "vendorApi": "Vendor Automation APIs (20+ Endpoints)",
-        "logs": "Integration Audit Logs"
+        "logs": "Integration Audit Logs",
+        "menuSync": "Menu sync"
       },
       "oauth": {
         "cardTitle": "OAuth2 Password Grant Simulator",
@@ -2105,6 +2106,45 @@
         "execute": "Execute API Endpoint",
         "response": "API Response Payload",
         "placeholder": "Select an endpoint and click Execute API Endpoint."
+      },
+      "menuSync": {
+        "intro": "Simulated: how a branch's menu on Snappfood is matched to ours and kept in step, with the calls of annex 4.3.0. Each branch is a Snappfood vendor. Nothing is sent anywhere; every call is in the integration log with its body. See docs/snappfood-menu-sync.md.",
+        "failed": "The simulator could not do that",
+        "branch": "Branch (Snappfood vendor)",
+        "vendorCode": "Vendor code {{code}}",
+        "reset": "Start the Snappfood menu again",
+        "matchTitle": "1. Match the branch's Snappfood menu",
+        "matchHelp": "The vendor's products as Snappfood lists them (GET /va/v1.1/product), each beside ours. Names are matched however they were typed; check each one and save. Saving tells Snappfood which of our ids each product is (product/sync/productId, category/sync/categoryId).",
+        "colSnappfood": "On Snappfood",
+        "colCategory": "Category",
+        "colPrice": "Price (Toman)",
+        "colStatus": "Status",
+        "colOurs": "Our product",
+        "noMatch": "Not ours",
+        "inReview": "In review",
+        "status": {
+          "MATCHED": "Matched",
+          "SUGGESTED": "Suggested",
+          "UNMATCHED": "No match"
+        },
+        "notOnSnappfood": "Not on Snappfood yet: {{names}}. Sending the menu creates them there, and Snappfood reviews them.",
+        "saveMatches": "Save matches",
+        "matchesSaved": "Matches saved and told to Snappfood",
+        "sendTitle": "2. Send our menu to Snappfood",
+        "sendHelp": "Categories, products (one per type), toppings, which product offers which topping, stock and prices, with the annex's calls in order. Preview shows the bodies without sending.",
+        "preview": "Preview",
+        "send": "Send menu",
+        "sent": "Menu sent (simulated); see the integration log",
+        "warnings": "Snappfood would refuse these",
+        "newOnSnappfood": "New on Snappfood (waits for review): {{names}}",
+        "count": {
+          "menus": "Categories",
+          "products": "Products",
+          "topping_groups": "Topping groups",
+          "toppings": "Toppings",
+          "product_toppings": "Product toppings",
+          "unavailable": "Unavailable"
+        }
       }
     },
     "hardware": {

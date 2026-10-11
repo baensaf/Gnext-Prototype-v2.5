@@ -10,7 +10,11 @@ import { PaymentAllocation } from '../../entities/PaymentAllocation.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { CustomerPhone } from '../../entities/CustomerPhone.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
+import { ChannelItemMap } from '../../entities/ChannelItemMap.entity';
+import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { SimulationService } from './simulation.service';
+import { SnappfoodCatalogService } from './snappfood-catalog.service';
+import { CatalogModule } from '../catalog/catalog.module';
 import { SimulationController } from './simulation.controller';
 import { SimulatedWebhooksController } from './simulated-webhooks.controller';
 import { AuditModule } from '../audit/audit.module';
@@ -30,15 +34,19 @@ import { CustomerModule } from '../customer/customer.module';
       PaymentMethod,
       CustomerPhone,
       CustomerAddress,
+      ChannelItemMap,
+      TenantSetting,
     ]),
+    // The menu sync reads the Snappfood price sheet and the branch's stops.
+    CatalogModule,
     AuditModule,
     // Snappfood's customer becomes a customer record.
     CustomerModule,
     // For the branch's incoming-order policy; see the matching note in OrderModule.
     forwardRef(() => OrderModule),
   ],
-  providers: [SimulationService],
+  providers: [SimulationService, SnappfoodCatalogService],
   controllers: [SimulationController, SimulatedWebhooksController],
-  exports: [SimulationService],
+  exports: [SimulationService, SnappfoodCatalogService],
 })
 export class SimulationModule {}
