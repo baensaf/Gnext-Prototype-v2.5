@@ -145,3 +145,18 @@ early if you want IDs fixed before the menu grows, since adding them later means
 4. **Wizard vs one form for a new product:** Food Partner's 6-step wizard suits a phone. Our
    head office works on a desktop. Recommendation: keep one form, in Food Partner's section
    order.
+
+## 6. Follow-up: add-ons rebuilt (2026-10-11)
+
+The PM decided add-ons should match Snappfood exactly and have nothing it lacks (C-12 in the
+product-management register). Done in the commit after this audit, replacing plan item 5:
+
+- A group is a title, its add-ons with prices and an at-least / at-most rule (at most ≥ 1).
+- A product's add-ons tab lists every group with a switch per add-on. "New group" and "Edit"
+  open the form there. The first switch on puts the group on the product; the last one off
+  takes it off.
+- Removed: the add-on groups page, category links, ask at the till (only a required group
+  asks), default add-ons, combo slots and the combo product type, per-product group order,
+  choice reorder arrows, "at most 0 = no limit", bulk add-on price changes.
+- Migration 118 keeps every existing link as a plain product link and turns "no limit" into
+  the number of add-ons in the group.

@@ -97,7 +97,6 @@ const CHAIN_ONLY_PATHS = [
   // it can actually serve today, on /app/catalog/availability, which stays open.
   // Products stays open too, read-only, because you cannot 86 what you cannot see.
   '/app/catalog/categories',
-  '/app/catalog/modifiers',
   '/app/pricing',
   // Discounts are the chain's for the same reason the menu is: a negotiated customer rate
   // carries no branch column, so a branch editing one is editing everybody's. The register

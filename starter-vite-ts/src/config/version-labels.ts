@@ -88,7 +88,6 @@ export const FEATURE_LABELS = {
   'catalog.stopBranches': 'V4',
   // Price changes: V1 changes base prices now.
   'pricing.listPrices': 'V4',
-  'pricing.addonPrices': 'V4',
   // Customers and credit
   'customers.credit': 'V3',
   // Operations

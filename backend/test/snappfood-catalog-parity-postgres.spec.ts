@@ -58,7 +58,7 @@ describe('Snappfood-style menu controls (PostgreSQL)', () => {
     groupId = (await save(OptionGroup, { tenant_id: tenantId, code: 'SFP-SAUCE', name: 'Sauces', min_selection: 0, max_selection: 3 })).id;
     chili = (await save(OptionItem, { tenant_id: tenantId, option_group_id: groupId, code: 'SFP-CHILI', name: 'Chili shot', price_delta: '20000.0000' })).id;
     ketchup = (await save(OptionItem, { tenant_id: tenantId, option_group_id: groupId, code: 'SFP-KETCHUP', name: 'Ketchup', price_delta: '5000.0000' })).id;
-    await catalog.attachOptionGroupToProduct(tenantId, sandwich, groupId, 0, 'test');
+    await catalog.attachOptionGroupToProduct(tenantId, sandwich, groupId, 'test');
   });
 
   afterAll(async () => {

@@ -523,7 +523,7 @@ export function PosOrderPage() {
     // A group that needs more choices than are left on offer (the rest excluded or 86'd)
     // can never be filled; the register would refuse the line whatever the cashier picks.
     const unfillable = offered.find(
-      (g) => (g.items || []).length < Math.max(g.min_selection || 0, g.is_required ? 1 : 0)
+      (g) => (g.items || []).length < addonMin(g)
     );
     if (unfillable) {
       setSelectedProduct(null);
@@ -535,29 +535,21 @@ export function PosOrderPage() {
     const ordered = [...offered].sort((a, b) => Number(addonMin(b) > 0) - Number(addonMin(a) > 0));
     setProductVariants(onSale);
     setOptionGroups(ordered);
-    // The catalogue's default choices start ticked (a combo's usual drink), up to what each
-    // group allows, so the common order is one tap.
-    const defaults = ordered.flatMap((g) =>
-      (g.items || [])
-        .filter((i) => i.is_default)
-        .slice(0, g.max_selection && g.max_selection > 0 ? g.max_selection : undefined)
-    );
     const line = lineIndex !== null ? cart[lineIndex] : null;
     const offeredIds = new Set(ordered.flatMap((g) => (g.items || []).map((i) => i.id)));
-    setCheckedOptionIds(
-      line ? line.selectedOptions.map((o) => o.id).filter((id) => offeredIds.has(id)) : defaults.map((i) => i.id)
-    );
+    setCheckedOptionIds(line ? line.selectedOptions.map((o) => o.id).filter((id) => offeredIds.has(id)) : []);
 
     const defaultVariant = onSale.find((v) => v.is_default) || onSale[0];
     const lineVariant = line?.selectedVariant && onSale.find((v) => v.id === line.selectedVariant!.id);
     setSelectedVariantId((lineVariant || defaultVariant)?.id || '');
 
-    const asks = onSale.length > 1 || ordered.some((g) => addonMin(g) > 0 || g.prompt_at_pos !== false);
+    // The till asks only for a size or a required group; optional add-ons ring straight
+    // through and are added from the line's Add-ons button.
+    const asks = onSale.length > 1 || ordered.some((g) => addonMin(g) > 0);
     if (line || asks) {
       setOptionDialogOpen(true);
     } else {
-      // Rung straight through with the default add-ons; the line's Add-ons button changes them.
-      addToCart(p, defaultVariant, defaults, onSale.length > 1 || ordered.length > 0);
+      addToCart(p, defaultVariant, [], onSale.length > 1 || ordered.length > 0);
       setSelectedProduct(null);
       return true;
     }

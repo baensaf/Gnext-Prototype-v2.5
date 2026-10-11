@@ -85,12 +85,15 @@ export class KioskService {
     const liveCategoryIds = new Set(categories.map((c) => c.id));
     const products =listedProducts.filter((p) => !p.category_id || liveCategoryIds.has(p.category_id));
 
+    // Groups in the order they were made, choices in the order they were added, as everywhere.
     const optionGroups = await this.optionGroupRepo.find({
       where: { tenant_id: tenantId },
+      order: { created_at: 'ASC' },
     });
 
     const optionItems = await this.optionItemRepo.find({
       where: { tenant_id: tenantId },
+      order: { sort_order: 'ASC', created_at: 'ASC' },
     });
 
     const productOptionGroups = await this.productOptionGroupRepo.find({ where: { tenant_id: tenantId } });
@@ -123,22 +126,22 @@ export class KioskService {
 
     const catalogProducts = products.map((p) => {
       const pLinks = productOptionGroups.filter((pog) => pog.product_id === p.id);
-      const groups = pLinks.map((link) => {
-        const og = optionGroups.find((g) => g.id === link.option_group_id);
+      const groups = optionGroups.filter((g) => pLinks.some((l) => l.option_group_id === g.id)).map((og) => {
+        const link = pLinks.find((l) => l.option_group_id === og.id)!;
         const items = optionItems
           // Items this product leaves out of the group, and add-ons off today, are not offered.
           .filter((i) => i.option_group_id === link.option_group_id && !(link.excluded_item_ids || []).includes(i.id))
-          .filter((i) => !off.optionItems.has(i.id) && !(i.product_id && off.products.has(i.product_id)))
+          .filter((i) => !off.optionItems.has(i.id))
           .map((i) => ({ ...i, price: i.price_delta }));
         return {
           ...og,
           items,
         };
-      }).filter((g) => g.id);
+      });
 
       // A group needing more choices than are left on offer can never be filled, and checkout
       // would refuse the dish whatever the guest picks.
-      const fillable = groups.every((g) => g.items.length >= Math.max(g.min_selection || 0, g.is_required ? 1 : 0));
+      const fillable = groups.every((g) => g.items.length >= (g.min_selection || 0));
       const own = variants.filter((v) => v.product_id === p.id);
       const onSale = own.filter((v) => !off.products.has(p.id) && !off.variants.has(v.id));
       return {

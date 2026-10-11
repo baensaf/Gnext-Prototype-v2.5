@@ -1,4 +1,4 @@
-import type { Category, PriceList, OptionGroup, PriceChangeInput, PriceChangePreview } from 'src/api/catalogApi';
+import type { Category, PriceList, PriceChangeInput, PriceChangePreview } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -38,17 +38,14 @@ const BASE = '';
 const ALL = '';
 
 /**
- * Price changes: raise or lower base prices, one list's prices or add-on prices by a
- * percentage or an amount. The change is previewed item by item and applies at once.
+ * Price changes: raise or lower base prices or one list's prices by a percentage or an
+ * amount. The change is previewed item by item and applies at once. Add-on prices are edited
+ * in their group, as on Snappfood.
  */
 export function PriceChangesPage() {
   const { t } = useTranslation();
   const [lists, setLists] = useState<PriceList[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [addonGroups, setAddonGroups] = useState<OptionGroup[]>([]);
-  // Menu items (base or one list's prices) or add-ons (chain-wide).
-  const [target, setTarget] = useState<'ITEMS' | 'ADDONS'>('ITEMS');
-  const [groupId, setGroupId] = useState(ALL);
   const [listId, setListId] = useState(BASE);
   const [categoryId, setCategoryId] = useState(ALL);
   const [adjustment, setAdjustment] = useState<'PERCENT' | 'AMOUNT'>('PERCENT');
@@ -62,24 +59,20 @@ export function PriceChangesPage() {
   const fail = useCallback((err: any, fallback: string) => setError(err?.detail || err?.message || fallback), []);
 
   useEffect(() => {
-    Promise.all([catalogApi.getPriceLists(), catalogApi.getCategories(), catalogApi.getOptionGroups()])
-      .then(([ls, cs, gs]) => {
+    Promise.all([catalogApi.getPriceLists(), catalogApi.getCategories()])
+      .then(([ls, cs]) => {
         setLists(ls);
         setCategories(cs);
-        setAddonGroups(gs);
       })
       .catch((err) => fail(err, t('pricing.changes.loadFailed')));
   }, [fail, t]);
 
   // Any edit to the form makes the preview stale.
-  useEffect(() => setPreview(null), [target, groupId, listId, categoryId, adjustment, value, roundTo]);
+  useEffect(() => setPreview(null), [listId, categoryId, adjustment, value, roundTo]);
 
-  const addons = target === 'ADDONS';
   const input = (): PriceChangeInput => ({
-    target,
-    option_group_id: addons ? groupId || null : null,
-    price_list_id: addons ? null : listId || null,
-    category_id: addons ? null : categoryId || null,
+    price_list_id: listId || null,
+    category_id: categoryId || null,
     adjustment,
     // Amounts are typed in tomans and sent in rials; a percentage goes as it is.
     value: adjustment === 'AMOUNT' ? fromToman(value.trim()) : value.trim(),
@@ -139,33 +132,7 @@ export function PriceChangesPage() {
           <Typography variant="h6" sx={{ mb: 2 }}>
             {t('pricing.changes.newChange')}
           </Typography>
-          <ToggleButtonGroup
-            size="small"
-            exclusive
-            value={target}
-            onChange={(_, next) => next && setTarget(next)}
-            sx={{ mb: 2 }}
-          >
-            <ToggleButton value="ITEMS">{t('pricing.changes.targetItems')}</ToggleButton>
-            <ToggleButton value="ADDONS">
-              {t('pricing.changes.targetAddons')} <VersionTag feature="pricing.addonPrices" sx={{ ml: 1 }} />
-            </ToggleButton>
-          </ToggleButtonGroup>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
-            {addons ? (
-              <FormControl size="small" sx={{ minWidth: 200 }}>
-                <InputLabel shrink>{t('pricing.changes.addonGroup')}</InputLabel>
-                <Select value={groupId} displayEmpty label={t('pricing.changes.addonGroup')} onChange={(e) => setGroupId(e.target.value)}>
-                  <MenuItem value={ALL}>{t('pricing.changes.allAddonGroups')}</MenuItem>
-                  {addonGroups.map((g) => (
-                    <MenuItem key={g.id} value={g.id}>
-                      {g.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            ) : (
-            <>
             <FormControl size="small" sx={{ minWidth: 200 }}>
               <InputLabel shrink>{t('pricing.changes.prices')}</InputLabel>
               <Select value={listId} displayEmpty label={t('pricing.changes.prices')} onChange={(e) => setListId(e.target.value)}>
@@ -188,8 +155,6 @@ export function PriceChangesPage() {
                 ))}
               </Select>
             </FormControl>
-            </>
-            )}
           </Stack>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ alignItems: { md: 'flex-start' } }}>
             <ToggleButtonGroup size="small" exclusive value={adjustment} onChange={(_, next) => next && setAdjustment(next)}>
@@ -247,7 +212,7 @@ export function PriceChangesPage() {
                   </TableHead>
                   <TableBody>
                     {preview.items.map((i) => (
-                      <TableRow key={i.option_item_id || `${i.product_id}:${i.variant_id || ''}`} sx={{ opacity: i.current === i.new ? 0.5 : 1 }}>
+                      <TableRow key={`${i.product_id}:${i.variant_id || ''}`} sx={{ opacity: i.current === i.new ? 0.5 : 1 }}>
                         <TableCell>{i.name}</TableCell>
                         <TableCell align="right">{MoneyUtil.formatCurrency(i.current)}</TableCell>
                         <TableCell align="right" sx={{ fontWeight: 'bold' }}>

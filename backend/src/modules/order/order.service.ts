@@ -2447,18 +2447,6 @@ export class OrderService {
       await this.catalogService.assertLineSellable(em, tenantId, order, product, variant?.id || null, qty, chosen.map((c) => c.optItem));
 
       for (const { optItem, optDto } of chosen) {
-        // A choice that is a dish of its own (a combo's drink) is off sale when that dish is.
-        if (optItem.product_id) {
-          const component = await this.productRepo.findOne({ where: { id: optItem.product_id, tenant_id: tenantId } });
-          const componentStop = component ? await this.catalogService.getSuspension(tenantId, component.id, order.branch_id) : null;
-          if (componentStop?.isSuspended) {
-            throw new BadRequestException({
-              statusCode: 400,
-              code: 'PRODUCT_SUSPENDED',
-              message: `${component!.name} in ${product.name} is not on sale now${componentStop.reason ? ` (${componentStop.reason})` : ''}`,
-            });
-          }
-        }
         const delta = optItem.price_delta ? MoneyUtil.format(optItem.price_delta) : '0.0000';
         modifierUnitDelta = MoneyUtil.add(modifierUnitDelta, delta);
         const itemOpt = em.create(OrderItemOption, {
@@ -2504,8 +2492,8 @@ export class OrderService {
   }
 
   /**
-   * A line's add-on choices against the groups on its product (a combo's slots are groups
-   * too): each choice from one of them, each group filled within its limits. Answers the
+   * A line's add-on choices against the groups on its product: each choice from one of them
+   * and switched on for it, each group filled within its limits. Answers the
    * group names, which the order line keeps with each choice.
    */
   private async checkChoices(tenantId: string, product: Product, choices: OptionItem[], em: EntityManager) {

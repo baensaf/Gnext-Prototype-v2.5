@@ -566,14 +566,13 @@ export async function runSeed() {
     console.log(`Seeded Product: ${p.name}`);
   }
 
-  // Add-on groups, put on their categories so every product there (and one added later) has
-  // them. None asks at the POS. A group already there, even archived, is left as it is, so one
+  // Add-on groups, switched on for every product of the listed categories. None is required,
+  // so the POS asks nothing. A group already there, even archived, is left as it is, so one
   // changed or removed in the catalogue stays that way.
   const optionGroupRepo = AppDataSource.getRepository('OptionGroup');
   const optionItemRepo = AppDataSource.getRepository('OptionItem');
   const productOptionRepo = AppDataSource.getRepository('ProductOptionGroup');
-  const categoryOptionRepo = AppDataSource.getRepository('CategoryOptionGroup');
-  for (const [groupIndex, g] of IRANBURGER_OPTION_GROUPS.entries()) {
+  for (const g of IRANBURGER_OPTION_GROUPS) {
     if (await optionGroupRepo.findOne({ where: { tenant_id: tenant.id, code: g.code }, withDeleted: true })) continue;
     const group: any = await optionGroupRepo.save(optionGroupRepo.create({
       tenant_id: tenant.id,
@@ -582,7 +581,6 @@ export async function runSeed() {
       min_selection: g.min,
       max_selection: g.max,
       is_required: g.min > 0,
-      prompt_at_pos: false,
     }));
     for (const [itemIndex, item] of g.items.entries()) {
       await optionItemRepo.save(optionItemRepo.create({
@@ -591,23 +589,15 @@ export async function runSeed() {
         code: item.code,
         name: item.name,
         price_delta: MoneyUtil.format(item.price),
-        is_default: !!item.isDefault,
         sort_order: itemIndex,
       }));
     }
     for (const code of g.categories) {
       const category = categoryByCode.get(code);
       if (!category) continue;
-      await categoryOptionRepo.save(categoryOptionRepo.create({ tenant_id: tenant.id, category_id: category.id, option_group_id: group.id }));
       const products = await prodRepo.find({ where: { tenant_id: tenant.id, category_id: category.id } });
       for (const product of products) {
-        await productOptionRepo.save(productOptionRepo.create({
-          tenant_id: tenant.id,
-          product_id: product.id,
-          option_group_id: group.id,
-          from_category_id: category.id,
-          sort_order: groupIndex,
-        }));
+        await productOptionRepo.save(productOptionRepo.create({ tenant_id: tenant.id, product_id: product.id, option_group_id: group.id }));
       }
     }
     console.log(`Seeded Add-on Group: ${g.name}`);

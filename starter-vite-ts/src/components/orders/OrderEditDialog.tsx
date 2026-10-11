@@ -117,15 +117,7 @@ export function OrderEditDialog({ open, onClose, order, reasonCodes, onSaved }: 
           items: (g.items || []).filter((i) => !(g.excluded_item_ids || []).includes(i.id)),
         }));
         setPickerGroups(groups);
-        // Defaults start ticked, as on the register.
-        setPickerOptionIds(
-          groups.flatMap((g) =>
-            (g.items || [])
-              .filter((i) => i.is_default)
-              .slice(0, g.max_selection > 0 ? g.max_selection : undefined)
-              .map((i) => i.id)
-          )
-        );
+        setPickerOptionIds([]);
       })
       .catch(() => undefined);
     return () => {

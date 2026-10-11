@@ -24,10 +24,6 @@ export class OptionGroup {
   @Column({ type: 'boolean', default: false })
   is_required: boolean;
 
-  /** An optional group opens the POS choices dialog when the item is rung up. Required ones always do. */
-  @Column({ type: 'boolean', default: true })
-  prompt_at_pos: boolean;
-
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
 

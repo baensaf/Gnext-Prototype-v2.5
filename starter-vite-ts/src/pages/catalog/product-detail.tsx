@@ -14,13 +14,10 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import StarIcon from '@mui/icons-material/Star';
-import TuneIcon from '@mui/icons-material/Tune';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import {
   Box,
   Tab,
@@ -69,6 +66,7 @@ import { VersionTag } from 'src/components/version-tag';
 import { AmountInWords } from 'src/components/amount-in-words';
 
 import { ProductPhotos } from './product-photos';
+import { AddonGroupSheet } from './addon-group-sheet';
 import { ProductPriceHistory } from './product-price-history';
 import { ProductItemDiscounts } from './product-item-discounts';
 
@@ -119,10 +117,8 @@ export function ProductDetailPage() {
   const [varSortOrder, setVarSortOrder] = useState('0');
   const [savingVariant, setSavingVariant] = useState(false);
 
-  // Option Group Modal State
-  const [attachDialogOpen, setAttachDialogOpen] = useState(false);
-  const [selectedOptionGroupId, setSelectedOptionGroupId] = useState('');
-  const [attachingGroup, setAttachingGroup] = useState(false);
+  // The add-on group form: a group to edit, or null for a new one.
+  const [sheet, setSheet] = useState<{ group: OptionGroup | null } | null>(null);
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -169,51 +165,47 @@ export function ProductDetailPage() {
     (a) => a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date())
   );
 
-  /** Items of a group this product offers, as Snappfood's per-product add-on switch. */
+  /** The add-ons of a group this product offers: none when the group is not on it. */
+  const offeredIds = (group: OptionGroup) => {
+    const own = (product?.optionGroups || []).find((g) => g.id === group.id);
+    if (!own) return new Set<string>();
+    const off = new Set(own.excluded_item_ids || []);
+    return new Set((group.items || []).map((i) => i.id).filter((itemId) => !off.has(itemId)));
+  };
+
+  /** The groups and this product's switches again, without touching the unsaved General form. */
+  const refreshAddons = async () => {
+    if (!id) return;
+    const [prod, groups] = await Promise.all([catalogApi.getProductById(id), catalogApi.getOptionGroups()]);
+    setProduct((p) => (p ? { ...p, optionGroups: prod.optionGroups } : prod));
+    setAllOptionGroups(groups);
+  };
+
+  /** Snappfood's per-product add-on switch: the first one on puts the group on the product, the last one off takes it off. */
   const handleToggleOptionItem = async (group: OptionGroup, itemId: string, offered: boolean) => {
     if (!id) return;
-    const excluded = new Set(group.excluded_item_ids || []);
-    if (offered) excluded.delete(itemId);
-    else excluded.add(itemId);
+    const next = offeredIds(group);
+    if (offered) next.add(itemId);
+    else next.delete(itemId);
     try {
-      await catalogApi.setExcludedOptionItems(id, group.id, [...excluded]);
-      setProduct((p) =>
-        p
-          ? {
-              ...p,
-              optionGroups: (p.optionGroups || []).map((g) =>
-                g.id === group.id ? { ...g, excluded_item_ids: [...excluded] } : g
-              ),
-            }
-          : p
-      );
+      const result = await catalogApi.setOfferedChoices(id, group.id, [...next]);
+      setProduct((p) => {
+        if (!p) return p;
+        const others = (p.optionGroups || []).filter((g) => g.id !== group.id);
+        return { ...p, optionGroups: result.attached ? [...others, { ...group, excluded_item_ids: result.excluded_item_ids }] : others };
+      });
     } catch (err: any) {
       setError(err.detail || err.message || t('catalog.productDetailPage.errors.saveFailed'));
     }
   };
 
-  const handleDetachGroup = async (groupId: string) => {
-    if (!id) return;
-    if (!window.confirm(t('catalog.productDetailPage.modifiers.detachConfirm', 'Take this add-on group off this product?')))
-      return;
+  /** A group made from this product's page is switched on for it, every add-on of it. */
+  const handleGroupSaved = async (saved: OptionGroup) => {
+    const isNew = !sheet?.group;
+    setSheet(null);
     try {
-      await catalogApi.detachOptionGroup(id, groupId);
-      setProduct(await catalogApi.getProductById(id));
-    } catch (err: any) {
-      setError(err.detail || err.message || t('catalog.productDetailPage.errors.saveFailed'));
-    }
-  };
-
-  /** The order the POS shows this product's groups in. */
-  const handleMoveGroup = async (index: number, by: number) => {
-    if (!id || !product?.optionGroups) return;
-    const list = [...product.optionGroups];
-    const to = index + by;
-    if (to < 0 || to >= list.length) return;
-    [list[index], list[to]] = [list[to], list[index]];
-    setProduct({ ...product, optionGroups: list });
-    try {
-      await catalogApi.reorderProductOptionGroups(id, list.map((g) => g.id));
+      if (isNew && id && saved.items?.length) await catalogApi.setOfferedChoices(id, saved.id, saved.items.map((i) => i.id));
+      await refreshAddons();
     } catch (err: any) {
       setError(err.detail || err.message || t('catalog.productDetailPage.errors.saveFailed'));
     }
@@ -328,23 +320,6 @@ export function ProductDetailPage() {
       setSuccessMsg(t('catalog.productDetailPage.messages.defaultUpdated'));
     } catch (err: any) {
       setError(err.detail || err.message || t('catalog.productDetailPage.errors.setDefaultFailed'));
-    }
-  };
-
-  const handleAttachOptionGroup = async () => {
-    if (!id || !selectedOptionGroupId) return;
-    setAttachingGroup(true);
-    try {
-      await catalogApi.attachOptionGroup(id, selectedOptionGroupId);
-      setAttachDialogOpen(false);
-      setSelectedOptionGroupId('');
-      const prod = await catalogApi.getProductById(id);
-      setProduct(prod);
-      setSuccessMsg(t('catalog.productDetailPage.messages.groupAttached'));
-    } catch (err: any) {
-      setError(err.detail || err.message || t('catalog.productDetailPage.errors.attachGroupFailed'));
-    } finally {
-      setAttachingGroup(false);
     }
   };
 
@@ -689,134 +664,76 @@ export function ProductDetailPage() {
 
       {currentTab === 3 && id && <ProductPriceHistory productId={id} />}
 
-      {/* TAB 2: Modifiers & Option Groups */}
+      {/* TAB 2: Add-ons, as Snappfood's product page has them: every group, a switch per add-on */}
       {currentTab === 2 && (
         <Card sx={{ p: 3 }}>
-          <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2 }}>
             <Box>
-              <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1 }}>
-                <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                  {t('catalog.productDetailPage.modifiers.title')}
-                </Typography>
-              </Stack>
+              <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                {t('catalog.productDetailPage.modifiers.title')}
+              </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                 {t('catalog.productDetailPage.modifiers.subtitle')}
               </Typography>
             </Box>
-            <Button
-              variant="contained"
-              startIcon={<TuneIcon />}
-              onClick={() => setAttachDialogOpen(true)}
-              sx={{ fontWeight: 'bold' }}
-            >
-              {t('catalog.productDetailPage.modifiers.attachGroup')}
-            </Button>
+            {canAuthor && (
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setSheet({ group: null })} sx={{ fontWeight: 'bold', flexShrink: 0 }}>
+                {t('catalog.productDetailPage.modifiers.newGroup')}
+              </Button>
+            )}
           </Stack>
 
-          {(!product?.optionGroups || product.optionGroups.length === 0) ? (
+          {allOptionGroups.length === 0 ? (
             <Paper variant="outlined" sx={{ p: 4, textAlign: 'center', bgcolor: 'background.neutral' }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
                 {t('catalog.productDetailPage.modifiers.noGroupsTitle')}
               </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              <Typography variant="body2" color="text.secondary">
                 {t('catalog.productDetailPage.modifiers.noGroupsDesc')}
               </Typography>
-              <Button variant="outlined" startIcon={<TuneIcon />} onClick={() => setAttachDialogOpen(true)}>
-                {t('catalog.productDetailPage.modifiers.attachGroup')}
-              </Button>
             </Paper>
           ) : (
-            <Grid container spacing={2}>
-              {product.optionGroups.map((group, groupIndex) => (
-                <Grid key={group.id} size={{ xs: 12, md: 6 }}>
-                  <Card variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+            <Stack spacing={2}>
+              {allOptionGroups.map((group) => {
+                const on = offeredIds(group);
+                return (
+                  <Card key={group.id} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                     <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                        {group.name}
-                      </Typography>
-                      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                        {canAuthor && (
-                          <>
-                            <IconButton
-                              size="small"
-                              disabled={groupIndex === 0}
-                              title={t('catalog.addonSheet.moveUp')}
-                              onClick={() => handleMoveGroup(groupIndex, -1)}
-                            >
-                              <ArrowUpwardIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              disabled={groupIndex === (product.optionGroups?.length || 0) - 1}
-                              title={t('catalog.addonSheet.moveDown')}
-                              onClick={() => handleMoveGroup(groupIndex, 1)}
-                            >
-                              <ArrowDownwardIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              color="error"
-                              title={t('catalog.productDetailPage.modifiers.detach')}
-                              onClick={() => handleDetachGroup(group.id)}
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </>
-                        )}
-                      </Stack>
-                    </Stack>
-                    <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.5, mb: 1.5 }}>
-                      <Chip size="small" color={addonMin(group) > 0 ? 'warning' : 'default'} label={addonRuleLabel(t, group)} />
-                      {addonMin(group) === 0 && (
-                        <Chip
-                          size="small"
-                          variant="outlined"
-                          label={group.prompt_at_pos !== false ? t('catalog.productDetailPage.modifiers.asksAtPos') : t('catalog.productDetailPage.modifiers.ringsThrough')}
-                        />
-                      )}
-                      {group.from_category_id && (
-                        <Chip
-                          size="small"
-                          variant="outlined"
-                          color="info"
-                          label={t('catalog.productDetailPage.modifiers.fromCategory', {
-                            name: categories.find((c) => c.id === group.from_category_id)?.name || '',
-                          })}
-                        />
+                      <Box>
+                        <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+                          {group.name}
+                        </Typography>
+                        <Typography variant="caption" color={addonMin(group) > 0 ? 'warning.main' : 'text.secondary'}>
+                          {addonRuleLabel(t, group)}
+                        </Typography>
+                      </Box>
+                      {canAuthor && (
+                        <Button size="small" startIcon={<EditIcon fontSize="small" />} onClick={() => setSheet({ group })}>
+                          {t('catalog.productDetailPage.modifiers.editGroup')}
+                        </Button>
                       )}
                     </Stack>
 
-                    <Stack spacing={0.5}>
-                      {group.items?.map((item) => (
+                    <Stack>
+                      {(group.items || []).map((item) => (
                         <Stack
                           key={item.id}
-                          sx={{
-                            flexDirection: 'row',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            py: 0.5,
-                            borderBottom: 1,
-                            borderColor: 'divider',
-                          }}
+                          sx={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', py: 0.5, borderTop: 1, borderColor: 'divider' }}
                         >
-                          <Typography
-                            variant="body2"
-                            color={(group.excluded_item_ids || []).includes(item.id) ? 'text.disabled' : 'text.primary'}
-                          >
+                          <Typography variant="body2" color={on.has(item.id) ? 'text.primary' : 'text.secondary'}>
                             {item.name}
                           </Typography>
                           <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold' }}>
+                            <Typography variant="body2" color="text.secondary">
                               <span dir="ltr">
                                 {Number(item.price_delta) > 0
-                                  ? `+${MoneyUtil.formatCurrency(item.price_delta)} ${currency}`
+                                  ? `${MoneyUtil.formatCurrency(item.price_delta)} ${currency}`
                                   : t('catalog.productDetailPage.modifiers.free')}
                               </span>
                             </Typography>
-                            {/* Offered on this product, as Snappfood's per-product add-on switch. */}
                             <Switch
                               size="small"
-                              checked={!(group.excluded_item_ids || []).includes(item.id)}
+                              checked={on.has(item.id)}
                               disabled={!canAuthor}
                               onChange={(e) => handleToggleOptionItem(group, item.id, e.target.checked)}
                               slotProps={{ input: { 'aria-label': t('catalog.productDetailPage.modifiers.offerAria', { name: item.name }) } }}
@@ -826,9 +743,9 @@ export function ProductDetailPage() {
                       ))}
                     </Stack>
                   </Card>
-                </Grid>
-              ))}
-            </Grid>
+                );
+              })}
+            </Stack>
           )}
         </Card>
       )}
@@ -922,39 +839,7 @@ export function ProductDetailPage() {
         </form>
       </Dialog>
 
-      {/* Attach Option Group Dialog */}
-      <Dialog open={attachDialogOpen} onClose={() => setAttachDialogOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.modifiers.dialogTitle')}</DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <FormControl fullWidth sx={{ mt: 1 }}>
-            <InputLabel>{t('catalog.productDetailPage.modifiers.selectGroup')}</InputLabel>
-            <Select
-              value={selectedOptionGroupId}
-              label={t('catalog.productDetailPage.modifiers.selectGroup')}
-              onChange={(e) => setSelectedOptionGroupId(e.target.value)}
-            >
-              {allOptionGroups
-                .filter((og) => !(product?.optionGroups || []).some((g) => g.id === og.id))
-                .map((og) => (
-                <MenuItem key={og.id} value={og.id}>
-                  {og.name} · {addonRuleLabel(t, og)}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAttachDialogOpen(false)}>{t('catalog.productDetailPage.modifiers.cancel')}</Button>
-          <Button
-            variant="contained"
-            onClick={handleAttachOptionGroup}
-            disabled={!selectedOptionGroupId || attachingGroup}
-            sx={{ fontWeight: 'bold' }}
-          >
-            {attachingGroup ? t('catalog.productDetailPage.modifiers.attachingButton') : t('catalog.productDetailPage.modifiers.attachButton')}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <AddonGroupSheet open={!!sheet} group={sheet?.group ?? null} onClose={() => setSheet(null)} onSaved={handleGroupSaved} />
     </Container>
   );
 }
