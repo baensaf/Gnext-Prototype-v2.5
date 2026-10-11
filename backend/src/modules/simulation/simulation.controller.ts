@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Patch, Delete, Param, Query, Body, Headers, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Query, Body, Headers, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { SimulationService } from './simulation.service';
+import { SnappfoodCatalogService } from './snappfood-catalog.service';
 import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 
 /**
@@ -12,7 +13,10 @@ import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 @Controller('api/v1/simulation')
 @HeadOfficeOnly()
 export class SimulationController {
-  constructor(private readonly simulationService: SimulationService) {}
+  constructor(
+    private readonly simulationService: SimulationService,
+    private readonly snappfoodCatalog: SnappfoodCatalogService,
+  ) {}
 
   @Get('scenarios')
   async getScenarios() {
@@ -169,6 +173,17 @@ export class SimulationController {
     return await this.simulationService.toggleMenu(tenantId, body);
   }
 
+  // The annex's verb for both toggles is PUT; PATCH above stays for older callers.
+  @Put('snappfood/va/v1/product')
+  async toggleProductPut(@Body() body: any, @Req() req: Request) {
+    return await this.simulationService.toggleProduct((req as any).tenantId, body);
+  }
+
+  @Put('snappfood/va/v1/menu')
+  async toggleMenuPut(@Body() body: any, @Req() req: Request) {
+    return await this.simulationService.toggleMenu((req as any).tenantId, body);
+  }
+
   @Get('snappfood/va/v1/topping/groups')
   async getToppingGroups(@Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -250,6 +265,36 @@ export class SimulationController {
   async getLatestOrders(@Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.simulationService.getLatestOrders(tenantId, body);
+  }
+
+  // The menu sync (simulated): match the branch's Snappfood menu to ours, preview and send ours.
+  @Get('snappfood/menu-sync/:branchId/match')
+  async menuSyncMatch(@Param('branchId') branchId: string, @Req() req: Request) {
+    return await this.snappfoodCatalog.matchPreview((req as any).tenantId, branchId);
+  }
+
+  @Put('snappfood/menu-sync/:branchId/match')
+  async menuSyncSaveMatches(
+    @Param('branchId') branchId: string,
+    @Body() body: { matches: Array<{ product_code: string; entity_type?: 'PRODUCT' | 'VARIANT' | null; entity_id?: string | null }> },
+    @Req() req: Request,
+  ) {
+    return await this.snappfoodCatalog.saveMatches((req as any).tenantId, branchId, body?.matches || []);
+  }
+
+  @Get('snappfood/menu-sync/:branchId/preview')
+  async menuSyncPreview(@Param('branchId') branchId: string, @Req() req: Request) {
+    return await this.snappfoodCatalog.buildMenu((req as any).tenantId, branchId);
+  }
+
+  @Post('snappfood/menu-sync/:branchId/push')
+  async menuSyncPush(@Param('branchId') branchId: string, @Req() req: Request) {
+    return await this.snappfoodCatalog.pushMenu((req as any).tenantId, branchId);
+  }
+
+  @Post('snappfood/menu-sync/:branchId/reset')
+  async menuSyncReset(@Param('branchId') branchId: string, @Req() req: Request) {
+    return await this.snappfoodCatalog.resetVendorMenu((req as any).tenantId, branchId);
   }
 
   @Post('snappfood/catalog-sync')

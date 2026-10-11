@@ -20,6 +20,8 @@ import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { CustomerPhone } from '../../entities/CustomerPhone.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { CustomerService, normalizePhone } from '../customer/customer.service';
+import { OrderItemOption } from '../../entities/OrderItemOption.entity';
+import { SnappfoodCatalogService } from './snappfood-catalog.service';
 
 /** Snappfood quotes every amount in Toman. The store keeps its books in Rial, ten to the Toman. */
 export function tomanToRial(toman: any): string {
@@ -34,9 +36,18 @@ function snappfoodPaidOnline(payload: any): boolean {
 interface SnappfoodLine {
   product_name: string;
   product_id?: string;
+  /** Our id as Snappfood sends it (the product's or the type's), read back through the menu map. */
+  external_id?: number;
+  variant_id?: string | null;
+  variant_name?: string | null;
   notes?: string;
   quantity: string;
+  /** One item's price, without its toppings. */
   unit_price: string;
+  /** One item's toppings. */
+  modifier_unit: string;
+  toppings: Array<{ id?: number; vmsFoodId?: number; title?: string; price?: number; quantity?: number }>;
+  options?: Array<{ option_item_id: string | null; option_group_name: string; option_item_name: string; price_delta: string }>;
   line_total: string;
   tax: string;
 }
@@ -76,6 +87,9 @@ export class SimulationService {
     @Optional()
     @Inject(forwardRef(() => OnlineOrdersService))
     private readonly onlineOrders?: OnlineOrdersService,
+    // Our menu as Snappfood knows it: ids on order lines and toppings, the vendor's menu.
+    @Optional()
+    private readonly snappfoodCatalog?: SnappfoodCatalogService,
   ) {}
 
   verifyHmacSignature(rawBody: string, signature: string, secret: string = 'snappfood-secret-key-123', timestamp?: string): boolean {
@@ -190,7 +204,7 @@ export class SimulationService {
     const branchId = await this.resolveWebhookBranch(tenantId, payload);
 
     const orderNum = `SNP-${orderCode || payload.event_id || '1001'}`;
-    const lines = this.snappfoodLines(payload);
+    const lines = await this.resolveSnappfoodLines(tenantId, this.snappfoodLines(payload));
 
     const orderHeader = this.orderRepo.create({
       tenant_id: tenantId,
@@ -368,7 +382,7 @@ export class SimulationService {
    * now, for the store to accept it with a new time.
    */
   private async resendSnappfoodOrder(tenantId: string, order: OrderHeader, payload: any) {
-    const lines = this.snappfoodLines(payload);
+    const lines = await this.resolveSnappfoodLines(tenantId, this.snappfoodLines(payload));
     const unchanged = order.state !== 'REJECTED' && (await this.hasSameLines(tenantId, order.id, lines));
     if (!unchanged) {
       const earlier = await this.orderItemRepo.count({ where: { tenant_id: tenantId, order_id: order.id } });
@@ -488,29 +502,71 @@ export class SimulationService {
   }
 
   /**
-   * The order's lines, in Rial. Snappfood sends `products`, each with a title; older payloads
-   * send `items` with a product_name. Prices arrive in Toman, and each line keeps the VAT rate
-   * Snappfood charged on it (the product's, else the order's).
+   * The order's lines, in Rial. Snappfood sends `products`, each with our id (`id`, also
+   * `vmsFoodId`), a title and its toppings; older payloads send `items` with a product_name.
+   * Prices arrive in Toman; a line's toppings are priced per item, and each line keeps the VAT
+   * rate Snappfood charged on it (the product's, else the order's).
    */
   private snappfoodLines(payload: any): SnappfoodLine[] {
     const raw: any[] =
       payload.items ||
       (Array.isArray(payload.products) && payload.products.length
-        ? payload.products.map((p: any) => ({ product_name: p.title, product_id: p.product_id, quantity: p.quantity, price: p.price, vat: p.vat }))
+        ? payload.products.map((p: any) => ({
+            product_name: p.title,
+            product_id: p.product_id,
+            external_id: p.id ?? p.vmsFoodId,
+            quantity: p.quantity,
+            price: p.price,
+            vat: p.vat,
+            toppings: p.toppings,
+          }))
         : [{ product_name: 'Snappfood Combo Meal', quantity: 1, price: 15.0 }]);
     return raw.map((line) => {
       const quantity = MoneyUtil.format(line.quantity || 1, 4);
       const unitPrice = tomanToRial(line.price ?? 15);
-      const lineTotal = MoneyUtil.multiply(unitPrice, quantity, 4);
+      const toppings = Array.isArray(line.toppings) ? line.toppings : [];
+      const modifierUnit = MoneyUtil.sum(toppings.map((t: any) => MoneyUtil.multiply(tomanToRial(t.price || 0), MoneyUtil.format(t.quantity || 1, 4), 4)));
+      const lineTotal = MoneyUtil.multiply(MoneyUtil.add(unitPrice, modifierUnit, 4), quantity, 4);
       const vat = MoneyUtil.format(line.vat ?? payload.vat ?? 0, 4);
       return {
         product_name: line.product_name || line.title || 'Snappfood Item',
         product_id: line.product_id,
+        external_id: line.external_id !== undefined && line.external_id !== null ? Number(line.external_id) : undefined,
         notes: line.notes,
         quantity,
         unit_price: unitPrice,
+        modifier_unit: modifierUnit,
+        toppings,
         line_total: lineTotal,
         tax: MoneyUtil.multiply(lineTotal, vat, 4),
+      };
+    });
+  }
+
+  /**
+   * Each line's product, type and add-ons from our ids, through the menu map. A line Snappfood
+   * names with an id we never sent keeps its title and says so, so the kitchen still makes it
+   * and the store can see the menu is out of step.
+   */
+  private async resolveSnappfoodLines(tenantId: string, lines: SnappfoodLine[]): Promise<SnappfoodLine[]> {
+    if (!this.snappfoodCatalog) return lines;
+    const resolved = await this.snappfoodCatalog.resolveIncoming(tenantId, lines);
+    return lines.map((line, index) => {
+      const found = resolved[index];
+      const options = found.toppings.map((t) => ({
+        option_item_id: t.option_item_id,
+        option_group_name: t.option_group_name,
+        option_item_name: t.quantity > 1 ? `${t.option_item_name} ×${t.quantity}` : t.option_item_name,
+        price_delta: MoneyUtil.multiply(tomanToRial(t.price_toman), MoneyUtil.format(t.quantity, 4), 4),
+      }));
+      const unknownId = !found.matched && line.external_id !== undefined && !line.product_id;
+      return {
+        ...line,
+        product_id: found.product_id || line.product_id,
+        variant_id: found.variant_id,
+        variant_name: found.variant_name,
+        options,
+        notes: unknownId ? [line.notes, `ناشناخته در منو: شناسهٔ ${line.external_id}`].filter(Boolean).join(' · ') : line.notes,
       };
     });
   }
@@ -566,11 +622,13 @@ export class SimulationService {
         line_number: firstLineNumber + index,
         product_id: item.product_id || '00000000-0000-0000-0000-000000000001',
         product_name: item.product_name,
+        variant_id: item.variant_id || null,
+        variant_name: item.variant_name || null,
         unit_price: item.unit_price,
         quantity: item.quantity,
-        base_total: item.line_total,
+        base_total: MoneyUtil.multiply(item.unit_price, item.quantity, 4),
         subtotal: item.line_total,
-        modifier_total: '0.0000',
+        modifier_total: MoneyUtil.multiply(item.modifier_unit || '0', item.quantity, 4),
         discount_total: '0.0000',
         discount_amount: '0.0000',
         tax_total: item.tax,
@@ -580,8 +638,21 @@ export class SimulationService {
         total_amount: MoneyUtil.add(item.line_total, item.tax, 4),
         special_instructions: item.notes || null,
         state: 'ACTIVE',
-      });
-      await this.orderItemRepo.save(orderItem);
+      } as any);
+      const saved = await this.orderItemRepo.save(orderItem);
+      // Its toppings, as add-ons on the line, the way the till's own lines keep them.
+      for (const option of (item.options || []).filter((o) => o.option_item_id)) {
+        await this.orderItemRepo.manager.save(
+          this.orderItemRepo.manager.create(OrderItemOption, {
+            tenant_id: tenantId,
+            order_item_id: (saved as any).id,
+            option_item_id: option.option_item_id!,
+            option_group_name: option.option_group_name,
+            option_item_name: option.option_item_name,
+            price_delta: option.price_delta,
+          }),
+        );
+      }
     }
   }
 
@@ -753,13 +824,21 @@ export class SimulationService {
 
     // With no basket given, order what the restaurant actually sells, at its prices. The fixed
     // basket of two 500-Toman test pizzas landed at a burger chain as a 19,100 Rial order.
-    const menuBasket = data?.items || data?.products || data?.price ? null : await this.menuBasket(tenantId);
+    // Lines carry our ids and toppings, as Snappfood's do once the menu is synced.
+    const basketBranch = this.snappfoodCatalog && !(data?.items || data?.products || data?.price)
+      ? await this.resolveWebhookBranch(tenantId, { branch_id: data?.branch_id, branch_code: data?.branch_code }).catch(() => null)
+      : null;
+    const menuBasket: any[] | null = data?.items || data?.products || data?.price
+      ? null
+      : (this.snappfoodCatalog ? await this.snappfoodCatalog.orderBasket(tenantId, basketBranch) : null) || (await this.menuBasket(tenantId));
+    const lineToman = (p: any) => p.totalPrice ?? p.price * p.quantity;
     const basketToman = menuBasket
-      ? menuBasket.reduce((sum, p) => sum + p.price * p.quantity, 0)
+      ? menuBasket.reduce((sum, p) => sum + lineToman(p), 0)
       : null;
     const basketTax = menuBasket
-      ? Math.round(menuBasket.reduce((sum, p) => sum + p.price * p.quantity * p.vat, 0))
+      ? Math.round(menuBasket.reduce((sum, p) => sum + lineToman(p) * p.vat, 0))
       : null;
+    const vendorBranch = basketBranch ? await this.branchRepo.findOne({ where: { id: basketBranch, tenant_id: tenantId } }) : null;
     const deliveryToman = data?.deliveryPrice ?? (menuBasket ? 60000 : 500);
     const packingToman = data?.packingPrice ?? (menuBasket ? 20000 : 200);
     const billedToman = basketToman !== null ? basketToman + basketTax! + deliveryToman + packingToman : 1910;
@@ -805,7 +884,7 @@ export class SimulationService {
       orderPaymentTypeCode: data?.orderPaymentTypeCode || 'ONLINE', // ONLINE, CREDIT, CASH
       preOrderTime: data?.preOrderTime || null,
       vendorMaxPreparationTime: data?.vendorMaxPreparationTime || 15,
-      vendorCode: data?.vendorCode || '0q54rd',
+      vendorCode: data?.vendorCode || (vendorBranch && this.snappfoodCatalog ? this.snappfoodCatalog.vendorCode(vendorBranch) : '0q54rd'),
       bikerName: data?.bikerName || 'علی تهرانی',
       bikerStatusV2: data?.bikerStatusV2 || 'REQUESTED', // REQUESTED, ASSIGNED, CANCELED, ACK, AT_RESTAURANT, PICKED, DELIVERED
       products: data?.items || data?.products || menuBasket || [
@@ -1005,6 +1084,9 @@ export class SimulationService {
   }
 
   async getProductsCatalog(tenantId: string, vendorCode?: string) {
+    // The vendor's menu as the simulator keeps it, once a branch's vendor code is given.
+    const branch = this.snappfoodCatalog ? await this.snappfoodCatalog.branchForVendor(tenantId, vendorCode) : null;
+    if (branch) return { status: true, data: await this.snappfoodCatalog!.vendorMenu(tenantId, branch.id) };
     return {
       status: true,
       data: {

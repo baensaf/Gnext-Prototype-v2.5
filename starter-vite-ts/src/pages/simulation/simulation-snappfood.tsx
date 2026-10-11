@@ -46,6 +46,8 @@ import { tenantApi, type Branch } from 'src/api/tenantApi';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
+import { SnappfoodMenuSync } from './snappfood-menu-sync';
+
 export function SimulationSnappfoodPage() {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<number>(0);
@@ -416,6 +418,7 @@ export function SimulationSnappfoodPage() {
             <Tab label={t('simulation.snappfood.tabs.stepper', '🔄 Order Lifecycle Stepper')} sx={{ fontWeight: 'bold' }} />
             <Tab label={t('simulation.snappfood.tabs.vendorApi', '🛠️ Vendor Automation APIs (20+ Endpoints)')} sx={{ fontWeight: 'bold' }} />
             <Tab label={t('simulation.snappfood.tabs.logs', '📜 Integration Audit Logs')} sx={{ fontWeight: 'bold' }} />
+            <Tab label={t('simulation.snappfood.tabs.menuSync')} sx={{ fontWeight: 'bold' }} />
           </Tabs>
 
           <Box sx={{ p: 3 }}>
@@ -819,6 +822,9 @@ export function SimulationSnappfoodPage() {
                 </Grid>
               </Grid>
             )}
+
+            {/* TAB 5: MENU SYNC (match the vendor menu, send ours) */}
+            {activeTab === 5 && <SnappfoodMenuSync />}
 
             {/* TAB 4: INTEGRATION AUDIT LOGS */}
             {activeTab === 4 && (
