@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Refund } from '../../entities/Refund.entity';
 import { RefundAllocation } from '../../entities/RefundAllocation.entity';
+import { AdminUser } from '../../entities/AdminUser.entity';
+import { AuditEvent } from '../../entities/AuditEvent.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { RefundService } from './refund.service';
 import { RefundController } from './refund.controller';
@@ -16,6 +18,8 @@ import { AuditModule } from '../audit/audit.module';
       Refund,
       RefundAllocation,
       OrderHeader,
+      AuditEvent,
+      AdminUser,
     ]),
     CustomerModule,
     CashierModule,

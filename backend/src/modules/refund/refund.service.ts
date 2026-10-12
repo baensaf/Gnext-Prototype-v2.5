@@ -4,6 +4,8 @@ import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { Repository, DataSource, EntityManager, In } from 'typeorm';
 import { Refund } from '../../entities/Refund.entity';
+import { AdminUser } from '../../entities/AdminUser.entity';
+import { AuditEvent } from '../../entities/AuditEvent.entity';
 import { RefundAllocation } from '../../entities/RefundAllocation.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
@@ -36,6 +38,8 @@ export class RefundService {
   constructor(
     @InjectRepository(Refund) private readonly refundRepo: Repository<Refund>,
     @InjectRepository(OrderHeader) private readonly orderRepo: Repository<OrderHeader>,
+    @InjectRepository(AuditEvent) private readonly auditRepo: Repository<AuditEvent>,
+    @InjectRepository(AdminUser) private readonly userRepo: Repository<AdminUser>,
     private readonly shiftService: ShiftService,
     private readonly creditService: CreditService,
     private readonly auditWriter: AuditWriter,
@@ -103,11 +107,23 @@ export class RefundService {
   async getRefunds(tenantId: string, query: any, branchId?: string) {
     const qb = this.refundRepo.createQueryBuilder('r').where('r.tenant_id = :tenantId', { tenantId });
     // A refund has no branch of its own: it belongs to the branch of the order it pays back.
-    if (branchId) {
-      qb.innerJoin(OrderHeader, 'o', 'o.id = r.order_id AND o.branch_id = :branchId', { branchId });
-    }
+    qb.innerJoin(OrderHeader, 'o', `o.id = r.order_id${branchId ? ' AND o.branch_id = :branchId' : ''}`, branchId ? { branchId } : {});
     if (query.orderId) qb.andWhere('r.order_id = :orderId', { orderId: query.orderId });
     if (query.status) qb.andWhere('r.status = :status', { status: query.status });
+
+    // The Orders page's Refunded tab asks for the refunds of a day: the day the money went
+    // back, not the day the order was placed.
+    const from = query.from ? new Date(String(query.from)) : null;
+    const to = query.to ? new Date(String(query.to)) : null;
+    if (from && !Number.isNaN(from.getTime())) qb.andWhere('r.initiated_at >= :from', { from });
+    if (to && !Number.isNaN(to.getTime())) qb.andWhere('r.initiated_at < :to', { to });
+
+    const q = String(query.q || '').trim();
+    if (q) {
+      qb.andWhere('(o.order_number ILIKE :like OR r.refund_number ILIKE :like OR r.reason_text ILIKE :like)', {
+        like: `%${q}%`,
+      });
+    }
 
     qb.orderBy('r.initiated_at', 'DESC');
     const page = Math.max(parseInt(query.page || '1', 10) || 1, 1);
@@ -122,25 +138,48 @@ export class RefundService {
     const orders = orderIds.length
       ? await this.orderRepo.find({
           where: { id: In(orderIds), tenant_id: tenantId },
-          select: ['id', 'order_number', 'total_amount'],
+          select: ['id', 'order_number', 'call_number', 'total_amount'],
         })
       : [];
     const byId = new Map(orders.map((o) => [o.id, o]));
+    const approvers = await this.approverNames(tenantId, rows.map((r) => r.id));
     const data = rows.map((r) => ({
       ...r,
       order_number: byId.get(r.order_id)?.order_number ?? null,
+      order_call_number: byId.get(r.order_id)?.call_number ?? null,
       order_total: byId.get(r.order_id)?.total_amount ?? null,
+      approved_by_name: approvers.get(r.id) ?? null,
     }));
     return { data, total, page, limit };
   }
 
-  async getRefundById(tenantId: string, id: string) {
-    const refund = await this.refundRepo.findOne({
-      where: { id, tenant_id: tenantId },
-      relations: ['allocations'],
+  /**
+   * Who released each refund's money: the approver named in its audit entry, or whoever made
+   * the refund when the entry names no one else. A refund has no approver column of its own.
+   */
+  private async approverNames(tenantId: string, refundIds: string[]): Promise<Map<string, string>> {
+    const names = new Map<string, string>();
+    if (!refundIds.length) return names;
+    const events = await this.auditRepo.find({
+      where: { tenant_id: tenantId, entity_type: 'Refund', action: 'REFUND_SUCCEEDED', entity_id: In(refundIds) },
+      select: ['entity_id', 'actor_id', 'details'],
     });
-    if (!refund) throw new NotFoundException(`Refund ${id} not found`);
-    return refund;
+    const whoByRefund = new Map<string, string>();
+    for (const e of events) {
+      const who = (e.details?.approvedBy as string | undefined) || e.actor_id;
+      if (who) whoByRefund.set(e.entity_id, who);
+    }
+    if (!whoByRefund.size) return names;
+    const users = await this.userRepo.find({
+      where: { tenant_id: tenantId, id: In([...new Set(whoByRefund.values())]) },
+      select: ['id', 'display_name', 'username'],
+    });
+    const nameOf = new Map(users.map((u) => [u.id, u.display_name || u.username]));
+    for (const [refundId, who] of whoByRefund) {
+      const name = nameOf.get(who);
+      if (name) names.set(refundId, name);
+    }
+    return names;
   }
 
   /**

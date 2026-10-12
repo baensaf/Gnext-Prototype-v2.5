@@ -4,6 +4,8 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { RefundService } from '../src/modules/refund/refund.service';
 import { Refund } from '../src/entities/Refund.entity';
+import { AdminUser } from '../src/entities/AdminUser.entity';
+import { AuditEvent } from '../src/entities/AuditEvent.entity';
 import { RefundAllocation } from '../src/entities/RefundAllocation.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { Payment } from '../src/entities/Payment.entity';
@@ -16,6 +18,8 @@ describe('Refunds & Paid-Order Cancellation Suite (R16, simplified 2026-10-10)',
   let service: RefundService;
   let refundRepo: any;
   let orderRepo: any;
+  let auditRepo: any;
+  let userRepo: any;
   let paymentRepo: any;
   let methodRepo: any;
   let allocations: any[];
@@ -43,6 +47,8 @@ describe('Refunds & Paid-Order Cancellation Suite (R16, simplified 2026-10-10)',
   beforeEach(async () => {
     refundRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), find: jest.fn().mockResolvedValue([]), createQueryBuilder: jest.fn() };
     orderRepo = { findOne: jest.fn(), save: jest.fn() };
+    auditRepo = { find: jest.fn().mockResolvedValue([]) };
+    userRepo = { find: jest.fn().mockResolvedValue([]) };
     paymentRepo = { find: jest.fn().mockResolvedValue([]) };
     methodRepo = { findOne: jest.fn().mockImplementation(async ({ where }: any) => methods[where.id] ?? null) };
     allocations = [];
@@ -103,6 +109,8 @@ describe('Refunds & Paid-Order Cancellation Suite (R16, simplified 2026-10-10)',
         RefundService,
         { provide: getRepositoryToken(Refund), useValue: refundRepo },
         { provide: getRepositoryToken(OrderHeader), useValue: orderRepo },
+        { provide: getRepositoryToken(AuditEvent), useValue: auditRepo },
+        { provide: getRepositoryToken(AdminUser), useValue: userRepo },
         { provide: ShiftService, useValue: shiftService },
         { provide: CreditService, useValue: creditService },
         { provide: AuditWriter, useValue: auditWriter },
@@ -296,6 +304,41 @@ describe('Refunds & Paid-Order Cancellation Suite (R16, simplified 2026-10-10)',
       });
       expect(qb.take).toHaveBeenCalledWith(200);
       expect(res.data[0]).toEqual(expect.objectContaining({ order_number: 'ORD-1', order_total: '100.0000' }));
+    });
+    it('lists the refunds made in a window, with the order and who approved each', async () => {
+      const qb: any = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        innerJoin: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest.fn().mockResolvedValue([[{ id: 'r-1', order_id: 'o-1' }, { id: 'r-2', order_id: 'o-1' }], 2]),
+      };
+      refundRepo.createQueryBuilder.mockReturnValue(qb);
+      orderRepo.find = jest.fn().mockResolvedValue([{ id: 'o-1', order_number: 'ORD-1', call_number: 42, total_amount: '100.0000' }]);
+      // r-1 was released by a manager's PIN; r-2 names no approver, so the account that made it counts.
+      auditRepo.find.mockResolvedValue([
+        { entity_id: 'r-1', actor_id: 'cashier-1', details: { approvedBy: 'manager-1' } },
+        { entity_id: 'r-2', actor_id: 'cashier-1', details: null },
+      ]);
+      userRepo.find.mockResolvedValue([
+        { id: 'manager-1', display_name: 'Sara', username: 'sara' },
+        { id: 'cashier-1', display_name: null, username: 'ali' },
+      ]);
+
+      const res = await service.getRefunds('t-1', {
+        from: '2026-10-12T00:00:00+03:30',
+        to: '2026-10-13T00:00:00+03:30',
+        q: 'cold',
+      });
+
+      expect(qb.andWhere).toHaveBeenCalledWith('r.initiated_at >= :from', { from: new Date('2026-10-12T00:00:00+03:30') });
+      expect(qb.andWhere).toHaveBeenCalledWith('r.initiated_at < :to', { to: new Date('2026-10-13T00:00:00+03:30') });
+      expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('r.reason_text ILIKE :like'), { like: '%cold%' });
+      expect(res.total).toBe(2);
+      expect(res.data[0]).toEqual(expect.objectContaining({ order_call_number: 42, approved_by_name: 'Sara' }));
+      expect(res.data[1].approved_by_name).toBe('ali');
     });
   });
 });
