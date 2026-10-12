@@ -49,7 +49,20 @@ export interface CreditEntry {
   balance_after: string;
 }
 
+/** The chain's credit in one line: what is owed and by how many, the limits, and what is left. */
+export interface CreditSummary {
+  total_owed: string;
+  owing_count: number;
+  total_limit: string;
+  total_available: string;
+}
+
 export const creditApi = {
+  getSummary: async (): Promise<CreditSummary> => {
+    const res = await httpClient.get('/api/v1/credit-accounts/summary');
+    return res.data;
+  },
+
   getAccounts: async (params?: Record<string, any>): Promise<{ data: CreditAccount[]; total: number }> => {
     const res = await httpClient.get('/api/v1/credit-accounts', { params });
     if (Array.isArray(res.data)) {

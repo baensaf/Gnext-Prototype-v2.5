@@ -54,7 +54,6 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/customers': 'V1',
   // A customer's profile page (`*` is one path segment: the customer's id)
   '/app/customers/*': 'V4',
-  '/app/credit': 'V3',
   // The wallet and its cashback rule (customer club).
   '/app/wallet': 'V4',
 };

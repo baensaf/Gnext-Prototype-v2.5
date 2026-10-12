@@ -1,11 +1,11 @@
 import type { GridPaginationModel } from '@mui/x-data-grid-premium';
-import type { CreditAccount } from 'src/api/creditApi';
+import type { CreditSummary } from 'src/api/creditApi';
 import type { AddressDraftState } from 'src/components/customer-register';
 import type { Customer, CustomerAddress, CustomerListFilter } from 'src/api/customerApi';
 
-import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import AddIcon from '@mui/icons-material/Add';
 import HomeIcon from '@mui/icons-material/Home';
@@ -22,16 +22,10 @@ import {
   Grid,
   Link,
   Stack,
-  Table,
-  Paper,
   Alert,
   Button,
   Dialog,
-  TableRow,
   MenuItem,
-  TableBody,
-  TableCell,
-  TableHead,
   TextField,
   Typography,
   IconButton,
@@ -41,14 +35,12 @@ import {
   DialogContent,
   DialogActions,
   InputAdornment,
-  TableContainer,
   ToggleButtonGroup,
 } from '@mui/material';
 
 import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
-import { fDateTime } from 'src/utils/format-time';
 import { useCurrencyLabel } from 'src/utils/currency';
 
 import { creditApi } from 'src/api/creditApi';
@@ -59,6 +51,7 @@ import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
 import { VersionTag } from 'src/components/version-tag';
 import { ServerDataGrid } from 'src/components/server-data-grid';
+import { CustomerCreditDialog } from 'src/components/customer-credit/customer-credit-dialog';
 import { CustomerAddressFields, CustomerRegisterDialog } from 'src/components/customer-register';
 
 const fullName = (c?: Customer | null) => (c ? `${c.first_name || ''} ${c.last_name || ''}`.trim() : '');
@@ -82,7 +75,11 @@ export function CustomersPage() {
   const canSetFamily = isManagerOrAbove(userRole);
   const { branches, selectedBranch, canChangeScope } = useBranchContext();
   const branchName = (id?: string | null) => branches.find((b) => b.id === id)?.name || '—';
-  const [filter, setFilter] = useState<CustomerListFilter | ''>('');
+  const [searchParams] = useSearchParams();
+  const [filter, setFilter] = useState<CustomerListFilter | ''>(() => {
+    const has = searchParams.get('has');
+    return has === 'FAMILY' || has === 'OWES' || has === 'WALLET' ? has : '';
+  });
 
   // Friends-and-family dialog: one person's percent at one branch.
   const [familyFor, setFamilyFor] = useState<Customer | null>(null);
@@ -99,9 +96,10 @@ export function CustomersPage() {
   const [registerOpen, setRegisterOpen] = useState(false);
 
   // Credit account dialog (V3): balance, limit and the account's transactions
-  const [creditDialogOpen, setCreditDialogOpen] = useState(false);
+  const [creditFor, setCreditFor] = useState<Customer | null>(null);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const [creditAccount, setCreditAccount] = useState<CreditAccount | null>(null);
+  // The chain's credit in one line, shown with the Owes filter.
+  const [creditSummary, setCreditSummary] = useState<CreditSummary | null>(null);
 
   // Address dialog
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
@@ -153,6 +151,11 @@ export function CustomersPage() {
     loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    if (filter !== 'OWES' || !isHeadOffice) return;
+    creditApi.getSummary().then(setCreditSummary).catch(() => setCreditSummary(null));
+  }, [filter, isHeadOffice, customers]);
+
   // The rates this screen shows: a branch sees its own; head office every branch's.
   const visibleFamily = (c: Customer) =>
     (c.family_discounts || []).filter((f) => canChangeScope || f.branch_id === selectedBranch?.id);
@@ -193,19 +196,7 @@ export function CustomersPage() {
     }
   };
 
-  const handleOpenCredit = useCallback(
-    async (c: Customer) => {
-      setSelectedCustomer(c);
-      setCreditAccount(null);
-      setCreditDialogOpen(true);
-      try {
-        if (c.credit_account) setCreditAccount(await creditApi.getAccountById(c.credit_account.id));
-      } catch (err: any) {
-        setError(err.detail || t('customers.directory.errors.creditFailed'));
-      }
-    },
-    [t]
-  );
+  const handleOpenCredit = (c: Customer) => setCreditFor(c);
 
   const handleOpenAddresses = async (c: Customer) => {
     setSelectedCustomer(c);
@@ -287,6 +278,34 @@ export function CustomersPage() {
           {isHeadOffice && <ToggleButton value="OWES">{t('customers.filters.owes')}</ToggleButton>}
         </ToggleButtonGroup>
       </Stack>
+
+      {filter === 'OWES' && isHeadOffice && creditSummary && (
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          {[
+            { label: t('credit.totalOwed'), value: creditSummary.total_owed, color: 'error.main', hint: t('customers.creditSummary.owing', { count: creditSummary.owing_count }) },
+            { label: t('credit.totalLimit'), value: creditSummary.total_limit, color: 'text.primary' },
+            { label: t('credit.totalAvailable'), value: creditSummary.total_available, color: 'primary.main' },
+          ].map((f) => (
+            <Grid key={f.label} size={{ xs: 12, sm: 4 }}>
+              <Card variant="outlined" sx={{ borderRadius: 2 }}>
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
+                    {f.label}
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 'bold', color: f.color, mt: 0.5 }}>
+                    {MoneyUtil.formatCurrency(f.value)} {currency}
+                  </Typography>
+                  {f.hint && (
+                    <Typography variant="caption" color="text.secondary">
+                      {f.hint}
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      )}
 
       <ServerDataGrid
         rows={customers}
@@ -458,99 +477,8 @@ export function CustomersPage() {
         showCredit={isHeadOffice}
       />
 
-      {/* Credit ledger (V3) */}
-      <Dialog open={creditDialogOpen} onClose={() => setCreditDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>
-          {t('customers.directory.credit.title')} — {fullName(selectedCustomer)} <VersionTag feature="customers.credit" sx={{ ml: 1 }} />
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          {creditAccount && (
-            <Grid container spacing={2} sx={{ mb: 3, mt: 1 }}>
-              <Grid size={{ xs: 12, md: 4 }}>
-                <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'error.50', borderColor: 'error.200' }}>
-                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                    <Typography variant="caption" color="error.dark" sx={{ fontWeight: 600 }}>
-                      {t('customers.directory.credit.owed')}
-                    </Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'error.main', mt: 0.5 }}>
-                      {MoneyUtil.formatCurrency(
-                        MoneyUtil.greaterThan('0', creditAccount.current_balance) ? MoneyUtil.subtract('0', creditAccount.current_balance) : '0'
-                      )}{' '}
-                      {currency}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid size={{ xs: 12, md: 4 }}>
-                <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'background.neutral' }}>
-                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-                      {t('customers.creditLimit')}
-                    </Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 'bold', mt: 0.5 }}>
-                      {MoneyUtil.formatCurrency(creditAccount.credit_limit)} {currency}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-              <Grid size={{ xs: 12, md: 4 }}>
-                <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'primary.50', borderColor: 'primary.200' }}>
-                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                    <Typography variant="caption" color="primary.dark" sx={{ fontWeight: 600 }}>
-                      {t('customers.directory.credit.spendable')}
-                    </Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main', mt: 0.5 }}>
-                      {MoneyUtil.formatCurrency(creditAccount.availableCredit || '0')} {currency}
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            </Grid>
-          )}
-
-          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-            {t('customers.directory.credit.history')}
-          </Typography>
-          <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2, maxHeight: 260 }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>{t('customers.directory.credit.date')}</TableCell>
-                  <TableCell>{t('customers.directory.credit.type')}</TableCell>
-                  <TableCell align="right">
-                    {t('customers.directory.credit.amount')} ({currency})
-                  </TableCell>
-                  <TableCell>{t('customers.directory.credit.note')}</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(creditAccount?.entries ?? []).map((tx) => {
-                  const type = tx.entry_type;
-                  return (
-                    <TableRow key={tx.id}>
-                      <TableCell>{fDateTime(tx.posted_at)}</TableCell>
-                      <TableCell>
-                        <Chip
-                          label={t(`credit.types.${type}`, type)}
-                          size="small"
-                          color={MoneyUtil.greaterThan(tx.amount, '0') ? 'success' : 'warning'}
-                        />
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                        {MoneyUtil.formatCurrency(tx.amount)} {currency}
-                      </TableCell>
-                      <TableCell>{tx.reason_text || tx.reference || '—'}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreditDialogOpen(false)}>{t('common.close')}</Button>
-        </DialogActions>
-      </Dialog>
+      {/* Credit (V3): what they owe, repayments and the limit, from the row. */}
+      <CustomerCreditDialog customer={creditFor} onClose={() => setCreditFor(null)} onChanged={() => loadData()} />
 
       {/* Friends and family: one person's percent off at one branch, filled in on the till. */}
       <Dialog open={!!familyFor} onClose={() => setFamilyFor(null)} maxWidth="xs" fullWidth>

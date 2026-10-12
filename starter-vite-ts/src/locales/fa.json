@@ -1421,6 +1421,14 @@
       "notePlaceholder": "مثلاً برادر مدیر",
       "remove": "حذف تخفیف",
       "saveFailed": "تخفیف ذخیره نشد"
+    },
+    "creditDialog": {
+      "noCredit": "به این مشتری اعتبار داده نشده است.",
+      "noLimitButOwes": "سقف اعتبار ندارد، ولی هنوز {{amount}} بدهکار است.",
+      "giveCredit": "دادن اعتبار"
+    },
+    "creditSummary": {
+      "owing": "{{count}} مشتری بدهکار"
     }
   },
   "credit": {
