@@ -244,6 +244,7 @@ export class CreditService {
       throw new ForbiddenException({
         statusCode: 403,
         error: 'WALLET_BALANCE_SHORT',
+        code: 'WALLET_BALANCE_SHORT',
         message: `Payment (${purchaseAmount}) is more than the wallet holds (${available})`,
       });
     }
@@ -251,6 +252,7 @@ export class CreditService {
       throw new ForbiddenException({
         statusCode: 403,
         error: 'CREDIT_LIMIT_EXCEEDED',
+        code: 'CREDIT_LIMIT_EXCEEDED',
         message: `Purchase amount (${purchaseAmount}) exceeds available credit (${available})`,
       });
     }

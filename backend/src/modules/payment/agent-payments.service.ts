@@ -231,17 +231,16 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
   }
 
   /**
-   * A manager settles an unconfirmed charge from the terminal's own report: it went through
-   * (with its reference number), or the customer was not charged.
+   * The cashier settles an unconfirmed charge from the terminal's slip: it went through (with
+   * its reference number), or the customer was not charged. The audit entry names who did it.
    */
   async resolveByHand(
     tenantId: string,
     paymentId: string,
-    input: { outcome: ManualResolution; rrn?: string; reason: string },
+    input: { outcome: ManualResolution; rrn?: string; reason?: string },
     actor: PaymentActor,
   ) {
     const reason = String(input.reason || '').trim();
-    if (!reason) throw new BadRequestException('Say how you checked the terminal.');
     if (input.outcome === 'APPROVED' && !String(input.rrn || '').trim()) {
       throw new BadRequestException('Enter the reference number (RRN) from the terminal receipt.');
     }
@@ -266,7 +265,7 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
         payment.status = 'FAILED';
         payment.needs_terminal_check = false;
         payment.failure_code = 'NOT_CHARGED';
-        payment.failure_message = `Confirmed not charged: ${reason}`;
+        payment.failure_message = reason ? `Confirmed not charged: ${reason}` : 'Confirmed not charged';
         await em.save(Payment, payment);
       }
       await this.auditWriter.writeInTransaction(em, {
@@ -278,7 +277,7 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
         entityId: payment.id,
         branchId: order.branch_id,
         correlationId: actor.correlationId ?? undefined,
-        details: { outcome: input.outcome, rrn: input.rrn ?? null, reason },
+        details: { outcome: input.outcome, rrn: input.rrn ?? null, reason: reason || null },
       });
       return payment;
     });

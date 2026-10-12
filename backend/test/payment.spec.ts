@@ -137,6 +137,15 @@ describe('Payments & Split Settlement Suite (R15)', () => {
       ).rejects.toThrow(ConflictException);
     });
 
+    it('names the active-intent refusal with a stable code, for the till to translate', async () => {
+      orderRepo.findOne.mockResolvedValue({ id: 'ord-1', state: 'SUBMITTED', outstanding_total: '100000.0000' });
+      paymentRepo.findOne.mockResolvedValue({ id: 'pay-active', payment_number: 'PAY-1', status: 'PROCESSING' });
+
+      await expect(
+        service.createPaymentIntent('t-1', { orderId: 'ord-1', methodId: 'pm-1', amount: '50000.0000' }),
+      ).rejects.toMatchObject({ response: expect.objectContaining({ code: 'ACTIVE_PAYMENT_INTENT' }) });
+    });
+
     it('should return existing payment record if idempotencyKey matches', async () => {
       orderRepo.findOne.mockResolvedValue({ id: 'ord-1', state: 'SUBMITTED', outstanding_total: '100000.0000' });
       paymentRepo.findOne

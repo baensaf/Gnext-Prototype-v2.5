@@ -13,6 +13,7 @@ import { PaymentDevice } from '../src/entities/PaymentDevice.entity';
 import { Payment } from '../src/entities/Payment.entity';
 import { PaymentAttempt } from '../src/entities/PaymentAttempt.entity';
 import { PaymentAllocation } from '../src/entities/PaymentAllocation.entity';
+import { AuditEvent } from '../src/entities/AuditEvent.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { AgentCommand } from '../src/entities/AgentCommand.entity';
 import { AgentEnrolmentService } from '../src/modules/agent-gateway/agent-enrolment.service';
@@ -300,7 +301,7 @@ describe('card payments via the branch agent (PostgreSQL)', () => {
     expect(await paymentRow(intent.id)).toMatchObject({ status: 'FAILED', failure_code: 'DECLINED', needs_terminal_check: false });
   });
 
-  it('leaves a terminal that cannot be queried to a manager', async () => {
+  it('leaves a terminal that cannot be queried to the cashier', async () => {
     const { agent } = await connect(['payment.charge']);
     const { intent, command } = await charge(agent);
     await answer(agent, command, { status: 'UNKNOWN', error: { code: 'AGENT_RESTARTED' } });
@@ -324,7 +325,43 @@ describe('card payments via the branch agent (PostgreSQL)', () => {
     );
   });
 
-  it('books a charge a manager confirms from the terminal receipt', async () => {
+  it('lets the cashier answer a charge waiting on the terminal, with no reason, and logs who did', async () => {
+    const { agent } = await connect(['payment.charge']);
+    const { order, intent, command } = await charge(agent);
+    await answer(agent, command, { status: 'UNKNOWN', error: { code: 'TIMEOUT' } });
+
+    // Nothing else can be taken on the order while the charge waits; the code is stable so the
+    // till can say so in the cashier's language.
+    await expect(
+      payments.createPaymentIntent(tenantId, { orderId: order.id, methodId: cardMethodId, amount: order.outstanding_total } as any),
+    ).rejects.toMatchObject({ response: expect.objectContaining({ code: 'ACTIVE_PAYMENT_INTENT' }) });
+
+    // The Orders list flags the order until the charge is answered.
+    const flagged = async () =>
+      ((await orders.getOrders(tenantId, { ids: order.id })).data as any[]).find((o) => o.id === order.id)
+        ?.has_unconfirmed_card_charge;
+    expect(await flagged()).toBe(true);
+
+    const resolved = await payments.resolveTerminal(tenantId, intent.id, { outcome: 'NOT_CHARGED' }, cashierId);
+    expect(resolved).toMatchObject({ status: 'FAILED', failure_code: 'NOT_CHARGED', needs_terminal_check: false });
+    expect(await flagged()).toBe(false);
+
+    const audit = await dataSource
+      .getRepository(AuditEvent)
+      .findOneByOrFail({ tenant_id: tenantId, action: 'PAYMENT_TERMINAL_RESOLVED', entity_id: intent.id });
+    expect(audit.actor_id).toBe(cashierId);
+    expect(audit.details).toMatchObject({ outcome: 'NOT_CHARGED', reason: null });
+
+    // The customer was not charged: the cashier can take payment again.
+    const again = await payments.createPaymentIntent(tenantId, {
+      orderId: order.id,
+      methodId: cardMethodId,
+      amount: order.outstanding_total,
+    } as any);
+    expect(again.status).toBe('PENDING');
+  });
+
+  it('books a charge the cashier confirms from the terminal receipt', async () => {
     const { agent } = await connect(['payment.charge']);
     const { intent, command } = await charge(agent);
     await answer(agent, command, { status: 'UNKNOWN', error: { code: 'TIMEOUT' } });
