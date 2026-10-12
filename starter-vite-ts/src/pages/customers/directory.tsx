@@ -1,26 +1,27 @@
-import type { GridPaginationModel } from '@mui/x-data-grid-premium';
+import type { GridFilterModel, GridPaginationModel } from '@mui/x-data-grid-premium';
 import type { CreditSummary } from 'src/api/creditApi';
 import type { AddressDraftState } from 'src/components/customer-register';
 import type { Customer, CustomerAddress, CustomerListFilter } from 'src/api/customerApi';
 
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import HomeIcon from '@mui/icons-material/Home';
 import PlaceIcon from '@mui/icons-material/Place';
-import SearchIcon from '@mui/icons-material/Search';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import CreditScoreIcon from '@mui/icons-material/CreditScore';
 import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import {
   Box,
+  Tab,
   Card,
   Chip,
   Grid,
   Link,
+  Tabs,
   Stack,
   Alert,
   Button,
@@ -31,11 +32,9 @@ import {
   IconButton,
   CardContent,
   DialogTitle,
-  ToggleButton,
   DialogContent,
   DialogActions,
   InputAdornment,
-  ToggleButtonGroup,
 } from '@mui/material';
 
 import { paths } from 'src/routes/paths';
@@ -49,6 +48,7 @@ import { isManagerOrAbove } from 'src/config/role-access';
 import { useBranchContext } from 'src/contexts/branch-context';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
+import { Label } from 'src/components/label';
 import { VersionTag } from 'src/components/version-tag';
 import { ServerDataGrid } from 'src/components/server-data-grid';
 import { CustomerCreditDialog } from 'src/components/customer-credit/customer-credit-dialog';
@@ -90,6 +90,7 @@ export function CustomersPage() {
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
+  const [counts, setCounts] = useState<Partial<Record<'ALL' | CustomerListFilter, number>>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -139,6 +140,7 @@ export function CustomersPage() {
       });
       setCustomers(res.items);
       setTotal(res.total);
+      if (res.counts) setCounts(res.counts);
       setError(null);
     } catch (err: any) {
       setError(err.detail || t('customers.directory.errors.loadFailed'));
@@ -155,6 +157,43 @@ export function CustomersPage() {
     if (filter !== 'OWES' || !isHeadOffice) return;
     creditApi.getSummary().then(setCreditSummary).catch(() => setCreditSummary(null));
   }, [filter, isHeadOffice, customers]);
+
+  // Which customers: the tabs on the grid's toolbar line, as on the orders list. Owes is head
+  // office's, like the rest of credit.
+  const tabs: { key: '' | CustomerListFilter; label: string; color: 'default' | 'secondary' | 'success' | 'error'; count?: number }[] = [
+    { key: '', label: t('customers.filters.all'), color: 'default', count: counts.ALL },
+    { key: 'FAMILY', label: t('customers.filters.family'), color: 'secondary', count: counts.FAMILY },
+    { key: 'WALLET', label: t('customers.filters.wallet'), color: 'success', count: counts.WALLET },
+    ...(isHeadOffice ? [{ key: 'OWES' as const, label: t('customers.filters.owes'), color: 'error' as const, count: counts.OWES }] : []),
+  ];
+  const tabsBar = (
+    <Tabs
+      value={filter}
+      onChange={(_e, value) => {
+        setFilter(value);
+        setPaging((p) => ({ ...p, page: 0 }));
+      }}
+      variant="scrollable"
+      scrollButtons={false}
+      sx={{ minHeight: 48, minWidth: 0 }}
+    >
+      {tabs.map(({ key, label, color, count }) => (
+        <Tab
+          key={key || 'ALL'}
+          value={key}
+          iconPosition="end"
+          label={label}
+          icon={
+            <Label variant={key === filter ? 'filled' : 'soft'} color={color}>
+              {count ?? 0}
+            </Label>
+          }
+          sx={{ minHeight: 48 }}
+        />
+      ))}
+    </Tabs>
+  );
+  const gridFilterModel = useMemo<GridFilterModel>(() => ({ items: [], quickFilterValues: search ? [search] : [] }), [search]);
 
   // The rates this screen shows: a branch sees its own; head office every branch's.
   const visibleFamily = (c: Customer) =>
@@ -249,36 +288,6 @@ export function CustomersPage() {
         </Alert>
       )}
 
-      <Stack direction="row" sx={{ mb: 3, gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-        <TextField
-          size="small"
-          placeholder={t('customers.directory.searchPlaceholder')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          sx={{ width: 400, maxWidth: '100%' }}
-          slotProps={{
-            input: {
-              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
-            },
-          }}
-        />
-        {/* The few customers each of these is about, without a page of their own. */}
-        <ToggleButtonGroup
-          size="small"
-          exclusive
-          value={filter}
-          onChange={(_e, value) => {
-            setFilter(value ?? '');
-            setPaging((p) => ({ ...p, page: 0 }));
-          }}
-        >
-          <ToggleButton value="">{t('customers.filters.all')}</ToggleButton>
-          <ToggleButton value="FAMILY">{t('customers.filters.family')}</ToggleButton>
-          <ToggleButton value="WALLET">{t('customers.filters.wallet')}</ToggleButton>
-          {isHeadOffice && <ToggleButton value="OWES">{t('customers.filters.owes')}</ToggleButton>}
-        </ToggleButtonGroup>
-      </Stack>
-
       {filter === 'OWES' && isHeadOffice && creditSummary && (
         <Grid container spacing={2} sx={{ mb: 3 }}>
           {[
@@ -309,6 +318,11 @@ export function CustomersPage() {
 
       <ServerDataGrid
         rows={customers}
+        toolbarStart={tabsBar}
+        // Search goes to the server (500,000 customers), through the grid's own search box.
+        filterModel={gridFilterModel}
+        onFilterModelChange={(model) => setSearch((model.quickFilterValues ?? []).join(' '))}
+        quickFilterPlaceholder={t('customers.directory.searchPlaceholder')}
         columns={[
           {
             field: 'name',
@@ -335,7 +349,10 @@ export function CustomersPage() {
           {
             field: 'family_discounts',
             headerName: t('customers.family.column'),
-            width: 190,
+            // Head office sees the branch beside each rate.
+            width: canChangeScope ? 260 : 150,
+            // Centres the chips and the dash in the row, as the text columns are.
+            display: 'flex',
             sortable: false,
             renderCell: (params) => {
               const rates = visibleFamily(params.row as Customer);
@@ -360,6 +377,7 @@ export function CustomersPage() {
             field: 'wallet_balance',
             headerName: t('customers.directory.walletColumn'),
             width: 160,
+            display: 'flex',
             renderCell: (params) => {
               const balance = (params.row as Customer).wallet_balance || '0';
               return MoneyUtil.greaterThan(balance, '0') ? (
@@ -380,6 +398,7 @@ export function CustomersPage() {
             ? [
                 {
                   field: 'credit_owed',
+                  display: 'flex' as const,
                   headerName: t('customers.directory.owesColumn'),
                   width: 200,
                   sortable: false,
