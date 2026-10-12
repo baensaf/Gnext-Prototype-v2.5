@@ -269,7 +269,7 @@ export function CashDrawerPage() {
         >
           {register.mismatch
             ? t('shift.device.mismatch', 'This device is {{register}} at {{branch}}', {
-                register: `${register.terminal?.name} (${register.terminal?.code})`,
+                register: register.terminal?.name ?? '',
                 branch: register.terminalBranchName || '',
               })
             : t('shift.device.notSetUp', 'This device is not set up as a register')}

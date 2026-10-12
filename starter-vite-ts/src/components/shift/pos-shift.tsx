@@ -160,7 +160,7 @@ export function PosShiftGate({ register }: { register: RegisterShiftState }) {
             <Typography variant="h5">{t('shift.gate.title', 'No shift is open on this register')}</Typography>
             <Typography variant="body2" color="text.secondary">
               {t('shift.gate.help', '{{register}}: count the float into the drawer and open a shift to start selling.', {
-                register: terminal ? `${terminal.name} (${terminal.code})` : '',
+                register: terminal?.name ?? '',
               })}
             </Typography>
             <Button size="large" variant="contained" color="success" startIcon={<LockOpenIcon />} onClick={() => setOpenOpen(true)}>
