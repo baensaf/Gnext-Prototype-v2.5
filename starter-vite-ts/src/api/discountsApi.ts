@@ -8,7 +8,7 @@ export interface ManualDiscount {
 }
 
 export interface ConsideredDiscount {
-  /** Who granted it: an automatic item discount, the cashier, or the customer's own rate. */
+  /** Who granted it: an automatic item discount, the cashier, or the customer's friends-and-family rate. */
   source: 'ITEM' | 'MANUAL' | 'CUSTOMER';
   productId?: string;
   percent?: string;

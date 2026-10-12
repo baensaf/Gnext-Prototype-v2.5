@@ -60,9 +60,8 @@ const positive = (a: string) => (MoneyUtil.greaterThan(a, '0') ? a : '0');
 
 /** What a customer can still buy on credit: limit plus balance, never below zero; no cap when unlimited. */
 const UNLIMITED_CREDIT = '999999999999';
-/** What the customer holds in credit in their favour (cashback): offered by default, the rest is typed. */
-const heldCreditOf = (customer?: Customer | null) =>
-  positive(wholeRials(customer?.credit_account?.current_balance));
+/** The cashback in the customer's wallet: offered by default, the rest is typed. */
+const walletOf = (customer?: Customer | null) => positive(wholeRials(customer?.wallet_account?.current_balance));
 const availableCreditOf = (customer?: Customer | null) => {
   const account = customer?.credit_account;
   if (!account) return '0';
@@ -70,10 +69,11 @@ const availableCreditOf = (customer?: Customer | null) => {
   return positive(MoneyUtil.add(wholeRials(account.credit_limit), wholeRials(account.current_balance)));
 };
 
-/** What is typed in the three fields, in tomans. Card is the rest until the cashier types in it. */
-type Fields = { cash: string; credit: string; card: string; cardTyped: boolean };
+/** What is typed in the four fields, in tomans. Card is the rest until the cashier types in it. */
+type Fields = { cash: string; wallet: string; credit: string; card: string; cardTyped: boolean };
+type FieldName = 'cash' | 'wallet' | 'credit' | 'card';
 
-const EMPTY: Fields = { cash: '', credit: '', card: '', cardTyped: false };
+const EMPTY: Fields = { cash: '', wallet: '', credit: '', card: '', cardTyped: false };
 
 
 interface CheckoutModalProps {
@@ -85,9 +85,10 @@ interface CheckoutModalProps {
 
 /**
  * The pay form Place Order opens, for the orders PC-POS does not take in one go. It looks the same
- * for every order so the cashier's hands learn it: Cash, Customer credit and Card in that order,
- * focus in Cash, Enter pays. Customer credit starts at what the customer can still buy on credit
- * (limit plus balance) and is greyed out when they have none; Card is what is left.
+ * for every order so the cashier's hands learn it: Cash, Wallet, Customer credit and Card in that
+ * order, focus in Cash, Enter pays. Wallet starts at the cashback the customer holds; Customer
+ * credit (pay later, what they owe) is typed, up to what is left of their limit. Each is greyed out
+ * when the customer has none; Card is what is left.
  */
 export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: CheckoutModalProps) {
   const { t } = useTranslation();
@@ -106,8 +107,8 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const [changeDue, setChangeDue] = useState<string | null>(null);
   // What the order's customer can still buy on credit, in rials: the limit plus the balance.
   const [creditAvailable, setCreditAvailable] = useState('0');
-  // The part of it the customer holds in their favour; the fields start with this, never with debt.
-  const [creditHeld, setCreditHeld] = useState('0');
+  // The cashback in the customer's wallet, in rials; the fields start with this, never with debt.
+  const [walletHeld, setWalletHeld] = useState('0');
   const cashInput = useRef<HTMLInputElement>(null);
   // Cash was handed over beyond the bill on this order, and the screen waits for the cashier.
   const changeGiven = useRef(false);
@@ -116,21 +117,24 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const cashMethod = paymentMethods.find((m) => m.kind === 'CASH');
   const cardMethod = paymentMethods.find((m) => CARD_KINDS.includes(m.kind));
   const creditMethod = paymentMethods.find((m) => m.kind === 'CUSTOMER_CREDIT');
+  const walletMethod = paymentMethods.find((m) => m.kind === 'WALLET');
 
   const due = wholeRials(order?.due_amount);
   const isFullyPaid = order ? MoneyUtil.isZero(order.due_amount) : false;
   const canUseCredit = !!creditMethod && MoneyUtil.greaterThan(creditAvailable, '0');
+  const canUseWallet = !!walletMethod && MoneyUtil.greaterThan(walletHeld, '0');
   const busy = loading || !!paying;
 
-  /** The fields for what is left: credit held offered once per order, card for the rest. */
+  /** The fields for what is left: the wallet offered once per order, card for the rest. */
   const fieldsFor = (o: OrderHeader | null, balance: string, paid: Payment[]): Fields => {
     const left = wholeRials(o?.due_amount);
-    const creditUsed = paid.some((p) => p.method_kind === 'CUSTOMER_CREDIT' && p.status === 'SUCCEEDED');
-    const credit = !creditUsed && MoneyUtil.greaterThan(balance, '0') ? minOf(balance, left) : '0';
-    const rest = positive(MoneyUtil.subtract(left, credit));
+    const walletUsed = paid.some((p) => p.method_kind === 'WALLET' && p.status === 'SUCCEEDED');
+    const wallet = !walletUsed && MoneyUtil.greaterThan(balance, '0') ? minOf(balance, left) : '0';
+    const rest = positive(MoneyUtil.subtract(left, wallet));
     return {
       cash: '',
-      credit: MoneyUtil.isZero(credit) ? '' : toToman(credit),
+      wallet: MoneyUtil.isZero(wallet) ? '' : toToman(wallet),
+      credit: '',
       card: MoneyUtil.isZero(rest) ? '' : toToman(rest),
       cardTyped: false,
     };
@@ -148,13 +152,13 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       const active = pms.filter((m) => m.is_active);
       const customer = o.customer_id ? await customerApi.getCustomer(o.customer_id).catch(() => null) : null;
       const available = availableCreditOf(customer);
-      const held = heldCreditOf(customer);
+      const held = walletOf(customer);
       setOrder(o);
       setPaymentMethods(active);
       setPayments(paid);
       setCreditAvailable(available);
-      setCreditHeld(held);
-      setFields(fieldsFor(o, active.some((m) => m.kind === 'CUSTOMER_CREDIT') ? held : '0', paid));
+      setWalletHeld(held);
+      setFields(fieldsFor(o, active.some((m) => m.kind === 'WALLET') ? held : '0', paid));
       setError(null);
     } catch (err: any) {
       setError(err.detail || t('pos.pay.loadFailed'));
@@ -186,35 +190,37 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   }, [open, order, busy, isFullyPaid]);
 
   const cash = rialsOf(fields.cash);
+  const wallet = rialsOf(fields.wallet);
   const credit = rialsOf(fields.credit);
   const card = rialsOf(fields.card);
+  // Wallet and credit together: neither can be handed over beyond the bill.
+  const customerFunds = MoneyUtil.add(wallet, credit);
   // Below zero is cash handed over beyond the bill.
-  const remaining = MoneyUtil.subtract(due, MoneyUtil.add(MoneyUtil.add(cash, credit), card));
+  const remaining = MoneyUtil.subtract(due, MoneyUtil.add(MoneyUtil.add(cash, customerFunds), card));
 
   /**
-   * Typing in Cash or Customer credit leaves Card with the rest, until the cashier types in Card.
-   * Customer credit stops at what the customer can still buy on credit.
+   * Typing in Cash, Wallet or Customer credit leaves Card with the rest, until the cashier types
+   * in Card. Wallet stops at what it holds; Customer credit at what is left of the limit.
    */
-  const setField = (name: 'cash' | 'credit' | 'card', text: string) => {
+  const setField = (name: FieldName, text: string) => {
     // What was wrong with the last amounts is about those amounts.
     setError(null);
     setFields((prev) => {
       let value = digitsOnly(text);
-      if (name === 'credit') {
-        const cap = minOf(creditAvailable, due);
-        if (MoneyUtil.greaterThan(rialsOf(value), cap)) value = toToman(cap);
-      }
+      const cap = name === 'credit' ? minOf(creditAvailable, due) : name === 'wallet' ? minOf(walletHeld, due) : null;
+      if (cap !== null && MoneyUtil.greaterThan(rialsOf(value), cap)) value = toToman(cap);
       const next = { ...prev, [name]: value };
       if (name === 'card') return { ...next, cardTyped: true };
       if (prev.cardTyped) return next;
-      const rest = positive(MoneyUtil.subtract(MoneyUtil.subtract(due, rialsOf(next.cash)), rialsOf(next.credit)));
+      const typed = MoneyUtil.add(MoneyUtil.add(rialsOf(next.cash), rialsOf(next.wallet)), rialsOf(next.credit));
+      const rest = positive(MoneyUtil.subtract(due, typed));
       return { ...next, card: MoneyUtil.isZero(rest) ? '' : toToman(rest) };
     });
   };
 
-  // Only cash can be handed over beyond the bill; credit or card past it is a typing slip.
+  // Only cash can be handed over beyond the bill; wallet, credit or card past it is a typing slip.
   const overByNonCash =
-    MoneyUtil.greaterThan(MoneyUtil.add(credit, card), due) ||
+    MoneyUtil.greaterThan(MoneyUtil.add(customerFunds, card), due) ||
     (MoneyUtil.greaterThan(card, '0') && MoneyUtil.greaterThan('0', remaining));
 
   /** Takes one part. Returns the order as it stands after it, or null when it did not go through. */
@@ -270,12 +276,12 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       latest.customer_id ? customerApi.getCustomer(latest.customer_id).catch(() => null) : Promise.resolve(null),
     ]);
     const available = customer ? availableCreditOf(customer) : creditAvailable;
-    const held = customer ? heldCreditOf(customer) : creditHeld;
+    const held = customer ? walletOf(customer) : walletHeld;
     setOrder(latest);
     setPayments(paid);
     setCreditAvailable(available);
-    setCreditHeld(held);
-    setFields(fieldsFor(latest, creditMethod ? held : '0', paid));
+    setWalletHeld(held);
+    setFields(fieldsFor(latest, walletMethod ? held : '0', paid));
     if (!MoneyUtil.isZero(latest.due_amount) || !onPaymentComplete) return;
     // A screen that closes the form once the order is paid would hide the change to hand back;
     // it closes when the cashier does.
@@ -290,21 +296,25 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     } else onClose();
   };
 
-  /** Enter: customer credit and cash first, as they are instant, then the card on the terminal. */
+  /** Enter: wallet, customer credit and cash first, as they are instant, then the card on the terminal. */
   const submit = async (override?: { cash?: string; card?: string }) => {
     if (!order || busy || isFullyPaid) return;
-    const parts = { cash, credit, card, ...override };
-    const total = MoneyUtil.add(MoneyUtil.add(parts.cash, parts.credit), parts.card);
+    const parts = { cash, wallet, credit, card, ...override };
+    const total = MoneyUtil.add(MoneyUtil.add(MoneyUtil.add(parts.cash, parts.wallet), parts.credit), parts.card);
     if (!MoneyUtil.greaterThan(total, '0')) {
       setError(t('pos.pay.enterAmount'));
+      return;
+    }
+    if (MoneyUtil.greaterThan(parts.wallet, walletHeld)) {
+      setError(t('pos.pay.walletShort', { amount: MoneyUtil.formatCurrency(walletHeld), currency }));
       return;
     }
     if (MoneyUtil.greaterThan(parts.credit, creditAvailable)) {
       setError(t('pos.pay.creditShort', { amount: MoneyUtil.formatCurrency(creditAvailable), currency }));
       return;
     }
-    // Only cash can be handed over beyond the bill; credit and card take exactly what is typed.
-    const nonCash = MoneyUtil.add(parts.credit, parts.card);
+    // Only cash can be handed over beyond the bill; wallet, credit and card take exactly what is typed.
+    const nonCash = MoneyUtil.add(MoneyUtil.add(parts.wallet, parts.credit), parts.card);
     if (MoneyUtil.greaterThan(nonCash, due) || (MoneyUtil.greaterThan(parts.card, '0') && MoneyUtil.greaterThan(total, due))) {
       setError(t('pos.pay.overDue'));
       return;
@@ -314,7 +324,8 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     setPaying('other');
     let current: OrderHeader | null = order;
     try {
-      if (MoneyUtil.greaterThan(parts.credit, '0')) current = await pay(creditMethod, parts.credit, current);
+      if (MoneyUtil.greaterThan(parts.wallet, '0')) current = await pay(walletMethod, parts.wallet, current);
+      if (current && MoneyUtil.greaterThan(parts.credit, '0')) current = await pay(creditMethod, parts.credit, current);
       if (current && MoneyUtil.greaterThan(parts.cash, '0')) current = await pay(cashMethod, parts.cash, current);
       if (current && MoneyUtil.greaterThan(parts.card, '0')) {
         setPaying('card');
@@ -342,9 +353,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     }
   };
 
-  /** F8 and F9: everything left in cash, or on the card, beside the customer credit as typed. */
+  /** F8 and F9: everything left in cash, or on the card, beside the wallet and credit as typed. */
   const payRest = (method: 'cash' | 'card') => {
-    const rest = positive(MoneyUtil.subtract(due, credit));
+    const rest = positive(MoneyUtil.subtract(due, customerFunds));
     submit(method === 'cash' ? { cash: rest, card: '0' } : { cash: '0', card: rest });
   };
 
@@ -412,7 +423,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const locked = busy || isFullyPaid;
 
   const amountField = (
-    name: 'cash' | 'credit' | 'card',
+    name: FieldName,
     label: string,
     opts: { disabled?: boolean; hint?: React.ReactNode; inputRef?: React.Ref<HTMLInputElement> } = {}
   ) => (
@@ -486,9 +497,15 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
               else submit();
             }}
           >
-            {/* The same three rows for every order, in the same place. */}
+            {/* The same four rows for every order, in the same place. */}
             <Stack spacing={1.5} sx={{ pt: 1 }}>
               {amountField('cash', t('pos.pay.cash'), { inputRef: cashInput })}
+              {amountField('wallet', t('pos.pay.wallet'), {
+                disabled: !canUseWallet,
+                hint: order.customer_id
+                  ? t('pos.pay.walletHolds', { amount: MoneyUtil.formatCurrency(walletHeld) })
+                  : t('pos.pay.noCustomer'),
+              })}
               {amountField('credit', t('pos.pay.credit'), {
                 disabled: !canUseCredit,
                 hint: order.customer_id

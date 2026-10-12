@@ -29,7 +29,6 @@ import { AgentsPage } from 'src/pages/operations/agents';
 import { homePathForRole } from 'src/config/role-access';
 import { ProductsPage } from 'src/pages/catalog/products';
 import { DataResetPage } from 'src/pages/tools/data-reset';
-import { DiscountsHubPage } from 'src/pages/discounts/hub';
 import { RolesMatrixPage } from 'src/pages/settings/roles';
 import { EndShiftPage } from 'src/pages/cashier/end-shift';
 import { BranchesPage } from 'src/pages/operations/branches';
@@ -67,6 +66,7 @@ import { BranchDetailPage } from 'src/pages/operations/branch-detail';
 import { PrintRoutingPage } from 'src/pages/operations/print-routing';
 import { CustomerFieldsPage } from 'src/pages/settings/customer-fields';
 import { CardTerminalsPage } from 'src/pages/operations/card-terminals';
+import WalletCashbackPage from 'src/pages/customer-club/wallet-cashback';
 import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 import { ShiftPolicySettingsPage } from 'src/pages/settings/shift-policy';
 import { BusinessDaySettingsPage } from 'src/pages/settings/business-day';
@@ -217,8 +217,10 @@ export const routesSection: RouteObject[] = [
       { path: 'cashier/business-days', element: <RequiresBranch><BusinessDaysPage /></RequiresBranch> },
       { path: 'payments', element: <RequiresBranch><PaymentsPage /></RequiresBranch> },
       { path: 'refunds', element: <RequiresBranch><RefundsPage /></RequiresBranch> },
-      { path: 'customer-club/discounts', element: <Navigate to="/app/discounts/customer-rates" replace /> },
-      { path: 'customer-club/wallet', element: <Navigate to="/app/discounts/wallet" replace /> },
+      // Friends-and-family rates are set on the customer list now; the wallet has its own page.
+      { path: 'customer-club/discounts', element: <Navigate to="/app/customers" replace /> },
+      { path: 'customer-club/wallet', element: <Navigate to="/app/wallet" replace /> },
+      { path: 'wallet', element: <WalletCashbackPage /> },
       { path: 'customers', element: <CustomersPage /> },
       { path: 'customers/:id', element: <CustomerProfilePage /> },
       { path: 'credit/accounts', element: <CustomerCreditPage /> },
@@ -238,11 +240,11 @@ export const routesSection: RouteObject[] = [
       { path: 'pricing/price-book', element: <Navigate to="/app/pricing/price-lists" replace /> },
       { path: 'pricing/price-groups', element: <Navigate to="/app/pricing/price-lists" replace /> },
       { path: 'pricing/bulk-update', element: <Navigate to="/app/pricing/changes" replace /> },
-      { path: 'discounts', element: <Navigate to="/app/discounts/customer-rates" replace /> },
-      { path: 'discounts/customer-rates', element: <DiscountsHubPage defaultTab={0} /> },
+      { path: 'discounts', element: <Navigate to="/app/customers" replace /> },
+      { path: 'discounts/customer-rates', element: <Navigate to="/app/customers" replace /> },
       // Cashier discount caps are a policy, so they live in Settings; this was a second door.
       { path: 'discounts/authorizations', element: <Navigate to="/app/settings/discount-authorizations" replace /> },
-      { path: 'discounts/wallet', element: <DiscountsHubPage defaultTab={1} /> },
+      { path: 'discounts/wallet', element: <Navigate to="/app/wallet" replace /> },
       { path: 'operations/branches', element: <BranchesPage /> },
       { path: 'operations/branches/new', element: <BranchNewPage /> },
       { path: 'operations/branches/:id', element: <BranchDetailPage /> },

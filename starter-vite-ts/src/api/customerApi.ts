@@ -13,10 +13,26 @@ export interface Customer {
   /** Answers to head office's customer fields, by field id. */
   custom_values?: Record<string, string | null>;
   is_active: boolean;
+  /** Pay later: what the customer owes (a negative balance) against a limit. */
   credit_account?: CustomerCreditAccount | null;
+  /** Cashback the customer earned, spent at the till. Never shares a balance with credit. */
+  wallet_account?: CustomerCreditAccount | null;
   wallet_balance?: string;
   credit_limit?: string;
+  /** Friends-and-family rates, one per branch that gives one. */
+  family_discounts?: FamilyDiscount[];
 }
+
+/** A friend or family member's percent off at one branch. */
+export interface FamilyDiscount {
+  id: string;
+  branch_id: string | null;
+  percent: string;
+  note?: string | null;
+}
+
+/** The customer list's filters: friends and family, who owes, who has wallet money. */
+export type CustomerListFilter = 'FAMILY' | 'OWES' | 'WALLET';
 
 export interface CustomerAddress {
   id: string;
@@ -106,8 +122,19 @@ export const customerApi = {
     return res.data;
   },
   /** One page of the customers list, newest first, or the best matches when searching. */
-  getCustomersPage: async (params: { search?: string; page: number; limit: number }): Promise<CustomerPage> => {
+  getCustomersPage: async (params: {
+    search?: string;
+    page: number;
+    limit: number;
+    has?: CustomerListFilter;
+    branchId?: string;
+  }): Promise<CustomerPage> => {
     const res = await httpClient.get('/api/v1/customers', { params: { ...params, search: params.search || undefined } });
+    return res.data;
+  },
+  /** One person's friends-and-family percent at a branch; no percent takes it away. */
+  setFamilyDiscount: async (data: { customer_id: string; branch_id?: string; percent: string | null; note?: string | null }) => {
+    const res = await httpClient.put('/api/v1/customer-discounts/family', data);
     return res.data;
   },
   /** The POS picker: up to `limit` best matches for 3+ typed characters (mobile or name). */

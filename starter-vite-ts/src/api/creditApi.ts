@@ -12,10 +12,14 @@ export interface CreditAccountCustomer {
 
 export type CreditMode = 'FINITE' | 'UNLIMITED' | 'POLICY';
 
+/** CREDIT is pay later (what the customer owes); WALLET is cashback they earned. */
+export type AccountKind = 'CREDIT' | 'WALLET';
+
 export interface CreditAccount {
   id: string;
   customer_id: string;
   currency_code: string;
+  kind?: AccountKind;
   mode: CreditMode;
   credit_limit?: string;
   /** Negative is what the customer owes. */
@@ -32,7 +36,7 @@ export interface CreditAccount {
 export interface CreditEntry {
   id: string;
   account_id: string;
-  entry_type: 'PURCHASE' | 'REPAYMENT' | 'REVERSAL' | 'LOYALTY_CASHBACK' | 'LOYALTY_CASHBACK_REVERSAL';
+  entry_type: 'PURCHASE' | 'REPAYMENT' | 'REVERSAL' | 'LOYALTY_CASHBACK' | 'LOYALTY_CASHBACK_REVERSAL' | 'TRANSFER';
   amount: string;
   currency_code: string;
   order_id?: string;

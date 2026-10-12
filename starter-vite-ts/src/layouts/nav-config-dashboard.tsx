@@ -188,8 +188,10 @@ export function useNavData(): NavSectionProps['data'] {
           path: '/app/pricing/snappfood',
           icon: ICONS.pricing,
         },
+        // One place for the customer: the list (with friends-and-family rates, wallet and what
+        // they owe on each row), the credit accounts, and the wallets with the cashback rule.
         {
-          title: t('nav.customersCredit', 'Customers & Credit'),
+          title: t('nav.customersGroup', 'Customers'),
           path: '/app/customers',
           icon: ICONS.customers,
           children: [
@@ -201,20 +203,9 @@ export function useNavData(): NavSectionProps['data'] {
               title: t('nav.credit', 'Credit accounts'),
               path: '/app/credit/accounts',
             },
-          ],
-        },
-        {
-          title: t('nav.discountsLoyalty', 'Discounts & Loyalty'),
-          path: '/app/discounts/customer-rates',
-          icon: ICONS.discounts,
-          children: [
-            {
-              title: t('nav.customerDiscounts', 'Customer-Specific Rates'),
-              path: '/app/discounts/customer-rates',
-            },
             {
               title: t('nav.customerWallet', 'Wallet & Cashback'),
-              path: '/app/discounts/wallet',
+              path: '/app/wallet',
             },
           ],
         },

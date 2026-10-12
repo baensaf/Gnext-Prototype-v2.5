@@ -252,7 +252,10 @@
       "credit": "Customer credit",
       "creditShort": "The customer can only buy {{amount}} {{currency}} more on credit.",
       "available": "Available {{amount}}",
-      "unlimited": "No limit"
+      "unlimited": "No limit",
+      "wallet": "Wallet",
+      "walletHolds": "Holds {{amount}}",
+      "walletShort": "The wallet holds only {{amount}} {{currency}}."
     },
     "directTerminalPay": "Direct Terminal Pay (PC-POS)",
     "itemSuspended": "86'd",
@@ -346,11 +349,15 @@
         "CUSTOMER_SATISFACTION": "Customer satisfaction / courtesy",
         "STAFF_DISCOUNT": "Staff discount",
         "DAMAGED_ITEM": "Minor defect / packaging issue",
-        "VIP_COURTESY": "VIP club member"
+        "VIP_COURTESY": "VIP club member",
+        "FRIENDS_FAMILY": "Friends & family"
       },
       "remove": "Remove discount",
       "apply": "Apply",
-      "applyWithPin": "Apply with manager PIN"
+      "applyWithPin": "Apply with manager PIN",
+      "family": "Friends & family {{pct}}%",
+      "familyTakeOff": "Take the friends-and-family discount off this order",
+      "familyPutBack": "Put the friends-and-family discount back"
     },
     "held": {
       "discard": "Discard",
@@ -1323,15 +1330,18 @@
         "addressesFailed": "Could not load or save the address"
       },
       "credit": {
-        "title": "Wallet & credit ledger",
+        "title": "Credit account",
         "balance": "Wallet balance",
         "spendable": "Can spend",
         "type": "Type",
         "amount": "Amount",
         "note": "Note",
         "history": "History",
-        "date": "Date"
-      }
+        "date": "Date",
+        "owed": "Owes"
+      },
+      "walletColumn": "Wallet",
+      "owesColumn": "Owes on credit"
     },
     "register": {
       "title": "Register customer",
@@ -1361,6 +1371,23 @@
         "saveFailed": "Could not register the customer",
         "fieldRequired": "{{name}} is required"
       }
+    },
+    "filters": {
+      "all": "All",
+      "family": "Friends & family",
+      "wallet": "Wallet money",
+      "owes": "Owes"
+    },
+    "family": {
+      "column": "Friends & family",
+      "title": "Friends & family discount",
+      "help": "A percent off this person's orders at the branch, filled in on the till when they are picked. The cashier can take it off an order.",
+      "branch": "Branch",
+      "percent": "Discount",
+      "note": "Who they are",
+      "notePlaceholder": "e.g. the owner's brother",
+      "remove": "Remove",
+      "saveFailed": "The discount could not be saved"
     }
   },
   "credit": {
@@ -1388,7 +1415,8 @@
       "REPAYMENT": "Repayment",
       "REVERSAL": "Sale reversed",
       "LOYALTY_CASHBACK": "Cashback",
-      "LOYALTY_CASHBACK_REVERSAL": "Cashback reversed"
+      "LOYALTY_CASHBACK_REVERSAL": "Cashback reversed",
+      "TRANSFER": "Moved between wallet and credit"
     },
     "table": {
       "customerCode": "Customer code",
@@ -1920,19 +1948,23 @@
     "auditNotice": "Discounts exceeding maximum manager policy limit (30%) are rejected outright by server-side evaluation. All requests write immutable audit trails.",
     "savedSuccess": "Role-based manual discount authorization policy saved successfully.",
     "failedToLoad": "Failed to load discount authorization policy",
-    "failedToSave": "Failed to save discount authorization settings"
+    "failedToSave": "Failed to save discount authorization settings",
+    "familyTitle": "Friends & family discount",
+    "familyDesc": "Categories that stay at full price for friends and family, such as drinks. This covers a customer's own rate and a cashier discount given for this reason.",
+    "familyExcluded": "Never discounted",
+    "familyExcludedPlaceholder": "Pick categories"
   },
   "wallet": {
     "title": "Customer Club Wallet & Cashback",
-    "subtitle": "Configure purchase-based cashback earning rules and manage customer credit wallet balances.",
+    "subtitle": "The cashback rule, and the cashback each customer holds to spend at the till.",
     "cashbackPolicy": "Cashback Earning Policy",
     "cashbackPolicyDesc": "Percentage of net paid order subtotal (after discounts) credited to customer credit wallet upon completion.",
     "cashbackPct": "Cashback Percentage (%)",
     "totalActiveWallets": "Active Customer Wallets",
-    "totalWalletBalance": "Total Net Wallet Credit Balance",
+    "totalWalletBalance": "Cashback held by customers",
     "loyaltySource": "Ledger Source Type",
     "customerBalances": "Customer Wallet Accounts",
-    "noAccounts": "No customer wallet accounts created yet. Wallets are auto-created on first cashback award or POS credit deposit.",
+    "noAccounts": "No wallets yet. A wallet opens with the customer's first cashback.",
     "customer": "Customer",
     "currency": "Currency",
     "currentBalance": "Available Balance",
@@ -3338,7 +3370,8 @@
       "overview": "Overview",
       "orders": "Orders",
       "credit": "Credit",
-      "shiftsCash": "Shifts & cash"
+      "shiftsCash": "Shifts & cash",
+      "wallet": "Wallet"
     },
     "kpi": {
       "orders": "Orders",
@@ -3390,7 +3423,11 @@
       "balanceAfter": "Balance after",
       "reason": "Reason / reference",
       "noEntries": "No credit entries yet",
-      "noAccount": "This customer has no credit account."
+      "noAccount": "This customer has no credit account.",
+      "wallet": "Wallet",
+      "walletBalance": "Wallet balance",
+      "owed": "Owes on credit",
+      "noWallet": "This customer has no wallet yet. It opens with their first cashback."
     },
     "user": {
       "ordersTaken": "Orders taken",

@@ -54,10 +54,8 @@ const MANAGER_PATHS = [
   '/app/payments',
   '/app/customers',
   '/app/credit',
-  '/app/customer-club',
   '/app/catalog',
   '/app/pricing',
-  '/app/discounts',
   '/app/operations',
   '/app/reports',
   '/app/settings',
@@ -98,18 +96,12 @@ const CHAIN_ONLY_PATHS = [
   // Products stays open too, read-only, because you cannot 86 what you cannot see.
   '/app/catalog/categories',
   '/app/pricing',
-  // Discounts are the chain's for the same reason the menu is: a negotiated customer rate
-  // carries no branch column, so a branch editing one is editing everybody's. The register
-  // still quotes discounts — a read in all but HTTP verb. Cashier discount caps live only
-  // at /app/settings/discount-authorizations.
-  '/app/discounts',
-  '/app/customer-club',
-  // Customers and their credit are held centrally: one record per customer across the
-  // chain, one limit and one ledger. The counter still looks customers up and signs new
-  // ones on at the POS, and takes a credit payment through the payment module — neither
-  // goes through these screens.
-  '/app/customers',
+  // Credit and the wallet are held centrally: one limit, one ledger and one cashback rule
+  // per customer across the chain. The counter takes a credit or wallet payment through the
+  // payment module, not through these screens. The customer list is open to a branch
+  // manager, who keeps their own branch's friends-and-family rates on it.
   '/app/credit',
+  '/app/wallet',
   // The sandbox drives the chain's integrations — Snappfood, the payment and printer mocks,
   // the offline queue — and its API has been head office's only all along, so a branch
   // copy of the menu was a set of screens whose every call came back refused.

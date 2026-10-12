@@ -159,7 +159,7 @@ const HELD_TYPE_KEYS: Record<string, string> = {
 };
 
 /** The reasons a cashier gives for a discount; the label is `pos.discount.reason.<code>`. */
-const DISCOUNT_REASONS = ['CUSTOMER_SATISFACTION', 'STAFF_DISCOUNT', 'DAMAGED_ITEM', 'VIP_COURTESY'];
+const DISCOUNT_REASONS = ['CUSTOMER_SATISFACTION', 'FRIENDS_FAMILY', 'STAFF_DISCOUNT', 'DAMAGED_ITEM', 'VIP_COURTESY'];
 
 const CATALOG_LOAD_FAILED = 'Failed to load POS catalog data';
 
@@ -338,6 +338,10 @@ export function PosOrderPage() {
   const [quotedTaxAmount, setQuotedTaxAmount] = useState<string>('0');
   const [quotedDeliveryFee, setQuotedDeliveryFee] = useState<string>('0');
   const [appliedDiscountName, setAppliedDiscountName] = useState<string | null>(null);
+  // The customer's friends-and-family rate at this branch, once a quote has shown it, and
+  // whether the cashier took it off this order. A new customer starts over.
+  const [familyPercent, setFamilyPercent] = useState<string | null>(null);
+  const [familySkipped, setFamilySkipped] = useState(false);
   const [approvalRequired, setApprovalRequired] = useState(false);
   const [approvalReason, setApprovalReason] = useState<string | null>(null);
 
@@ -900,6 +904,7 @@ export function PosOrderPage() {
           customerId: selectedCustomerId || undefined,
           orderType,
           deliveryFee: deliveryFeeCharged,
+          skipCustomerDiscount: familySkipped || undefined,
           items: cart.map((ci) => ({
             productId: ci.product.id,
             variantId: ci.selectedVariant?.id || undefined,
@@ -935,14 +940,18 @@ export function PosOrderPage() {
       // The order's own discount; item discounts show on their lines instead.
       const applied = quoteRes.consideredDiscounts?.find((d) => d.status === 'APPLIED' && d.source !== 'ITEM');
 
+      if (applied?.source === 'CUSTOMER' && applied.percent) setFamilyPercent(applied.percent);
+
       if (applied) {
         // The cashier's own discount shows as its rate; its name is the same on every order.
         setAppliedDiscountName(
-          applied.source !== 'MANUAL'
-            ? applied.name
-            : appliedManualDiscount?.calculation_type === 'PERCENTAGE'
-              ? `${Number(appliedManualDiscount.value)}%`
-              : null
+          applied.source === 'CUSTOMER'
+            ? t('pos.discount.family', { pct: Number(applied.percent || 0) })
+            : applied.source !== 'MANUAL'
+              ? applied.name
+              : appliedManualDiscount?.calculation_type === 'PERCENTAGE'
+                ? `${Number(appliedManualDiscount.value)}%`
+                : null
         );
         setError(null);
       } else {
@@ -951,11 +960,16 @@ export function PosOrderPage() {
     } catch {
       // A quote that fails leaves the figures as they were; submitting prices the order again.
     }
-  }, [cart, selectedCustomerId, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, priceOf]);
+  }, [cart, selectedCustomerId, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, priceOf, familySkipped, t]);
 
   useEffect(() => {
     evaluateQuote();
   }, [evaluateQuote]);
+
+  useEffect(() => {
+    setFamilyPercent(null);
+    setFamilySkipped(false);
+  }, [selectedCustomerId]);
 
   const hasDiscount = Boolean(appliedManualDiscount);
   // Also true for one the cashier didn't add: an item's own discount, or the customer's rate.
@@ -1041,15 +1055,18 @@ export function PosOrderPage() {
   // Sending only the approval id makes the server price the order differently from what
   // the cashier saw and the manager approved.
   const buildSubmitPayload = useCallback(() => {
+    // Taken off on the till, the friends-and-family rate stays off when the order is sent.
+    const skip = familySkipped ? { skipCustomerDiscount: true } : {};
     if (!appliedManualDiscount || !MoneyUtil.greaterThan(appliedManualDiscount.value, '0')) {
-      return undefined;
+      return familySkipped ? skip : undefined;
     }
     const approvalRequestId = appliedManualDiscount.approvalRequestId || manualApprovalRequestId;
     return {
+      ...skip,
       manualDiscount: { ...appliedManualDiscount, approvalRequestId },
       ...(approvalRequestId ? { approvalRequestIds: [approvalRequestId] } : {}),
     };
-  }, [appliedManualDiscount, manualApprovalRequestId]);
+  }, [appliedManualDiscount, manualApprovalRequestId, familySkipped]);
 
   // 1-Click Direct Terminal POS Checkout (90% Iranian Standard)
   const [terminalPayLoading, setTerminalPayLoading] = useState(false);
@@ -2163,6 +2180,20 @@ export function PosOrderPage() {
                       </Box>
                     </Button>
                   </Tooltip>
+                  {/* The customer's friends-and-family rate fills itself in; one tap takes it off
+                      this order, and back on. A cashier's own discount replaces it. */}
+                  {familyPercent && !appliedManualDiscount && (
+                    <Chip
+                      size="small"
+                      color="secondary"
+                      variant={familySkipped ? 'outlined' : 'filled'}
+                      label={t('pos.discount.family', { pct: Number(familyPercent) })}
+                      onClick={familySkipped ? () => setFamilySkipped(false) : undefined}
+                      onDelete={familySkipped ? undefined : () => setFamilySkipped(true)}
+                      title={familySkipped ? t('pos.discount.familyPutBack') : t('pos.discount.familyTakeOff')}
+                      sx={{ flexShrink: 0, fontWeight: 600, textDecoration: familySkipped ? 'line-through' : 'none' }}
+                    />
+                  )}
                   {MoneyUtil.greaterThan(appliedDiscountAmount, '0') ? (
                     <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold', flexShrink: 0 }}>
                       -{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(appliedDiscountAmount) })}
