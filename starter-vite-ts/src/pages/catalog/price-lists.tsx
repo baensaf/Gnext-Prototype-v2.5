@@ -45,11 +45,13 @@ import { catalogApi } from 'src/api/catalogApi';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 
 const BASE = '';
+const SNAPPFOOD = 'SNAPPFOOD';
 
 /**
  * Branch price lists. A few shared lists hold prices for some items; each branch sells from
  * one list, or at the base price when it has none. An item a list does not price sells at
- * base on that list too. The register, the kiosk and the Snappfood sheet all use these.
+ * base on that list too. The register and the kiosk use these. Each list also prices items on
+ * Snappfood; an item with no Snappfood price there follows the in-store price plus the markup.
  */
 export function PriceListsPage() {
   const { t } = useTranslation();
@@ -133,17 +135,19 @@ export function PriceListsPage() {
     }
   };
 
-  const key = (productId: string, variantId: string | null) => `${productId}:${variantId || ''}`;
+  /** A draft's key: the item, and for the Snappfood box a prefix so the two boxes stay apart. */
+  const key = (productId: string, variantId: string | null, channel: string | null = null) =>
+    `${channel ? `${channel}:` : ''}${productId}:${variantId || ''}`;
   /** A saved price as the toman figure its box shows; drafts are typed in tomans too. */
   const shown = (price: string | null) => (price ? toToman(price) : '');
 
-  const savePrice = async (productId: string, variantId: string | null) => {
-    const value = (drafts[key(productId, variantId)] ?? '').trim();
+  const savePrice = async (productId: string, variantId: string | null, channel: string | null = null) => {
+    const value = (drafts[key(productId, variantId, channel)] ?? '').trim();
     try {
-      setSheet(await catalogApi.setListPrice(selectedListId, productId, variantId, value === '' ? null : fromToman(value)));
+      setSheet(await catalogApi.setListPrice(selectedListId, productId, variantId, value === '' ? null : fromToman(value), channel));
       setDrafts((prev) => {
         const next = { ...prev };
-        delete next[key(productId, variantId)];
+        delete next[key(productId, variantId, channel)];
         return next;
       });
       await loadLists();
@@ -309,6 +313,7 @@ export function PriceListsPage() {
                   <TableCell>{t('pricing.priceLists.item')}</TableCell>
                   <TableCell align="right">{t('pricing.priceLists.basePrice')}</TableCell>
                   <TableCell align="right">{t('pricing.priceLists.listPrice')}</TableCell>
+                  <TableCell align="right">{t('pricing.priceLists.snappfoodPrice')}</TableCell>
                   <TableCell align="right">{t('pricing.priceLists.charged')}</TableCell>
                 </TableRow>
               </TableHead>
@@ -317,6 +322,9 @@ export function PriceListsPage() {
                   const k = key(r.product_id, r.variant_id);
                   const draft = drafts[k];
                   const changed = draft !== undefined && draft !== shown(r.list_price);
+                  const sfKey = key(r.product_id, r.variant_id, SNAPPFOOD);
+                  const sfDraft = drafts[sfKey];
+                  const sfChanged = sfDraft !== undefined && sfDraft !== shown(r.snappfood_price);
                   return (
                     <TableRow key={k}>
                       <TableCell>{r.name}</TableCell>
@@ -335,6 +343,25 @@ export function PriceListsPage() {
                             sx={{ width: 150 }}
                           />
                           <Button size="small" disabled={!changed} onClick={() => savePrice(r.product_id, r.variant_id)}>
+                            {t('common.save')}
+                          </Button>
+                        </Stack>
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', alignItems: 'center' }}>
+                          {/* Empty, the box shows greyed what Snappfood gets instead: the in-store price plus the markup. */}
+                          <TextField
+                            size="small"
+                            type="number"
+                            placeholder={shown(r.snappfood_fallback)}
+                            value={sfDraft ?? shown(r.snappfood_price)}
+                            onChange={(e) => setDrafts((prev) => ({ ...prev, [sfKey]: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && sfChanged) savePrice(r.product_id, r.variant_id, SNAPPFOOD);
+                            }}
+                            sx={{ width: 150 }}
+                          />
+                          <Button size="small" disabled={!sfChanged} onClick={() => savePrice(r.product_id, r.variant_id, SNAPPFOOD)}>
                             {t('common.save')}
                           </Button>
                         </Stack>

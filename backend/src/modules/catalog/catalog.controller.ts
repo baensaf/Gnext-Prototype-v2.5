@@ -287,7 +287,7 @@ export class CatalogController {
   @Put('catalog/price-lists/:id/prices')
   async setListPrice(
     @Param('id') id: string,
-    @Body() body: { productId: string; variantId?: string | null; amount: string | null },
+    @Body() body: { productId: string; variantId?: string | null; amount: string | null; channel?: string | null },
     @Req() req: Request,
   ) {
     return await this.priceLists.setListPrice(
@@ -297,6 +297,8 @@ export class CatalogController {
       body.variantId || null,
       body.amount === '' || body.amount === undefined ? null : body.amount,
       (req as any).correlationId,
+      // Empty is the list's in-store price; SNAPPFOOD is its Snappfood one.
+      body.channel ? String(body.channel).toUpperCase() : null,
     );
   }
 
@@ -324,31 +326,14 @@ export class CatalogController {
     return await this.priceChanges.getPriceHistory((req as any).tenantId, id);
   }
 
-  // Aggregator price sheet. The markup rule itself is the CHANNEL_PRICING setting.
+  // Aggregator price sheet, read only: what a branch gets on the channel. The Snappfood price
+  // itself is set on the branch's price list; the markup rule is the CHANNEL_PRICING setting.
   @Get('catalog/channel-prices')
   async getChannelPriceSheet(@Query('channel') channel: string, @Query('branchId') branchId: string, @Req() req: Request) {
     return await this.catalogService.getChannelPriceSheet(
       (req as any).tenantId,
       (channel || 'SNAPPFOOD').toUpperCase(),
       effectiveBranchId((req as any).userBranchId, branchId) || null,
-    );
-  }
-
-  @HeadOfficeOnly()
-  @Put('catalog/channel-prices')
-  async setChannelFixedPrice(
-    @Body() body: { channel?: string; productId: string; variantId?: string | null; amount: string | null; branchId?: string | null },
-    @Req() req: Request,
-  ) {
-    return await this.catalogService.setChannelFixedPrice(
-      (req as any).tenantId,
-      (body.channel || 'SNAPPFOOD').toUpperCase(),
-      body.productId,
-      body.variantId || null,
-      body.amount === '' || body.amount === undefined ? null : body.amount,
-      (req as any).correlationId,
-      // Only which branch's sheet comes back; the fixed price itself is chain-wide.
-      body.branchId || null,
     );
   }
 

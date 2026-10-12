@@ -7,15 +7,25 @@ import { PriceEntry } from '../../entities/PriceEntry.entity';
 import { Product } from '../../entities/Product.entity';
 import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { Branch } from '../../entities/Branch.entity';
+import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { inStorePrice, isLiveAt, listPricesAt, priceKey } from '../../common/utils/price-list.util';
+import { CHANNEL_PRICING_KEY, applyChannelRule, readChannelRule } from '../../common/utils/channel-price.util';
+import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { AuditWriter } from '../audit/audit-writer.service';
+
+/** The channels a price group can price an item on, beside the in-store price. */
+export const LIST_PRICE_CHANNELS = ['SNAPPFOOD'];
 
 /**
  * Branch price lists. A list (a `price_group` row) holds prices for some items; a branch
  * assigned to it (`price_group_branch`) sells those items at those prices and everything
  * else at the base price. A branch with no list sells at base. This is the in-store price:
  * the register, the kiosk and the Snappfood sheet all start from it.
+ *
+ * A list also holds a Snappfood price per item (2026-10-12): the same `price_entry` shape
+ * with `channel = 'SNAPPFOOD'`. A branch's Snappfood price is its list's Snappfood price,
+ * else its in-store price with the channel's markup (see `CatalogService.getChannelPriceSheet`).
  */
 @Injectable()
 export class PriceListService {
@@ -41,15 +51,16 @@ export class PriceListService {
 
   /**
    * A list's own price rows, or with `listId` null the dated base prices: rows with no list,
-   * branch, channel, order type or add-on.
+   * branch, channel, order type or add-on. With `channel`, the list's prices on that channel
+   * instead of its in-store ones.
    */
-  entriesOf(tenantId: string, listId: string | null, productIds?: string[]) {
+  entriesOf(tenantId: string, listId: string | null, productIds?: string[], channel: string | null = null) {
     return this.entryRepo.find({
       where: {
         tenant_id: tenantId,
         price_group_id: listId ?? IsNull(),
         branch_id: IsNull(),
-        channel: IsNull(),
+        channel: channel ?? IsNull(),
         order_type: IsNull(),
         modifier_option_id: IsNull(),
         ...(productIds ? { product_id: In(productIds) } : {}),
@@ -69,6 +80,17 @@ export class PriceListService {
       for (const [key, amount] of listPricesAt(await this.entriesOf(tenantId, list.id, productIds), at)) prices.set(key, amount);
     }
     return prices;
+  }
+
+  /** What a list charges on a channel (Snappfood) at `at`, keyed by product and size. */
+  async channelPricesOf(tenantId: string, listId: string, channel: string, at = new Date()) {
+    return listPricesAt(await this.entriesOf(tenantId, listId, undefined, channel), at);
+  }
+
+  /** The markup rule of a channel, out of the CHANNEL_PRICING setting. */
+  async channelRule(tenantId: string, channel: string) {
+    const rows = await this.entryRepo.manager.find(TenantSetting, { where: { tenant_id: tenantId, key: CHANNEL_PRICING_KEY } });
+    return readChannelRule(pickSettingValue(rows, null), channel);
   }
 
   /** What one product, or one size of it, costs in store at a branch. Add-ons are extra. */
@@ -220,18 +242,23 @@ export class PriceListService {
 
   /**
    * A list's price sheet: one row per product, or per size of a product sold in sizes, with
-   * the base price, the list's own price if it sets one, and the price that applies.
+   * the base price, the list's own price if it sets one, and the price that applies. Beside
+   * them the list's Snappfood price, and what Snappfood gets while that is empty: the price
+   * that applies in store, marked up by the channel's rule.
    */
   async getPriceListSheet(tenantId: string, listId: string) {
     const list = await this.getList(tenantId, listId);
     const now = new Date();
     const listed = listPricesAt(await this.entriesOf(tenantId, listId), now);
+    const snappfood = await this.channelPricesOf(tenantId, listId, 'SNAPPFOOD', now);
+    const rule = await this.channelRule(tenantId, 'SNAPPFOOD');
     const based = listPricesAt(await this.entriesOf(tenantId, null), now);
     const products = await this.productRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { code: 'ASC' } });
     const variants = await this.variantRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', code: 'ASC' } });
     const row = (product: Product, variant: ProductVariant | null) => {
       const own = listed.get(priceKey(product.id, variant?.id));
       const base = inStorePrice(based, product, variant);
+      const onSnappfood = snappfood.get(priceKey(product.id, variant?.id));
       return {
         product_id: product.id,
         variant_id: variant?.id || null,
@@ -240,6 +267,9 @@ export class PriceListService {
         base_price: base,
         list_price: own ?? null,
         price: own ?? base,
+        snappfood_price: onSnappfood ?? null,
+        // What Snappfood gets while the list sets no Snappfood price for the item.
+        snappfood_fallback: applyChannelRule(own ?? base, rule),
       };
     };
     const items = products.flatMap((p) => {
@@ -251,8 +281,10 @@ export class PriceListService {
 
   /**
    * Set one item's price on a list from now on, or clear it (amount null) so the item sells at
-   * base on that list. The price in force is closed rather than deleted, so the history stays;
-   * prices dated to start later are left alone.
+   * base on that list. With `channel` (Snappfood) it is the list's price on that channel, and
+   * clearing it makes Snappfood follow the list's in-store price plus the markup. The price in
+   * force is closed rather than deleted, so the history stays; prices dated to start later
+   * are left alone.
    */
   async setListPrice(
     tenantId: string,
@@ -261,8 +293,12 @@ export class PriceListService {
     variantId: string | null,
     amount: string | null,
     correlationId: string,
+    channel: string | null = null,
   ) {
     await this.getList(tenantId, listId);
+    if (channel && !LIST_PRICE_CHANNELS.includes(channel)) {
+      throw new BadRequestException(`A list prices an item in store or on ${LIST_PRICE_CHANNELS.join(', ')} only`);
+    }
     const product = await this.productRepo.findOne({ where: { id: productId, tenant_id: tenantId } });
     if (!product) throw new NotFoundException('Product not found');
     if (variantId) {
@@ -287,7 +323,7 @@ export class PriceListService {
             product_id: productId,
             variant_id: variantId || IsNull(),
             branch_id: IsNull(),
-            channel: IsNull(),
+            channel: channel ?? IsNull(),
             order_type: IsNull(),
             modifier_option_id: IsNull(),
             effective_from: LessThanOrEqual(now),
@@ -306,7 +342,8 @@ export class PriceListService {
             product_id: productId,
             variant_id: variantId || null,
             price_group_id: listId,
-            price_type: 'LIST',
+            channel,
+            price_type: channel ? 'CHANNEL' : 'LIST',
             currency_code: 'IRR',
             amount: MoneyUtil.format(amount),
             effective_from: now,
@@ -318,11 +355,11 @@ export class PriceListService {
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
-      action: 'PRICE_LIST_PRICE_SET',
+      action: channel ? 'PRICE_LIST_CHANNEL_PRICE_SET' : 'PRICE_LIST_PRICE_SET',
       entityType: 'Product',
       entityId: productId,
       correlationId,
-      details: { priceListId: listId, variantId, before, after: amount === null ? null : MoneyUtil.format(amount) },
+      details: { priceListId: listId, channel, variantId, before, after: amount === null ? null : MoneyUtil.format(amount) },
     });
     return this.getPriceListSheet(tenantId, listId);
   }
