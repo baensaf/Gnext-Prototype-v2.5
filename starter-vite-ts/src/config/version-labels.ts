@@ -32,12 +32,11 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   // Branches, tills, kitchen stations and routing, printers, the print queue, branch agents
   '/app/operations': 'V1',
   '/app/kiosk': 'V3',
-  // V1's one very basic report is the dashboard; the reports page comes in V2.
-  '/app/reports': 'V2',
+  // The reports page (moved from V2 to V1, 2026-10-12); the dashboard is still the day at a glance.
+  '/app/reports': 'V1',
   // Settings: users, roles, general, calendar, business day, shift policy, order workflow,
   // discount limits, payment methods, reason codes, note templates
   '/app/settings': 'V1',
-  '/app/settings/approvals': 'V2',
   '/app/settings/data-reset': 'F',
   '/app/delivery': 'V1',
   // Categories, products with sizes, add-on groups and combos, availability (the 86 stop)
@@ -74,7 +73,6 @@ export const FEATURE_LABELS = {
   'payments.settlementAccounts': 'V4',
   // Delivery. Couriers belong to one branch and are on a salary: a trip pays them nothing.
   // V1 dispatch: assign and send out, then settle on return.
-  'delivery.settlementReverse': 'V2',
   // Catalog. Sizes, add-on groups and combos are V1 (2026-10-04).
   'catalog.maxPerOrder': 'V4',
   'catalog.priceHistory': 'V4',
@@ -91,7 +89,6 @@ export const FEATURE_LABELS = {
   'printers.simulated': 'F',
   'printQueue.simulate': 'F',
   // Settings. Money is shown in Toman in V1; the Omani rial and the US dollar come in V7.
-  'settings.reopenOrders': 'V2',
   'settings.incomingOrders': 'V3',
   // Kiosk (V3): sizes and add-ons ship with the kiosk.
   'kiosk.simulatedTerminal': 'F',
