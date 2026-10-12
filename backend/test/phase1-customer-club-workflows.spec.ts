@@ -113,22 +113,42 @@ describe('Phase 1 Customer Club & Discounts Workflows (Spec)', () => {
     it('creates customer-specific discount assignment', async () => {
       const assign = await discountsService.createCustomerDiscount(tenantId, {
         customer_id: customerA,
+        branch_id: 'branch-1',
         discount_percentage: '10.00',
         note: 'Loyalty tier 1',
       }, 'user-admin-1');
 
       expect(assign).toBeDefined();
       expect(assign.discount_percentage).toBe('10.0000');
+      expect(assign.branch_id).toBe('branch-1');
       expect(assign.created_by).toBe('user-admin-1');
+    });
+
+    it("gives a branch account's rate to its own branch, whatever branch was sent", async () => {
+      const assign = await discountsService.createCustomerDiscount(
+        tenantId,
+        { customer_id: customerA, branch_id: 'branch-other', discount_percentage: '20.00' },
+        'user-manager-1',
+        undefined,
+        'branch-1',
+      );
+
+      expect(assign.branch_id).toBe('branch-1');
+    });
+
+    it('refuses a rate with no branch', async () => {
+      await expect(
+        discountsService.createCustomerDiscount(tenantId, { customer_id: customerA, discount_percentage: '20.00' }),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('rejects percentage > 100 or <= 0', async () => {
       await expect(
-        discountsService.createCustomerDiscount(tenantId, { customer_id: customerA, discount_percentage: '150.00' }),
+        discountsService.createCustomerDiscount(tenantId, { customer_id: customerA, branch_id: 'branch-1', discount_percentage: '150.00' }),
       ).rejects.toThrow(BadRequestException);
 
       await expect(
-        discountsService.createCustomerDiscount(tenantId, { customer_id: customerA, discount_percentage: '0.00' }),
+        discountsService.createCustomerDiscount(tenantId, { customer_id: customerA, branch_id: 'branch-1', discount_percentage: '0.00' }),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -136,6 +156,7 @@ describe('Phase 1 Customer Club & Discounts Workflows (Spec)', () => {
       await expect(
         discountsService.createCustomerDiscount(tenantId, {
           customer_id: customerA,
+          branch_id: 'branch-1',
           discount_percentage: '15.00',
           effective_from: '2026-12-31T00:00:00Z',
           effective_to: '2026-01-01T00:00:00Z',
@@ -154,6 +175,7 @@ describe('Phase 1 Customer Club & Discounts Workflows (Spec)', () => {
       const quote = await evaluationService.evaluateQuote(tenantId, {
         orderDraft: {
           customerId: customerA,
+          branchId: 'branch-1',
           items: [{ productId: 'item-1', unitPrice: '100000.0000', quantity: '1' }],
         },
       });

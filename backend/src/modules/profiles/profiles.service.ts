@@ -40,19 +40,21 @@ export class ProfilesService {
   async customerProfile(tenantId: string, id: string) {
     const customer: any = await this.customerService.getCustomerById(tenantId, id);
     const account = customer.credit_account;
+    const wallet = customer.wallet_account;
+    const ledger = (accountId: string) =>
+      this.dataSource.query(
+        `SELECT id, entry_type, amount, balance_after, currency_code, order_id, reason_text, reference, posted_at
+           FROM credit_entry
+          WHERE tenant_id = $1 AND account_id = $2
+          ORDER BY posted_at DESC
+          LIMIT ${HISTORY_LIMIT}`,
+        [tenantId, accountId],
+      );
 
-    const [summary, entries, audit] = await Promise.all([
+    const [summary, entries, walletEntries, audit] = await Promise.all([
       this.orderSummary(tenantId, 'o.customer_id = $2', [id]),
-      account
-        ? this.dataSource.query(
-            `SELECT id, entry_type, amount, balance_after, currency_code, order_id, reason_text, reference, posted_at
-               FROM credit_entry
-              WHERE tenant_id = $1 AND account_id = $2
-              ORDER BY posted_at DESC
-              LIMIT ${HISTORY_LIMIT}`,
-            [tenantId, account.id],
-          )
-        : [],
+      account ? ledger(account.id) : [],
+      wallet ? ledger(wallet.id) : [],
       this.auditTrail(tenantId, `a.entity_id::text IN ($2, $3)`, [id, account?.id ?? id]),
     ]);
 
@@ -74,6 +76,8 @@ export class ProfilesService {
       stats: summary.stats,
       orders: summary.orders,
       credit: account ? { account, entries } : null,
+      wallet: wallet ? { account: wallet, entries: walletEntries } : null,
+      family_discounts: customer.family_discounts || [],
       audit,
     };
   }

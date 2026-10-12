@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CustomerDiscount } from '../../entities/CustomerDiscount.entity';
@@ -38,8 +38,8 @@ export class DiscountsService {
     return await this.evaluationService.getManualDiscountLimits(tenantId, callerRole);
   }
 
-  // Customer Discounts (Workflow 1)
-  async getCustomerDiscounts(tenantId: string, customerId?: string) {
+  // Friends-and-family rates. A branch account sees and sets only its own branch's people.
+  async getCustomerDiscounts(tenantId: string, customerId?: string, branchId?: string | null) {
     const qb = this.customerDiscountRepo
       .createQueryBuilder('cd')
       .leftJoinAndSelect('cd.customer', 'customer')
@@ -48,13 +48,63 @@ export class DiscountsService {
     if (customerId) {
       qb.andWhere('cd.customer_id = :customerId', { customerId });
     }
+    if (branchId) {
+      qb.andWhere('cd.branch_id = :branchId', { branchId });
+    }
     qb.orderBy('cd.created_at', 'DESC');
     return await qb.getMany();
   }
 
-  async createCustomerDiscount(tenantId: string, dto: CreateCustomerDiscountDto, userId?: string, correlationId?: string) {
+  /**
+   * Sets one person's friends-and-family percent at one branch, or takes it away (no percent).
+   * What the customer list's dialog calls; a branch account's branch wins over the one sent.
+   */
+  async setFamilyDiscount(
+    tenantId: string,
+    dto: { customer_id: string; branch_id?: string; percent?: string | null; note?: string | null },
+    ownBranchId: string | null,
+    userId?: string,
+    correlationId?: string,
+  ) {
+    const branchId = ownBranchId || dto.branch_id;
+    if (!branchId) throw new BadRequestException('A friends-and-family discount belongs to a branch');
+    const current = await this.customerDiscountRepo.findOne({
+      where: { tenant_id: tenantId, customer_id: dto.customer_id, branch_id: branchId, is_active: true },
+    });
+    if (!dto.percent || !MoneyUtil.greaterThan(dto.percent, '0')) {
+      if (current) await this.revokeCustomerDiscount(tenantId, current.id, correlationId, ownBranchId);
+      return null;
+    }
+    if (current) {
+      return await this.updateCustomerDiscount(
+        tenantId,
+        current.id,
+        { discount_percentage: dto.percent, note: dto.note ?? current.note } as UpdateCustomerDiscountDto,
+        userId,
+        correlationId,
+        ownBranchId,
+      );
+    }
+    return await this.createCustomerDiscount(
+      tenantId,
+      { customer_id: dto.customer_id, branch_id: branchId, discount_percentage: dto.percent, note: dto.note || undefined } as CreateCustomerDiscountDto,
+      userId,
+      correlationId,
+      ownBranchId,
+    );
+  }
+
+  async createCustomerDiscount(
+    tenantId: string,
+    dto: CreateCustomerDiscountDto,
+    userId?: string,
+    correlationId?: string,
+    ownBranchId?: string | null,
+  ) {
     const customer = await this.customerRepo.findOne({ where: { id: dto.customer_id, tenant_id: tenantId } });
     if (!customer) throw new NotFoundException(`Customer ${dto.customer_id} not found`);
+    const branchId = ownBranchId || dto.branch_id;
+    if (!branchId) throw new BadRequestException('A friends-and-family discount belongs to a branch');
 
     const percentage = MoneyUtil.format(dto.discount_percentage);
     if (MoneyUtil.lessThanOrEqual(percentage, '0') || MoneyUtil.greaterThan(percentage, '100')) {
@@ -69,15 +119,16 @@ export class DiscountsService {
       }
     }
 
-    // Inactivate existing active discounts for this customer if creating new one
+    // One rate per person per branch: a new one replaces the old.
     await this.customerDiscountRepo.update(
-      { tenant_id: tenantId, customer_id: dto.customer_id, is_active: true },
+      { tenant_id: tenantId, customer_id: dto.customer_id, branch_id: branchId, is_active: true },
       { is_active: false },
     );
 
     const assignment = this.customerDiscountRepo.create({
       tenant_id: tenantId,
       customer_id: dto.customer_id,
+      branch_id: branchId,
       discount_percentage: percentage,
       effective_from: dto.effective_from ? windowStart(dto.effective_from) : null,
       effective_to: dto.effective_to ? windowEnd(dto.effective_to) : null,
@@ -97,15 +148,23 @@ export class DiscountsService {
       entityId: saved.id,
       correlationId: correlationId || 'system',
       afterData: saved,
-      details: { customerId: dto.customer_id, percentage, createdBy: userId },
+      details: { customerId: dto.customer_id, branchId, percentage, createdBy: userId },
     });
 
     return saved;
   }
 
-  async updateCustomerDiscount(tenantId: string, id: string, dto: UpdateCustomerDiscountDto, userId?: string, correlationId?: string) {
+  async updateCustomerDiscount(
+    tenantId: string,
+    id: string,
+    dto: UpdateCustomerDiscountDto,
+    userId?: string,
+    correlationId?: string,
+    ownBranchId?: string | null,
+  ) {
     const discount = await this.customerDiscountRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!discount) throw new NotFoundException(`Customer discount ${id} not found`);
+    this.assertOwnBranch(discount, ownBranchId);
 
     const before = { ...discount };
 
@@ -153,9 +212,10 @@ export class DiscountsService {
     return saved;
   }
 
-  async revokeCustomerDiscount(tenantId: string, id: string, correlationId?: string) {
+  async revokeCustomerDiscount(tenantId: string, id: string, correlationId?: string, ownBranchId?: string | null) {
     const discount = await this.customerDiscountRepo.findOne({ where: { id, tenant_id: tenantId } });
     if (!discount) throw new NotFoundException(`Customer discount ${id} not found`);
+    this.assertOwnBranch(discount, ownBranchId);
 
     discount.is_active = false;
     await this.customerDiscountRepo.save(discount);
@@ -170,5 +230,11 @@ export class DiscountsService {
     });
 
     return { success: true };
+  }
+
+  private assertOwnBranch(discount: CustomerDiscount, ownBranchId?: string | null) {
+    if (ownBranchId && discount.branch_id !== ownBranchId) {
+      throw new ForbiddenException('This friends-and-family discount belongs to another branch');
+    }
   }
 }

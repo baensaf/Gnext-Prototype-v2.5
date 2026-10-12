@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager, In } from 'typeorm';
-import { CustomerCreditAccount } from '../../entities/CustomerCreditAccount.entity';
+import { AccountKind, CustomerCreditAccount } from '../../entities/CustomerCreditAccount.entity';
 import { CreditEntry } from '../../entities/CreditEntry.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
@@ -31,7 +31,12 @@ export class CreditService {
     private readonly dataSource: DataSource,
   ) {}
 
+  // What can be spent from the account now: the wallet's balance, or what is left of the
+  // credit limit.
   calculateAvailableCredit(account: CustomerCreditAccount): string {
+    if (account.kind === 'WALLET') {
+      return MoneyUtil.greaterThan(account.current_balance, '0.0000') ? account.current_balance : '0.0000';
+    }
     if (account.mode === 'UNLIMITED') {
       return '999999999999.0000';
     }
@@ -45,6 +50,8 @@ export class CreditService {
       .createQueryBuilder('a')
       .where('a.tenant_id = :tenantId', { tenantId });
 
+    // The credit page and the wallet page each list their own kind; credit when not said.
+    if (query.kind !== 'ALL') qb.andWhere('a.kind = :kind', { kind: query.kind === 'WALLET' ? 'WALLET' : 'CREDIT' });
     if (query.customer) qb.andWhere('a.customer_id = :customer', { customer: query.customer });
     if (query.currency && query.currency !== 'ALL') qb.andWhere('a.currency_code = :currency', { currency: query.currency });
     if (query.mode && query.mode !== 'ALL') qb.andWhere('a.mode = :mode', { mode: query.mode });
@@ -116,10 +123,16 @@ export class CreditService {
     };
   }
 
-  async getAccountByCustomer(tenantId: string, customerId: string, currencyCode: string = 'IRR', entityManager?: EntityManager) {
+  async getAccountByCustomer(
+    tenantId: string,
+    customerId: string,
+    currencyCode: string = 'IRR',
+    entityManager?: EntityManager,
+    kind: AccountKind = 'CREDIT',
+  ) {
     const repo = entityManager ? entityManager.getRepository(CustomerCreditAccount) : this.accountRepo;
     const acc = await repo.findOne({
-      where: { tenant_id: tenantId, customer_id: customerId, currency_code: currencyCode },
+      where: { tenant_id: tenantId, customer_id: customerId, currency_code: currencyCode, kind },
     });
     if (!acc) return null;
     return {
@@ -141,7 +154,7 @@ export class CreditService {
       }
 
       const existing = await em.findOne(CustomerCreditAccount, {
-        where: { tenant_id: tenantId, customer_id: customerId, currency_code: currencyCode },
+        where: { tenant_id: tenantId, customer_id: customerId, currency_code: currencyCode, kind: 'CREDIT' },
       });
       if (existing) {
         throw new ConflictException(`Customer already has a credit account for currency ${currencyCode}`);
@@ -153,6 +166,7 @@ export class CreditService {
         tenant_id: tenantId,
         customer_id: customerId,
         currency_code: currencyCode,
+        kind: 'CREDIT',
         mode,
         credit_limit: limit,
         current_balance: '0.0000',
@@ -186,6 +200,7 @@ export class CreditService {
     return await this.dataSource.transaction(async (em) => {
       const acc = await em.findOne(CustomerCreditAccount, { where: { id, tenant_id: tenantId } });
       if (!acc) throw new NotFoundException(`Credit account ${id} not found`);
+      if (acc.kind === 'WALLET') throw new BadRequestException('A wallet has no credit limit');
 
       if (dto.mode !== undefined) acc.mode = dto.mode;
       if (dto.policyNote !== undefined) acc.policy_note = dto.policyNote;
@@ -225,7 +240,14 @@ export class CreditService {
     }
 
     const available = this.calculateAvailableCredit(acc);
-    if (acc.mode !== 'UNLIMITED' && MoneyUtil.greaterThan(purchaseAmount, available)) {
+    if (acc.kind === 'WALLET' && MoneyUtil.greaterThan(purchaseAmount, available)) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        error: 'WALLET_BALANCE_SHORT',
+        message: `Payment (${purchaseAmount}) is more than the wallet holds (${available})`,
+      });
+    }
+    if (acc.kind !== 'WALLET' && acc.mode !== 'UNLIMITED' && MoneyUtil.greaterThan(purchaseAmount, available)) {
       throw new ForbiddenException({
         statusCode: 403,
         error: 'CREDIT_LIMIT_EXCEEDED',
@@ -243,14 +265,19 @@ export class CreditService {
     currencyCode: string,
     amount: string,
     entityManager?: EntityManager,
+    kind: AccountKind = 'CREDIT',
   ) {
     const repo = entityManager
       ? entityManager.getRepository(CustomerCreditAccount)
       : this.accountRepo;
     const acc = await repo.findOne({
-      where: { tenant_id: tenantId, customer_id: customerId, currency_code: currencyCode },
+      where: { tenant_id: tenantId, customer_id: customerId, currency_code: currencyCode, kind },
     });
-    if (!acc) throw new NotFoundException(`No credit account found for customer ${customerId}`);
+    if (!acc) {
+      throw new NotFoundException(
+        kind === 'WALLET' ? `Customer ${customerId} has no wallet` : `No credit account found for customer ${customerId}`,
+      );
+    }
 
     this.assertPurchaseAllowed(acc, amount);
     return acc;
@@ -397,6 +424,7 @@ export class CreditService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!acc) throw new NotFoundException(`Credit account ${accountId} not found`);
+      if (acc.kind === 'WALLET') throw new BadRequestException('A wallet is not repaid; it is spent at the till');
 
       const repaymentAmount = MoneyUtil.format(dto.amount);
       if (MoneyUtil.lessThanOrEqual(repaymentAmount, '0.0000')) {
@@ -455,7 +483,8 @@ export class CreditService {
     return await this.dataSource.transaction(execute);
   }
 
-  // Workflow 2: Purchase-based cashback & loyalty wallet
+  // Cashback goes to the customer's wallet, opened on the first award. Never to the credit
+  // account: earning cashback must not pay off a debt or open a credit line.
   async awardLoyaltyCashback(
     tenantId: string,
     customerId: string,
@@ -477,7 +506,7 @@ export class CreditService {
       if (MoneyUtil.lessThanOrEqual(cashbackAmt, '0.0000')) return null;
 
       let acc = await em.findOne(CustomerCreditAccount, {
-        where: { tenant_id: tenantId, customer_id: customerId, currency_code: currencyCode },
+        where: { tenant_id: tenantId, customer_id: customerId, currency_code: currencyCode, kind: 'WALLET' },
         lock: { mode: 'pessimistic_write' },
       });
 
@@ -486,8 +515,9 @@ export class CreditService {
           tenant_id: tenantId,
           customer_id: customerId,
           currency_code: currencyCode,
+          kind: 'WALLET',
           mode: 'FINITE',
-          credit_limit: '10000000.0000',
+          credit_limit: null as any,
           current_balance: '0.0000',
         });
         acc = await em.save(CustomerCreditAccount, acc);
@@ -582,6 +612,12 @@ export class CreditService {
         lock: { mode: 'pessimistic_write' },
       });
       if (!acc) return null;
+
+      // Cashback already spent stays spent: the wallet never goes below zero.
+      if (acc.kind === 'WALLET' && MoneyUtil.greaterThan(reversalAmt, acc.current_balance)) {
+        reversalAmt = MoneyUtil.greaterThan(acc.current_balance, '0.0000') ? acc.current_balance : '0.0000';
+      }
+      if (MoneyUtil.lessThanOrEqual(reversalAmt, '0.0000')) return null;
 
       const newBalance = MoneyUtil.subtract(acc.current_balance, reversalAmt);
       acc.current_balance = newBalance;

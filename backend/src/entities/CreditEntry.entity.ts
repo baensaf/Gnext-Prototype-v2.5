@@ -14,7 +14,9 @@ export type CreditEntryType =
   | 'REPAYMENT'
   | 'REVERSAL'
   | 'LOYALTY_CASHBACK'
-  | 'LOYALTY_CASHBACK_REVERSAL';
+  | 'LOYALTY_CASHBACK_REVERSAL'
+  // A balance moved between a customer's credit account and wallet (the 2026-10-12 split).
+  | 'TRANSFER';
 
 @Entity('credit_entry')
 @Index(['account_id', 'posted_at'])
@@ -32,7 +34,7 @@ export class CreditEntry {
   entry_type: CreditEntryType;
 
   @Column({ type: 'numeric', precision: 19, scale: 4 })
-  amount: string; // signed: negative for PURCHASE, positive for REPAYMENT
+  amount: string; // signed: negative for PURCHASE (credit or wallet spend), positive for REPAYMENT and cashback
 
   @Column({ type: 'varchar', length: 3, default: 'IRR' })
   currency_code: string;

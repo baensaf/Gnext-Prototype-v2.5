@@ -56,25 +56,79 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
     expect(result.consideredDiscounts).toEqual([]);
   });
 
-  describe("The customer's own rate", () => {
+  describe("The customer's friends-and-family rate", () => {
     const item = { productId: 'p-1', unitPrice: '100000.0000', quantity: '1' };
+    const drink = { productId: 'p-2', categoryId: 'cat-drinks', unitPrice: '50000.0000', quantity: '1' };
+    const drinksExcluded = () =>
+      settingRepo.find.mockImplementation(async ({ where }: any) =>
+        where?.key === 'DISCOUNT_AUTHORIZATIONS' ? [{ key: 'DISCOUNT_AUTHORIZATIONS', value: { familyExcludedCategoryIds: ['cat-drinks'] } }] : [],
+      );
 
-    it('applies when the cashier gave no discount, and names where it came from', async () => {
-      customerDiscountRepo.findOne.mockResolvedValue({ customer_id: 'cust-1', discount_percentage: '20.00', is_active: true });
+    it('applies at its branch when the cashier gave no discount, and names where it came from', async () => {
+      customerDiscountRepo.findOne.mockResolvedValue({ customer_id: 'cust-1', branch_id: 'b-1', discount_percentage: '20.00', is_active: true });
 
-      const result = await evaluationService.evaluateQuote('t-1', { orderDraft: { customerId: 'cust-1', items: [item] } });
+      const result = await evaluationService.evaluateQuote('t-1', { orderDraft: { customerId: 'cust-1', branchId: 'b-1', items: [item] } });
 
       expect(result.discountTotal).toBe('20000.0000');
-      expect(result.consideredDiscounts).toEqual([expect.objectContaining({ source: 'CUSTOMER', status: 'APPLIED' })]);
+      expect(result.consideredDiscounts).toEqual([expect.objectContaining({ source: 'CUSTOMER', status: 'APPLIED', percent: '20.00' })]);
+      expect(customerDiscountRepo.findOne).toHaveBeenCalledWith({
+        where: { tenant_id: 't-1', customer_id: 'cust-1', branch_id: 'b-1', is_active: true },
+      });
+    });
+
+    it('is only looked up for the branch the order is at', async () => {
+      const result = await evaluationService.evaluateQuote('t-1', { orderDraft: { customerId: 'cust-1', items: [item] } });
+
+      expect(result.discountTotal).toBe('0.0000');
+      expect(customerDiscountRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it('stays off when the cashier took it off the order', async () => {
+      customerDiscountRepo.findOne.mockResolvedValue({ customer_id: 'cust-1', branch_id: 'b-1', discount_percentage: '20.00', is_active: true });
+
+      const result = await evaluationService.evaluateQuote('t-1', {
+        orderDraft: { customerId: 'cust-1', branchId: 'b-1', skipCustomerDiscount: true, items: [item] },
+      });
+
+      expect(result.discountTotal).toBe('0.0000');
+    });
+
+    it("leaves head office's excluded categories at full price", async () => {
+      drinksExcluded();
+      customerDiscountRepo.findOne.mockResolvedValue({ customer_id: 'cust-1', branch_id: 'b-1', discount_percentage: '20.00', is_active: true });
+
+      const result = await evaluationService.evaluateQuote('t-1', {
+        orderDraft: { customerId: 'cust-1', branchId: 'b-1', items: [item, drink] },
+      });
+
+      expect(result.discountTotal).toBe('20000.0000');
+      expect(result.items[1].discountTotal).toBe('0.0000');
+    });
+
+    it('excludes the same categories from a cashier discount given for friends and family, and only that one', async () => {
+      drinksExcluded();
+      const family = await evaluationService.evaluateQuote(
+        't-1',
+        { orderDraft: { items: [item, drink] }, manualDiscount: { calculation_type: 'PERCENTAGE', value: '10', reasonCode: 'FRIENDS_FAMILY' } },
+        'CASHIER',
+      );
+      const other = await evaluationService.evaluateQuote(
+        't-1',
+        { orderDraft: { items: [item, drink] }, manualDiscount: { calculation_type: 'PERCENTAGE', value: '10', reasonCode: 'CUSTOMER_SATISFACTION' } },
+        'CASHIER',
+      );
+
+      expect(family.discountTotal).toBe('10000.0000');
+      expect(other.discountTotal).toBe('15000.0000');
     });
 
     it("gives way to the cashier's own discount, and only one of them applies", async () => {
-      customerDiscountRepo.findOne.mockResolvedValue({ customer_id: 'cust-1', discount_percentage: '20.00', is_active: true });
+      customerDiscountRepo.findOne.mockResolvedValue({ customer_id: 'cust-1', branch_id: 'b-1', discount_percentage: '20.00', is_active: true });
 
       const result = await evaluationService.evaluateQuote(
         't-1',
         {
-          orderDraft: { customerId: 'cust-1', items: [item] },
+          orderDraft: { customerId: 'cust-1', branchId: 'b-1', items: [item] },
           manualDiscount: { calculation_type: 'PERCENTAGE', value: '5.0000' },
         },
         'CASHIER',

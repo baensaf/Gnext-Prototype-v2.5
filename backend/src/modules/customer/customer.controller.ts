@@ -42,11 +42,14 @@ export class CustomerController {
   async getCustomers(
     @Query('search') search?: string,
     @Query('status') status?: string,
-    @Query() query?: PaginationQueryDto & { search?: string; status?: string },
+    @Query() query?: PaginationQueryDto & { search?: string; status?: string; has?: string; branchId?: string },
     @Req() req?: Request,
   ) {
     const tenantId = (req as any).tenantId;
-    return await this.customerService.getCustomers(tenantId, query || { search, status });
+    // A branch account's friends-and-family filter is its own branch, whatever was asked.
+    const ownBranch = (req as any).userBranchId;
+    const scoped = query && ownBranch ? { ...query, branchId: ownBranch } : query;
+    return await this.customerService.getCustomers(tenantId, scoped || { search, status });
   }
 
   // The POS picker: best matches for what the cashier typed (3+ characters), no paging.

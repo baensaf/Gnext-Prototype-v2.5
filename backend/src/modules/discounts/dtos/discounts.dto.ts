@@ -81,6 +81,8 @@ export class DiscountQuoteRequestDto {
     orderType?: string;
     deliveryFee?: string;
     currencyCode?: string;
+    /** The cashier took the customer's friends-and-family rate off this order. */
+    skipCustomerDiscount?: boolean;
   };
 
   @IsOptional()
@@ -93,6 +95,11 @@ export class CreateCustomerDiscountDto {
   @IsUUID()
   @IsNotEmpty()
   customer_id: string;
+
+  /** The branch whose friend or family member this is. A branch account always gets its own. */
+  @IsOptional()
+  @IsUUID()
+  branch_id?: string;
 
   @IsNumberString()
   @IsNotEmpty()

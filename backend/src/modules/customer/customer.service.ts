@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Like, SelectQueryBuilder } from 'typeorm';
 import { Customer } from '../../entities/Customer.entity';
 import { CustomerPhone } from '../../entities/CustomerPhone.entity';
 import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { CustomerCreditAccount } from '../../entities/CustomerCreditAccount.entity';
+import { CustomerDiscount } from '../../entities/CustomerDiscount.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { AuditWriter } from '../audit/audit-writer.service';
@@ -112,32 +113,42 @@ export class CustomerService {
     @InjectRepository(CustomerCreditAccount) private readonly accountRepo: Repository<CustomerCreditAccount>,
     @InjectRepository(OrderHeader) private readonly orderRepo: Repository<OrderHeader>,
     private readonly auditWriter: AuditWriter,
+    @Optional() @InjectRepository(CustomerDiscount) private readonly familyRepo?: Repository<CustomerDiscount>,
   ) {}
 
+  /**
+   * Each customer with their two balances, kept apart: the wallet (cashback, theirs to spend)
+   * and the credit account (what they owe), plus their friends-and-family rates by branch.
+   */
   private async enrichCustomersWithCredit(tenantId: string, customers: Customer[]): Promise<any[]> {
     if (!customers || customers.length === 0) return [];
     const customerIds = customers.map((c) => c.id);
-    const accounts = await this.accountRepo.find({
-      where: { tenant_id: tenantId, customer_id: In(customerIds) },
-    });
-    const accMap = new Map(accounts.map((a) => [a.customer_id, a]));
-    return customers.map((c) => {
-      const acc = accMap.get(c.id);
-      return {
-        ...c,
-        credit_account: acc || null,
-        wallet_balance: acc?.current_balance || '0.0000',
-        credit_limit: acc?.credit_limit || '0.0000',
-      };
-    });
+    const [accounts, family] = await Promise.all([
+      this.accountRepo.find({ where: { tenant_id: tenantId, customer_id: In(customerIds) } }),
+      this.familyRepo ? this.familyRepo.find({ where: { tenant_id: tenantId, customer_id: In(customerIds), is_active: true } }) : [],
+    ]);
+    return customers.map((c) => this.withAccounts(c, accounts.filter((a) => a.customer_id === c.id), family.filter((f) => f.customer_id === c.id)));
+  }
+
+  private withAccounts(c: Customer, accounts: CustomerCreditAccount[], family: CustomerDiscount[]) {
+    const credit = accounts.find((a) => a.kind !== 'WALLET') || null;
+    const wallet = accounts.find((a) => a.kind === 'WALLET') || null;
+    return {
+      ...c,
+      credit_account: credit,
+      wallet_account: wallet,
+      wallet_balance: wallet?.current_balance || '0.0000',
+      credit_limit: credit?.credit_limit || '0.0000',
+      family_discounts: family.map((f) => ({ id: f.id, branch_id: f.branch_id, percent: f.discount_percentage, note: f.note })),
+    };
   }
 
   // Customers
   async getCustomers(
     tenantId: string,
-    query?: PaginationQueryDto & { search?: string; status?: string },
+    query?: PaginationQueryDto & { search?: string; status?: string; has?: string; branchId?: string },
   ): Promise<PagedResponse<any> | any[]> {
-    if (!query || (!query.page && !query.limit && !query.search && !query.status)) {
+    if (!query || (!query.page && !query.limit && !query.search && !query.status && !query.has)) {
       const qb = this.customerRepo.createQueryBuilder('c')
         .where('c.tenant_id = :tenantId', { tenantId })
         .orderBy('c.code', 'ASC');
@@ -156,6 +167,22 @@ export class CustomerService {
       qb.andWhere('c.is_active = true');
     } else if (query.status === 'INACTIVE') {
       qb.andWhere('c.is_active = false');
+    }
+
+    // The list's own filters, so nobody needs a separate page to find these customers:
+    // friends and family (at the given branch, or any), who owes, who has wallet money.
+    if (query.has === 'FAMILY') {
+      qb.andWhere(
+        `EXISTS (SELECT 1 FROM customer_discount f WHERE f.customer_id = c.id AND f.tenant_id = c.tenant_id
+           AND f.is_active AND f.deleted_at IS NULL${query.branchId ? ' AND f.branch_id = :familyBranch' : ''})`,
+        query.branchId ? { familyBranch: query.branchId } : {},
+      );
+    } else if (query.has === 'OWES') {
+      qb.andWhere(`EXISTS (SELECT 1 FROM credit_account a WHERE a.customer_id = c.id AND a.tenant_id = c.tenant_id
+           AND a.kind = 'CREDIT' AND a.current_balance < 0 AND a.deleted_at IS NULL)`);
+    } else if (query.has === 'WALLET') {
+      qb.andWhere(`EXISTS (SELECT 1 FROM credit_account a WHERE a.customer_id = c.id AND a.tenant_id = c.tenant_id
+           AND a.kind = 'WALLET' AND a.current_balance > 0 AND a.deleted_at IS NULL)`);
     }
 
     if (!searching) qb.orderBy('c.created_at', 'DESC').addOrderBy('c.id', 'ASC');
@@ -217,14 +244,12 @@ export class CustomerService {
     if (!customer) throw new NotFoundException('Customer not found');
     const phones = await this.phoneRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
     const addresses = await this.addressRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
-    const creditAccount = await this.accountRepo.findOne({ where: { tenant_id: tenantId, customer_id: id } });
+    const accounts = await this.accountRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
+    const family = this.familyRepo ? await this.familyRepo.find({ where: { tenant_id: tenantId, customer_id: id, is_active: true } }) : [];
     return {
-      ...customer,
+      ...this.withAccounts(customer, accounts, family),
       phones,
       addresses,
-      credit_account: creditAccount || null,
-      wallet_balance: creditAccount?.current_balance || '0.0000',
-      credit_limit: creditAccount?.credit_limit || '0.0000',
     };
   }
 
@@ -315,6 +340,7 @@ export class CustomerService {
       tenant_id: tenantId,
       customer_id: saved.id,
       currency_code: 'IRR',
+      kind: 'CREDIT',
       mode: 'FINITE',
       credit_limit: MoneyUtil.format(data.credit_limit || '0'),
       current_balance: '0.0000',

@@ -423,6 +423,9 @@ export class ReportsService {
             code: a.code || '',
             discount_amount: amtStr,
             reason: a.name || '',
+            // Why it was given: the till's reason (friends and family, staff, ...), or
+            // FRIENDS_FAMILY for a customer's own rate.
+            reason_code: (a.calculation_snapshot as any)?.reasonCode || '',
           };
         });
 
