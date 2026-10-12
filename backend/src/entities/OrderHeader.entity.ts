@@ -153,6 +153,23 @@ export class OrderHeader {
   @Column({ type: 'boolean', default: false })
   after_hours: boolean;
 
+  /**
+   * Served and paid for, but rung up late (a manager's PIN, a reason). The order is stamped
+   * with the moment it was entered, never backdated; `late_served_at` is only the cashier's
+   * rough word for when it really went out.
+   */
+  @Column({ type: 'boolean', default: false })
+  is_late_entry: boolean;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  late_entry_reason: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  late_served_at: Date | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  late_entry_approved_by: string | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   completed_at: Date;
 

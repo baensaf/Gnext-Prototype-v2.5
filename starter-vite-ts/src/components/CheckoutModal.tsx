@@ -117,6 +117,8 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const [creditAvailable, setCreditAvailable] = useState('0');
   // The cashback in the customer's wallet, in rials; the fields start with this, never with debt.
   const [walletHeld, setWalletHeld] = useState('0');
+  // A late entry was charged long ago: its card is recorded from the slip's reference, never sent to the terminal.
+  const [slipRef, setSlipRef] = useState('');
   // The four boxes, for moving the cursor to the one a label filled.
   const cashInput = useRef<HTMLInputElement>(null);
   const walletInput = useRef<HTMLInputElement>(null);
@@ -141,6 +143,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const isFullyPaid = order ? MoneyUtil.isZero(order.due_amount) : false;
   const canUseCredit = !!creditMethod && MoneyUtil.greaterThan(creditAvailable, '0');
   const canUseWallet = !!walletMethod && MoneyUtil.greaterThan(walletHeld, '0');
+  const lateEntry = !!order?.is_late_entry;
   const busy = loading || !!paying;
   // A charge on the terminal that nobody has answered: it comes first, and nothing else is paid.
   const waitingCharges = payments.filter(isWaitingCharge);
@@ -199,6 +202,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   // The change shown is the last cash payment's on this order; the next order starts without it.
   useEffect(() => {
     setChangeDue(null);
+    setSlipRef('');
     setFields(EMPTY);
     changeGiven.current = false;
     finishLater.current = false;
@@ -276,7 +280,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     method: PaymentMethod | undefined,
     amount: string,
     current: OrderHeader,
-    opts: { replaces?: string } = {}
+    opts: { replaces?: string; slip?: string } = {}
   ): Promise<OrderHeader | null> => {
     if (!orderId) return null;
     if (!method) {
@@ -293,6 +297,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         order_id: orderId,
         payment_method_id: method.id,
         amount: over ? left : amount,
+        ...(opts.slip ? { off_terminal: true, reference_number: opts.slip } : {}),
         // One key for this payment: the branch agent may repeat the call that makes its intent after a
         // lost answer, and the cloud answers the intent the first call made (agent-protocol §19.11).
         idempotency_key: newIdempotencyKey(),
@@ -380,6 +385,12 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       return;
     }
 
+    // The slip's reference is what the charge is found by later.
+    if (lateEntry && MoneyUtil.greaterThan(parts.card, '0') && !slipRef.trim()) {
+      setError(t('pos.pay.slipRequired'));
+      return;
+    }
+
     setError(null);
     setPaying('other');
     let current: OrderHeader | null = order;
@@ -393,6 +404,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         const failedCard = payments.find((p) => p.status === 'FAILED' && CARD_KINDS.includes(p.method_kind));
         current = await pay(cardMethod, minOf(parts.card, wholeRials(current.due_amount)), current, {
           replaces: failedCard?.id,
+          slip: lateEntry ? slipRef.trim() : undefined,
         });
       }
       await settle(current);
@@ -404,10 +416,14 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   /** Retry on a failed card row: the same charge again, in its place. */
   const retryCard = async (amount: string, replaces: string) => {
     if (!order || busy) return;
+    if (lateEntry && !slipRef.trim()) {
+      setError(t('pos.pay.slipRequired'));
+      return;
+    }
     setError(null);
     setPaying('card');
     try {
-      await settle(await pay(cardMethod, amount, order, { replaces }));
+      await settle(await pay(cardMethod, amount, order, { replaces, slip: lateEntry ? slipRef.trim() : undefined }));
     } finally {
       setPaying(null);
     }
@@ -607,6 +623,19 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                   : t('pos.pay.noCustomer'),
               })}
               {amountField('card', t('pos.pay.card'))}
+              {/* A late entry's card was charged before it was rung up: only the slip's reference is recorded. */}
+              {lateEntry && !isFullyPaid && (
+                <TextField
+                  size="small"
+                  fullWidth
+                  disabled={locked}
+                  label={t('pos.pay.slipLabel')}
+                  helperText={t('pos.pay.slipHelp')}
+                  value={slipRef}
+                  onChange={(e) => setSlipRef(e.target.value)}
+                  slotProps={{ htmlInput: { dir: 'ltr', maxLength: 64, 'data-testid': 'pay-slip' } }}
+                />
+              )}
             </Stack>
 
             <Divider sx={{ my: 2 }} />

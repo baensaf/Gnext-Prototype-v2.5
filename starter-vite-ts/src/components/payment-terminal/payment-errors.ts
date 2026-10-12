@@ -17,6 +17,7 @@ const PAYMENT_ERROR_KEYS: Record<string, string> = {
   AGENT_OFFLINE: 'pos.pay.errors.agentOffline',
   DECLINED: 'pos.pay.errors.declined',
   CANCELLED: 'pos.pay.errors.cancelled',
+  OFF_TERMINAL_REFERENCE_REQUIRED: 'pos.pay.errors.slipRequired',
 };
 
 /** The locale key for a known code, or null when the server's code has no words here yet. */

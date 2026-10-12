@@ -85,6 +85,12 @@ export interface OrderHeader {
   submitted_at?: string;
   /** Sent while the branch was outside its opening hours. It still sold; this only marks it. */
   after_hours?: boolean;
+  /** Served and paid for earlier, rung up now with a manager's PIN. Never backdated. */
+  is_late_entry?: boolean;
+  late_entry_reason?: string | null;
+  /** The cashier's rough word for when it was served; only explains the entry. */
+  late_served_at?: string | null;
+  late_entry_approved_by?: string | null;
   completed_at?: string;
   cancelled_at?: string;
   /** Snappfood's preparation time, the minutes it lets the store add, and how the order travels. */
@@ -264,7 +270,14 @@ export const orderApi = {
   /** Place a draft: the kitchen ticket and the call number. The key is the press of Place's own. */
   submitOrder: async (
     id: string,
-    data?: { quoteVersion?: string; approvalRequestIds?: string[]; manualDiscount?: ManualDiscount; skipCustomerDiscount?: boolean },
+    data?: {
+      quoteVersion?: string;
+      approvalRequestIds?: string[];
+      manualDiscount?: ManualDiscount;
+      skipCustomerDiscount?: boolean;
+      /** A forgotten order rung up now: the reason, roughly when it was served, the manager's approval. */
+      lateEntry?: { reason: string; servedAt?: string; approvalRequestId: string };
+    },
     options?: { idempotencyKey?: string }
   ): Promise<OrderHeader> => {
     const res = await httpClient.post(`/api/v1/orders/${id}/submit`, data || {}, idempotencyHeaders(options?.idempotencyKey));
