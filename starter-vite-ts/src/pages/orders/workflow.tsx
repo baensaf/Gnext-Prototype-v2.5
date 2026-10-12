@@ -1126,6 +1126,9 @@ export function OrdersWorkflowPage() {
           />
           {renderProgressChip(row.status)}
           {renderSnappfoodChips(row)}
+          {row.has_unconfirmed_card_charge && (
+            <Chip size="small" color="warning" label={t('payments.unconfirmed.status')} sx={{ fontWeight: 700 }} />
+          )}
         </Stack>
       ),
     },

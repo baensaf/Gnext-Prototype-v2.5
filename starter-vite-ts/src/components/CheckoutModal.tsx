@@ -15,6 +15,7 @@ import {
   Button,
   Divider,
   TextField,
+  ButtonBase,
   Typography,
   DialogTitle,
   DialogContent,
@@ -32,8 +33,10 @@ import { printingApi } from 'src/api/printingApi';
 import { settingsApi } from 'src/api/settingsApi';
 import { customerApi } from 'src/api/customerApi';
 
+import { toast } from 'src/components/snackbar';
 import { VersionTag } from 'src/components/version-tag';
-import { toast, showErrorToast } from 'src/components/snackbar';
+import { ConfirmDialog } from 'src/components/confirm-dialog';
+import { paymentErrorKey, paymentErrorText } from 'src/components/payment-terminal/payment-errors';
 import { UnconfirmedChargeActions } from 'src/components/payment-terminal/unconfirmed-charge-actions';
 
 /** The API sends "42292000.0000"; the form works on whole rials. */
@@ -75,6 +78,11 @@ type FieldName = 'cash' | 'wallet' | 'credit' | 'card';
 
 const EMPTY: Fields = { cash: '', wallet: '', credit: '', card: '', cardTyped: false };
 
+/** How often the dialog asks again while a card charge waits on the terminal. */
+const WAITING_POLL_MS = 4000;
+
+/** A card charge the terminal has not answered: the order takes no other payment until it is. */
+const isWaitingCharge = (p: Payment) => p.status === 'PROCESSING';
 
 interface CheckoutModalProps {
   open: boolean;
@@ -109,10 +117,20 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const [creditAvailable, setCreditAvailable] = useState('0');
   // The cashback in the customer's wallet, in rials; the fields start with this, never with debt.
   const [walletHeld, setWalletHeld] = useState('0');
+  // The four boxes, for moving the cursor to the one a label filled.
   const cashInput = useRef<HTMLInputElement>(null);
+  const walletInput = useRef<HTMLInputElement>(null);
+  const creditInput = useRef<HTMLInputElement>(null);
+  const cardInput = useRef<HTMLInputElement>(null);
+  const inputs = { cash: cashInput, wallet: walletInput, credit: creditInput, card: cardInput };
+  // Closing while a card charge waits on the terminal asks first.
+  const [confirmClose, setConfirmClose] = useState(false);
   // Cash was handed over beyond the bill on this order, and the screen waits for the cashier.
   const changeGiven = useRef(false);
   const finishLater = useRef(false);
+  // A charge answered after the cashier closed the dialog must not run the caller's "paid" step.
+  const openRef = useRef(open);
+  openRef.current = open;
 
   const cashMethod = paymentMethods.find((m) => m.kind === 'CASH');
   const cardMethod = paymentMethods.find((m) => CARD_KINDS.includes(m.kind));
@@ -124,9 +142,14 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const canUseCredit = !!creditMethod && MoneyUtil.greaterThan(creditAvailable, '0');
   const canUseWallet = !!walletMethod && MoneyUtil.greaterThan(walletHeld, '0');
   const busy = loading || !!paying;
+  // A charge on the terminal that nobody has answered: it comes first, and nothing else is paid.
+  const waitingCharges = payments.filter(isWaitingCharge);
+  const waiting = waitingCharges.length > 0;
 
   /** The fields for what is left: the wallet offered once per order, card for the rest. */
   const fieldsFor = (o: OrderHeader | null, balance: string, paid: Payment[]): Fields => {
+    // Nothing is offered while a charge waits: Card must not be filled with what that charge covers.
+    if (paid.some(isWaitingCharge)) return { ...EMPTY, cardTyped: true };
     const left = wholeRials(o?.due_amount);
     const walletUsed = paid.some((p) => p.method_kind === 'WALLET' && p.status === 'SUCCEEDED');
     const wallet = !walletUsed && MoneyUtil.greaterThan(balance, '0') ? minOf(balance, left) : '0';
@@ -161,7 +184,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       setFields(fieldsFor(o, active.some((m) => m.kind === 'WALLET') ? held : '0', paid));
       setError(null);
     } catch (err: any) {
-      setError(err.detail || t('pos.pay.loadFailed'));
+      setError(paymentErrorText(t, err, t('pos.pay.loadFailed')));
     } finally {
       setLoading(false);
     }
@@ -183,11 +206,11 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
   // The cashier always starts typing in Cash, and comes back to it after each payment.
   useEffect(() => {
-    if (!open || !order || busy || isFullyPaid) return;
+    if (!open || !order || busy || isFullyPaid || waiting) return;
     const input = cashInput.current;
     input?.focus();
     input?.select();
-  }, [open, order, busy, isFullyPaid]);
+  }, [open, order, busy, isFullyPaid, waiting]);
 
   const cash = rialsOf(fields.cash);
   const wallet = rialsOf(fields.wallet);
@@ -215,6 +238,31 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       const typed = MoneyUtil.add(MoneyUtil.add(rialsOf(next.cash), rialsOf(next.wallet)), rialsOf(next.credit));
       const rest = positive(MoneyUtil.subtract(due, typed));
       return { ...next, card: MoneyUtil.isZero(rest) ? '' : toToman(rest) };
+    });
+  };
+
+  /**
+   * Clicking a label puts the whole bill in that box and empties the others, the wallet too.
+   * Wallet and Customer credit stop at their cap and Card takes the rest. It only fills: Enter or
+   * Pay still pays. Clicking Card counts as typing in Card, so Card is not worked out again.
+   */
+  const fillWhole = (name: FieldName) => {
+    if (busy || isFullyPaid || waiting) return;
+    setError(null);
+    const cap = name === 'credit' ? minOf(creditAvailable, due) : name === 'wallet' ? minOf(walletHeld, due) : due;
+    const rest = positive(MoneyUtil.subtract(due, cap));
+    const show = (rials: string) => (MoneyUtil.isZero(rials) ? '' : toToman(rials));
+    setFields({
+      ...EMPTY,
+      [name]: show(cap),
+      // Card is the rest after a capped wallet or credit; for Card itself the whole bill is its own.
+      ...(name === 'card' ? {} : { card: show(rest) }),
+      cardTyped: name === 'card',
+    });
+    // After the boxes redraw, so Enter pays right away.
+    window.requestAnimationFrame(() => {
+      inputs[name].current?.focus();
+      inputs[name].current?.select();
     });
   };
 
@@ -260,9 +308,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       }
       return res.order;
     } catch (err: any) {
-      const errorMsg = err.detail || t('pos.pay.failed');
+      const errorMsg = paymentErrorText(t, err, t('pos.pay.failed'));
       setError(errorMsg);
-      showErrorToast(err, errorMsg);
+      // A server fault still toasts through the http client; a refusal is read in the dialog.
       return null;
     }
   };
@@ -282,14 +330,26 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     setCreditAvailable(available);
     setWalletHeld(held);
     setFields(fieldsFor(latest, walletMethod ? held : '0', paid));
-    if (!MoneyUtil.isZero(latest.due_amount) || !onPaymentComplete) return;
+    if (!MoneyUtil.isZero(latest.due_amount) || !onPaymentComplete || !openRef.current) return;
     // A screen that closes the form once the order is paid would hide the change to hand back;
     // it closes when the cashier does.
     if (changeGiven.current) finishLater.current = true;
     else onPaymentComplete();
   };
 
+  /** A card charge still on the terminal: closing is allowed, after a warning (the order list flags it). */
+  const chargeInFlight = !isFullyPaid && (paying === 'card' || waiting);
+
   const close = () => {
+    if (chargeInFlight) {
+      setConfirmClose(true);
+      return;
+    }
+    closeNow();
+  };
+
+  const closeNow = () => {
+    setConfirmClose(false);
     if (finishLater.current && onPaymentComplete) {
       finishLater.current = false;
       onPaymentComplete();
@@ -298,7 +358,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
   /** Enter: wallet, customer credit and cash first, as they are instant, then the card on the terminal. */
   const submit = async (override?: { cash?: string; card?: string }) => {
-    if (!order || busy || isFullyPaid) return;
+    if (!order || busy || isFullyPaid || waiting) return;
     const parts = { cash, wallet, credit, card, ...override };
     const total = MoneyUtil.add(MoneyUtil.add(MoneyUtil.add(parts.cash, parts.wallet), parts.credit), parts.card);
     if (!MoneyUtil.greaterThan(total, '0')) {
@@ -363,6 +423,21 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const payRestRef = useRef(payRest);
   payRestRef.current = payRest;
 
+  // A charge that waits on the terminal is answered by the branch agent, not by this screen:
+  // look again every few seconds, and set the form up afresh once nothing waits any more.
+  const settleRef = useRef(settle);
+  settleRef.current = settle;
+  useEffect(() => {
+    if (!open || !orderId || !waiting || paying) return undefined;
+    const timer = window.setInterval(async () => {
+      const paid = await paymentApi.getOrderPayments(orderId).catch(() => null);
+      if (!paid) return;
+      if (paid.some(isWaitingCharge)) setPayments(paid);
+      else settleRef.current(null);
+    }, WAITING_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [open, orderId, waiting, paying]);
+
   useEffect(() => {
     if (!open || isFullyPaid) return undefined;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -391,9 +466,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       setError(null);
       toast.success(t('pos.paymentVoided', 'Payment attempt voided'));
     } catch (err: any) {
-      const errorMsg = err.detail || t('pos.pay.voidFailed');
-      setError(errorMsg);
-      showErrorToast(err, errorMsg);
+      setError(paymentErrorText(t, err, t('pos.pay.voidFailed')));
     } finally {
       setLoading(false);
     }
@@ -418,20 +491,31 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const methodName = (p: Payment) => paymentMethods.find((m) => m.id === p.method_id)?.name || p.method_kind;
   const money = (rials: string) => `${MoneyUtil.formatCurrency(rials)} ${currency}`;
 
-  // A cancelled attempt took no money and has nothing left to do.
-  const parts = payments.filter((p) => p.status !== 'CANCELLED');
-  const locked = busy || isFullyPaid;
+  // A cancelled attempt took no money and has nothing left to do; nor has a charge answered "not
+  // charged". A charge still waiting on the terminal is shown at the top, not here.
+  const parts = payments.filter(
+    (p) => p.status !== 'CANCELLED' && !isWaitingCharge(p) && !(p.status === 'FAILED' && p.failure_code === 'NOT_CHARGED')
+  );
+  const locked = busy || isFullyPaid || waiting;
 
   const amountField = (
     name: FieldName,
     label: string,
-    opts: { disabled?: boolean; hint?: React.ReactNode; inputRef?: React.Ref<HTMLInputElement> } = {}
+    opts: { disabled?: boolean; hint?: React.ReactNode } = {}
   ) => (
     <Stack direction="row" sx={{ alignItems: 'center', gap: 2 }}>
       <Box sx={{ width: 110, flexShrink: 0 }}>
-        <Typography variant="body1" sx={{ fontWeight: 600, color: opts.disabled ? 'text.disabled' : 'text.primary' }}>
-          {label}
-        </Typography>
+        {/* Click to put the whole bill in this box; a greyed-out box's label does nothing. */}
+        <ButtonBase
+          disabled={locked || opts.disabled}
+          onClick={() => fillWhole(name)}
+          sx={{ display: 'block', textAlign: 'start', borderRadius: 0.5, '&:hover .MuiTypography-root': { color: 'primary.main' } }}
+          data-testid={`pay-fill-${name}`}
+        >
+          <Typography variant="body1" sx={{ fontWeight: 600, color: opts.disabled ? 'text.disabled' : 'text.primary' }}>
+            {label}
+          </Typography>
+        </ButtonBase>
         {opts.hint && (
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.2 }}>
             {opts.hint}
@@ -444,7 +528,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         // Greyed out but still in the Tab order, so Tab lands in the same place on every order.
         disabled={locked}
         sx={opts.disabled ? { '& .MuiInputBase-root': { bgcolor: 'action.disabledBackground' } } : undefined}
-        inputRef={opts.inputRef}
+        inputRef={inputs[name]}
         value={fields[name] ? MoneyUtil.formatCurrency(fromToman(fields[name])) : ''}
         placeholder="0"
         onChange={(e) => setField(name, e.target.value)}
@@ -487,6 +571,12 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
           </Alert>
         )}
 
+        {/* A card charge nobody has answered comes first: nothing else is paid until it is. */}
+        {order &&
+          waitingCharges.map((p) => (
+            <UnconfirmedChargeActions key={p.id} payment={p} amountText={money(p.amount)} onChanged={() => settle(null)} />
+          ))}
+
         {order && (
           <Box
             onKeyDown={(e: React.KeyboardEvent) => {
@@ -499,7 +589,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
           >
             {/* The same four rows for every order, in the same place. */}
             <Stack spacing={1.5} sx={{ pt: 1 }}>
-              {amountField('cash', t('pos.pay.cash'), { inputRef: cashInput })}
+              {amountField('cash', t('pos.pay.cash'))}
               {amountField('wallet', t('pos.pay.wallet'), {
                 disabled: !canUseWallet,
                 hint: order.customer_id
@@ -575,17 +665,13 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
             {parts.length > 0 && (
               <Stack divider={<Divider flexItem />} sx={{ mt: 2 }}>
                 {parts.map((p) => {
-                  const unconfirmed = p.status === 'PROCESSING' && !!p.needs_terminal_check;
                   const failed = p.status === 'FAILED';
                   const isVoidable = p.status === 'PENDING' || failed;
                   const isCard = CARD_KINDS.includes(p.method_kind);
                   // What this charge was for, or what is left of it.
                   const again = minOf(wholeRials(p.amount), due);
-                  const status = unconfirmed
-                    ? t('payments.unconfirmed.status', 'Check terminal')
-                    : failed
-                      ? t('pos.pay.statusFailed')
-                      : t('pos.pay.statusWaiting');
+                  const status = failed ? t('pos.pay.statusFailed') : t('pos.pay.statusWaiting');
+                  const failureKey = paymentErrorKey(p.failure_code);
                   return (
                     <Box key={p.id} sx={{ py: 0.75 }}>
                       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
@@ -597,12 +683,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                           variant="body2"
                           sx={{
                             fontWeight: 600,
-                            color:
-                              p.status === 'SUCCEEDED'
-                                ? 'text.primary'
-                                : failed || unconfirmed
-                                  ? 'error.main'
-                                  : 'warning.dark',
+                            color: p.status === 'SUCCEEDED' ? 'text.primary' : failed ? 'error.main' : 'warning.dark',
                           }}
                         >
                           {p.status !== 'SUCCEEDED' && `${status} · `}
@@ -611,10 +692,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                       </Stack>
                       {failed && p.failure_message && (
                         <Typography variant="caption" color="error" sx={{ display: 'block' }}>
-                          {p.failure_message}
+                          {failureKey ? t(failureKey) : p.failure_message}
                         </Typography>
                       )}
-                      {unconfirmed && <UnconfirmedChargeActions payment={p} onChanged={loadData} />}
                       {isVoidable && !isFullyPaid && (
                         <Stack direction="row" spacing={0.5} sx={{ mt: 0.25, flexWrap: 'wrap' }}>
                           {failed && isCard && (
@@ -648,7 +728,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         {!isFullyPaid && (
           <Button
             variant="contained"
-            disabled={busy || !order}
+            disabled={busy || !order || waiting}
             onClick={() => submit()}
             startIcon={paying ? <CircularProgress size={16} color="inherit" /> : undefined}
             sx={{ minWidth: 110, fontWeight: 700 }}
@@ -660,6 +740,18 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
           </Button>
         )}
       </DialogActions>
+
+      {/* Closing with a card charge still on the terminal asks first; the order is flagged in Orders. */}
+      <ConfirmDialog
+        open={confirmClose}
+        onClose={() => setConfirmClose(false)}
+        title={t('pos.pay.closeWaitingTitle')}
+        content={t('pos.pay.closeWaiting')}
+        confirmColor="warning"
+        confirmLabel={t('pos.pay.closeAnyway')}
+        cancelLabel={t('pos.pay.stay')}
+        onConfirm={closeNow}
+      />
     </Dialog>
   );
 }
