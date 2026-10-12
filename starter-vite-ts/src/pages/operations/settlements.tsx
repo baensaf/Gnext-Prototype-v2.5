@@ -102,8 +102,9 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedCourierId, setSelectedCourierId] = useState<string | null>(null);
   const [previewData, setPreviewData] = useState<any>(null);
-  // The settle dialog: the card slip per ride (rials, by assignment) and the cash handed over.
-  const [cardBy, setCardBy] = useState<Record<string, string>>({});
+  // The settle dialog: the cash the courier hands over per ride (rials, by assignment) and the
+  // total counted. The card side is never typed: it is what the ride owed minus that cash.
+  const [cashBy, setCashBy] = useState<Record<string, string>>({});
   const [cashCounted, setCashCounted] = useState<string | null>(null);
   const [settling, setSettling] = useState(false);
   const [settleError, setSettleError] = useState<string | null>(null);
@@ -156,7 +157,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
   const handleStartCreateSettlement = async (courierId: string) => {
     setSelectedCourierId(courierId);
     setSettleError(null);
-    setCardBy({});
+    setCashBy({});
     setCashCounted(null);
     try {
       const res = await axios.post('/api/v1/delivery/settlements/preview', { courier_id: courierId, branch_id: branchId });
@@ -167,24 +168,24 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
     }
   };
 
-  // What each delivered ride owed, how much of it the card slip took, and the cash that is left.
+  // What each delivered ride owed, the cash typed for it (starts at 0), and the card that is left.
   const settleRows = (previewData?.lines || []).map((l: any) => {
     const delivered = l.delivery_status === 'DELIVERED';
     const owed = delivered ? MoneyUtil.add(l.expected_cash || '0', l.expected_pos || '0', 2) : '0.00';
-    const typed = cardBy[l.assignment_id];
-    const card = typed !== undefined && MoneyUtil.isValid(typed) ? typed : l.expected_pos || '0';
-    const cardTaken = MoneyUtil.greaterThan(card, owed) ? owed : card;
-    return { ...l, delivered, owed, card, cash: MoneyUtil.subtract(owed, cardTaken, 2) };
+    const typed = cashBy[l.assignment_id];
+    const cash = typed !== undefined && MoneyUtil.isValid(typed) ? typed : '0';
+    const cashOver = MoneyUtil.greaterThan(cash, owed);
+    return { ...l, delivered, owed, cash, cashOver, card: cashOver ? '0.00' : MoneyUtil.subtract(owed, cash, 2) };
   });
   const settleExpectedCash = MoneyUtil.sum(settleRows.map((r: any) => r.cash), 2);
   const settleCash = cashCounted ?? settleExpectedCash;
   const settleCashGap = MoneyUtil.subtract(MoneyUtil.isValid(settleCash) ? settleCash : '0', settleExpectedCash, 2);
-  const settleCardOver = settleRows.some((r: any) => MoneyUtil.greaterThan(r.card, r.owed));
+  const settleCashOver = settleRows.some((r: any) => r.cashOver);
 
   // One step: the server makes the batch, records the payments and closes it. A gap in the
   // money comes back as APPROVAL_REQUIRED; the manager's PIN then sends the same settlement.
   const handleSettle = async (approvalRequestId?: string) => {
-    if (!selectedCourierId) return;
+    if (!selectedCourierId || settleCashOver) return;
     setSettling(true);
     setSettleError(null);
     try {
@@ -236,19 +237,20 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
   // What the order still owed; the server keeps the line's cash and card expectations summing to it.
   const lineOwed = (l: SettlementLine) => MoneyUtil.add(l.expected_cash || '0', l.expected_pos || '0', 2);
 
-  const handleLineActualChange = (lineId: string, field: 'actual_cash' | 'actual_pos', value: string) => {
-    setEditableLines((prev) =>
-      prev.map((l) => {
-        if (l.id !== lineId) return l;
-        if (field === 'actual_cash') return { ...l, actual_cash: value };
-        // The card slip decides the split: the rest of what was owed is taken as cash, and the
-        // cashier changes the cash only when the courier hands over something else.
-        const card = MoneyUtil.isValid(value) ? value : '0';
-        const rest = MoneyUtil.subtract(lineOwed(l), card, 2);
-        return { ...l, actual_pos: value, actual_cash: MoneyUtil.greaterThan(rest, '0') ? rest : '0.00' };
-      })
-    );
+  // The cashier types the cash the courier handed over for the order; the card is what is left.
+  const handleLineCashChange = (lineId: string, value: string) => {
+    setEditableLines((prev) => prev.map((l) => (l.id === lineId ? { ...l, actual_cash: value } : l)));
   };
+
+  const lineCash = (l: SettlementLine) => (MoneyUtil.isValid(l.actual_cash) ? l.actual_cash : '0');
+  const lineCashOver = (l: SettlementLine) => MoneyUtil.greaterThan(lineCash(l), lineOwed(l));
+  // A draft works the card out from the cash; a closed batch shows what was saved.
+  const lineCard = (l: SettlementLine, draft: boolean) => {
+    if (!draft) return l.actual_pos || '0';
+    return lineCashOver(l) ? '0.00' : MoneyUtil.subtract(lineOwed(l), lineCash(l), 2);
+  };
+  const detailIsDraft = activeSettlementDetail?.status === 'DRAFT';
+  const detailCashOver = detailIsDraft && editableLines.some(lineCashOver);
 
   // The server sends a ride's status and the payment method as codes; a cashier reads words.
   const rideStatusLabel = (status?: string) => {
@@ -257,19 +259,19 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
   };
 
   const paidByLabel = (l: SettlementLine) => {
-    const card = MoneyUtil.isValid(l.actual_pos) && MoneyUtil.greaterThan(l.actual_pos, '0');
-    const cash = MoneyUtil.isValid(l.actual_cash) && MoneyUtil.greaterThan(l.actual_cash, '0');
+    const card = MoneyUtil.greaterThan(lineCard(l, detailIsDraft), '0');
+    const cash = MoneyUtil.greaterThan(lineCash(l), '0');
     if (card && cash) return t('settlements.detailModal.methodSplit');
     return card ? t('settlements.detailModal.methodCard') : t('settlements.detailModal.methodCash');
   };
 
   // Saves the cashier's figures. Closing saves first, so what is on screen is what closes.
   const saveLines = async () => {
-    if (!activeSettlementDetail) return;
+    if (!activeSettlementDetail || detailCashOver) return;
     const linePayload = editableLines.map((l) => ({
       id: l.id,
       actual_cash: MoneyUtil.format(l.actual_cash || '0', 2),
-      actual_pos: MoneyUtil.format(l.actual_pos || '0', 2),
+      actual_pos: MoneyUtil.format(lineCard(l, true), 2),
       receipt_verified: l.receipt_verified,
     }));
 
@@ -294,7 +296,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
   };
 
   const handleCloseSettlement = async () => {
-    if (!activeSettlementDetail) return;
+    if (!activeSettlementDetail || detailCashOver) return;
     try {
       // Closing used to skip saving, so card and cash typed in and not saved were lost.
       await saveLines();
@@ -499,7 +501,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
         </Alert>
       )}
 
-      {/* DIALOG: Settle a courier. The card slip per ride, the cash handed over, and done. */}
+      {/* DIALOG: Settle a courier. The cash per ride, the cash handed over, and done. */}
       <Dialog open={createDialogOpen} onClose={() => !settling && setCreateDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{t('settlements.settleModal.title', { name: previewData?.courier_name || '' })}</DialogTitle>
         <DialogContent dividers>
@@ -516,8 +518,8 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                       <TableCell>{t('settlements.previewModal.orderNumber')}</TableCell>
                       <TableCell>{t('settlements.previewModal.status')}</TableCell>
                       <TableCell align="right">{t('settlements.settleModal.owed')}</TableCell>
-                      <TableCell align="right">{t('settlements.settleModal.card')}</TableCell>
                       <TableCell align="right">{t('settlements.settleModal.cash')}</TableCell>
+                      <TableCell align="right">{t('settlements.settleModal.card')}</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -539,17 +541,17 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                           {r.delivered ? (
                             <TextField
                               size="small"
-                              value={amountText(r.card)}
+                              value={amountText(r.cash)}
                               placeholder="0"
-                              onChange={(e) => setCardBy((prev) => ({ ...prev, [r.assignment_id]: amountFromText(e.target.value) || '0' }))}
+                              onChange={(e) => setCashBy((prev) => ({ ...prev, [r.assignment_id]: amountFromText(e.target.value) || '0' }))}
                               onFocus={(e) => e.target.select()}
-                              error={MoneyUtil.greaterThan(r.card, r.owed)}
+                              error={r.cashOver}
                               slotProps={{ htmlInput: { inputMode: 'numeric', dir: 'ltr', style: { textAlign: 'right', padding: '4px 8px' } } }}
                             />
                           ) : null}
                         </TableCell>
                         <TableCell align="right" dir="ltr">
-                          {r.delivered ? `${MoneyUtil.formatCurrency(r.cash)} ${currency}` : null}
+                          {r.delivered ? `${MoneyUtil.formatCurrency(r.card)} ${currency}` : null}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -577,11 +579,11 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                 />
               </Stack>
 
-              {(!MoneyUtil.isZero(settleCashGap) || settleCardOver) && (
+              {(!MoneyUtil.isZero(settleCashGap) || settleCashOver) && (
                 <Alert severity="warning">
-                  {!MoneyUtil.isZero(settleCashGap)
-                    ? t('settlements.settleModal.gap', { amount: `${MoneyUtil.formatCurrency(settleCashGap)} ${currency}` })
-                    : t('settlements.settleModal.cardOver')}
+                  {settleCashOver
+                    ? t('settlements.settleModal.cashOver')
+                    : t('settlements.settleModal.gap', { amount: `${MoneyUtil.formatCurrency(settleCashGap)} ${currency}` })}
                 </Alert>
               )}
               {settleError && <Alert severity="error">{settleError}</Alert>}
@@ -592,7 +594,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
           <Button disabled={settling} onClick={() => setCreateDialogOpen(false)}>
             {t('settlements.previewModal.cancel')}
           </Button>
-          <Button variant="contained" color="primary" disabled={settling} onClick={() => handleSettle()}>
+          <Button variant="contained" color="primary" disabled={settling || settleCashOver} onClick={() => handleSettle()}>
             {t('settlements.settleModal.submit')}
           </Button>
         </DialogActions>
@@ -685,14 +687,14 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                       value={toToman(adjAmount)}
                       onChange={(e) => setAdjAmount(fromToman(e.target.value))}
                     />
-                    <Button variant="outlined" size="small" onClick={handleSaveSettlementDraft}>
+                    <Button variant="outlined" size="small" disabled={detailCashOver} onClick={handleSaveSettlementDraft}>
                       {t('settlements.detailModal.recalculateSave')}
                     </Button>
                   </Stack>
                 )}
 
-                {/* Line Items Table: the cashier types each order's card amount from the courier's
-                    slip; the cash fills in as the rest of what the order owed. */}
+                {/* Line Items Table: the cashier types the cash the courier handed over for each
+                    order; the card is worked out as the rest of what the order owed. */}
                 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
                   {t('settlements.detailModal.lineItemsTitle')}
                 </Typography>
@@ -701,6 +703,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                     {t('settlements.detailModal.lineHint')}
                   </Typography>
                 )}
+                {detailCashOver && <Alert severity="error">{t('settlements.detailModal.cashOver')}</Alert>}
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
                     <TableHead>
@@ -710,10 +713,10 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                         <TableCell>{t('settlements.detailModal.status')}</TableCell>
                         <TableCell align="right">{t('settlements.detailModal.toCollect')}</TableCell>
                         <TableCell align="right" width={140}>
-                          {t('settlements.detailModal.cardSlip')}
+                          {t('settlements.detailModal.cashHanded')}
                         </TableCell>
                         <TableCell align="right" width={140}>
-                          {t('settlements.detailModal.cashHanded')}
+                          {t('settlements.detailModal.cardSlip')}
                         </TableCell>
                         <TableCell>{t('settlements.detailModal.method')}</TableCell>
                       </TableRow>
@@ -736,26 +739,17 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                               <TextField
                                 size="small"
                                 variant="outlined"
-                                value={toToman(line.actual_pos)}
-                                onChange={(e) => handleLineActualChange(line.id, 'actual_pos', fromToman(e.target.value))}
-                                slotProps={{ htmlInput: { style: { textAlign: 'right', padding: '4px 8px' } } }}
-                              />
-                            ) : (
-                              <span dir="ltr">{MoneyUtil.formatCurrency(line.actual_pos || 0)} {currency}</span>
-                            )}
-                          </TableCell>
-                          <TableCell align="right">
-                            {activeSettlementDetail.status === 'DRAFT' ? (
-                              <TextField
-                                size="small"
-                                variant="outlined"
                                 value={toToman(line.actual_cash)}
-                                onChange={(e) => handleLineActualChange(line.id, 'actual_cash', fromToman(e.target.value))}
+                                onChange={(e) => handleLineCashChange(line.id, fromToman(e.target.value))}
+                                error={lineCashOver(line)}
                                 slotProps={{ htmlInput: { style: { textAlign: 'right', padding: '4px 8px' } } }}
                               />
                             ) : (
                               <span dir="ltr">{MoneyUtil.formatCurrency(line.actual_cash || 0)} {currency}</span>
                             )}
+                          </TableCell>
+                          <TableCell align="right" dir="ltr">
+                            {MoneyUtil.formatCurrency(lineCard(line, detailIsDraft))} {currency}
                           </TableCell>
                           <TableCell>{paidByLabel(line)}</TableCell>
                         </TableRow>
@@ -770,7 +764,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
               <Button onClick={() => setDetailDialogOpen(false)}>{t('settlements.detailModal.closeWindow')}</Button>
 
               {activeSettlementDetail.status === 'DRAFT' && (
-                <Button variant="contained" color="success" onClick={handleCloseSettlement}>
+                <Button variant="contained" color="success" disabled={detailCashOver} onClick={handleCloseSettlement}>
                   {t('settlements.detailModal.finalizeClose')}
                 </Button>
               )}
