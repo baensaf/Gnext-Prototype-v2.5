@@ -38,7 +38,8 @@ describe('Fullstack Money Conformance & Decimal-Safe Financial Business Logic Sp
       'pages/operations/delivery.tsx',
       'pages/operations/settlements.tsx',
       'pages/operations/cash-drawer.tsx',
-      'pages/orders/refunds.tsx',
+      'pages/orders/refunds-list.tsx',
+      'components/orders/RefundDialog.tsx',
       'pages/orders/workflow.tsx',
       'components/CheckoutModal.tsx',
     ];
