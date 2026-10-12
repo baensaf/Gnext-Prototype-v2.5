@@ -133,9 +133,11 @@ export class TerminalResolutionDto {
   @MaxLength(160)
   rrn?: string;
 
+  /** An optional note for the audit log; the cashier no longer has to say how they checked. */
+  @IsOptional()
   @IsString()
   @MaxLength(500)
-  reason: string;
+  reason?: string;
 }
 
 export class SettlementAccountCreateDto {

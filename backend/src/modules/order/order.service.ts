@@ -241,7 +241,7 @@ export class OrderService {
     const orderIds = rows.map((o) => o.id);
     const customerIds = [...new Set(rows.map((o) => o.customer_id).filter(Boolean))];
 
-    const [customers, deliveries] = await Promise.all([
+    const [customers, deliveries, unconfirmedCharges] = await Promise.all([
       customerIds.length
         ? this.dataSource.query(
             `SELECT id,
@@ -259,7 +259,15 @@ export class OrderService {
           ORDER BY d.order_id, d.created_at DESC`,
         [tenantId, orderIds],
       ),
+      // A card charge the terminal has not answered yet: the Orders list flags the order
+      // "check terminal" until someone answers it at the pay dialog.
+      this.dataSource.query(
+        `SELECT DISTINCT order_id FROM payment
+          WHERE tenant_id = $1 AND order_id = ANY($2::uuid[]) AND status = 'PROCESSING'`,
+        [tenantId, orderIds],
+      ),
     ]);
+    const unconfirmedOrders = new Set<string>(unconfirmedCharges.map((r: any) => r.order_id));
 
     const customerById = new Map<string, any>(customers.map((c: any) => [c.id, c]));
     const deliveryByOrder = new Map<string, any>(deliveries.map((d: any) => [d.order_id, d]));
@@ -289,6 +297,7 @@ export class OrderService {
         delivery_state: delivery?.state || null,
         courier_name: delivery?.courier_name || null,
         delivery_address: delivery?.address_text || null,
+        has_unconfirmed_card_charge: unconfirmedOrders.has(o.id),
       };
     });
   }

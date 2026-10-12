@@ -152,9 +152,11 @@ export class PaymentService {
         ],
       });
       if (activeIntent) {
-        throw new ConflictException(
-          `An active payment intent (${activeIntent.payment_number} - ${activeIntent.status}) already exists for order ${order.id}`,
-        );
+        throw new ConflictException({
+          code: 'ACTIVE_PAYMENT_INTENT',
+          title: 'Payment Already Waiting',
+          detail: `An active payment intent (${activeIntent.payment_number} - ${activeIntent.status}) already exists for order ${order.id}`,
+        });
       }
 
       // Check idempotency key deduplication
@@ -397,7 +399,7 @@ export class PaymentService {
   async resolveTerminal(
     tenantId: string,
     id: string,
-    dto: { outcome: 'APPROVED' | 'NOT_CHARGED'; rrn?: string; reason: string },
+    dto: { outcome: 'APPROVED' | 'NOT_CHARGED'; rrn?: string; reason?: string },
     userId?: string,
     correlationId?: string,
   ) {

@@ -105,9 +105,12 @@ export class PaymentController {
     return await this.paymentService.checkTerminal(tenantId, id, userId, (req as any).correlationId);
   }
 
-  /** A manager settles an unconfirmed card charge from the terminal's own report. */
+  /**
+   * The cashier settles an unconfirmed card charge from the terminal's slip: charged (with the
+   * slip's RRN) or not charged. Not manager-only: the person at the till holds the slip, and the
+   * audit entry records who answered.
+   */
   @BranchOwned(Payment, PAYMENT_OF_BRANCH)
-  @Roles(...MANAGER_AND_ABOVE)
   @Post('payments/:id/resolve-terminal')
   async resolveTerminal(@Param('id') id: string, @Body() body: TerminalResolutionDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
