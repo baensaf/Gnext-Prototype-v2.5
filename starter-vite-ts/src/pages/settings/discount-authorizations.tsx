@@ -10,11 +10,13 @@ import {
   Button,
   TextField,
   Typography,
+  Autocomplete,
   CircularProgress,
 } from '@mui/material';
 
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
+import { catalogApi } from 'src/api/catalogApi';
 import { httpClient as axios } from 'src/api/httpClient';
 import { DashboardContent } from 'src/layouts/dashboard';
 import { useIsHeadOffice } from 'src/store/useAuthStore';
@@ -33,6 +35,8 @@ interface RolePolicy {
   managerMaxFixed: number;
   adminMaxPct: number;
   adminMaxFixed: number;
+  /** Categories a friends-and-family discount never touches, such as drinks. */
+  familyExcludedCategoryIds: string[];
 }
 
 interface DiscountAuthorizationsPageProps {
@@ -56,7 +60,9 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
     managerMaxFixed: 300000,
     adminMaxPct: 100,
     adminMaxFixed: 10000000,
+    familyExcludedCategoryIds: [],
   });
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
 
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
@@ -67,7 +73,8 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.get('/api/v1/settings');
+      const [res, cats] = await Promise.all([axios.get('/api/v1/settings'), catalogApi.getCategories().catch(() => [])]);
+      setCategories(cats.map((c) => ({ id: c.id, name: c.name })));
       const data = res.data;
       const authSetting = data?.DISCOUNT_AUTHORIZATIONS || data?.DISCOUNTS || {};
 
@@ -80,6 +87,7 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
         managerMaxFixed: authSetting.managerMaxFixed ?? 300000,
         adminMaxPct: authSetting.adminMaxPct ?? 100,
         adminMaxFixed: authSetting.adminMaxFixed ?? 10000000,
+        familyExcludedCategoryIds: authSetting.familyExcludedCategoryIds ?? [],
       });
     } catch (err: any) {
       setError(err.detail || err.message || t('authPolicy.failedToLoad', 'Failed to load discount authorization policy'));
@@ -237,6 +245,30 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                   helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} {{currency}}', { currency: currencyLabel, amount: '300,000' })}
                 />
               </Stack>
+            </Card>
+          </Grid>
+
+          {/* Friends and family: what their discount never touches. */}
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Card sx={{ p: 3 }}>
+              <Typography variant="h6" color="secondary.main" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Iconify icon={'solar:hand-heart-bold' as any} />
+                {t('authPolicy.familyTitle')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                {t('authPolicy.familyDesc')}
+              </Typography>
+              <Autocomplete
+                multiple
+                options={categories}
+                getOptionLabel={(c) => c.name}
+                value={categories.filter((c) => policy.familyExcludedCategoryIds.includes(c.id))}
+                onChange={(_e, picked) => setPolicy({ ...policy, familyExcludedCategoryIds: picked.map((c) => c.id) })}
+                disabled={!isHeadOffice}
+                renderInput={(params) => (
+                  <TextField {...params} label={t('authPolicy.familyExcluded')} placeholder={t('authPolicy.familyExcludedPlaceholder')} />
+                )}
+              />
             </Card>
           </Grid>
 

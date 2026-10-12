@@ -1,7 +1,7 @@
 import type { GridPaginationModel } from '@mui/x-data-grid-premium';
 import type { CreditAccount } from 'src/api/creditApi';
-import type { Customer, CustomerAddress } from 'src/api/customerApi';
 import type { AddressDraftState } from 'src/components/customer-register';
+import type { Customer, CustomerAddress, CustomerListFilter } from 'src/api/customerApi';
 
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,8 @@ import HomeIcon from '@mui/icons-material/Home';
 import PlaceIcon from '@mui/icons-material/Place';
 import SearchIcon from '@mui/icons-material/Search';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import CreditScoreIcon from '@mui/icons-material/CreditScore';
+import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import {
   Box,
@@ -26,6 +28,7 @@ import {
   Button,
   Dialog,
   TableRow,
+  MenuItem,
   TableBody,
   TableCell,
   TableHead,
@@ -34,9 +37,12 @@ import {
   IconButton,
   CardContent,
   DialogTitle,
+  ToggleButton,
   DialogContent,
   DialogActions,
+  InputAdornment,
   TableContainer,
+  ToggleButtonGroup,
 } from '@mui/material';
 
 import { paths } from 'src/routes/paths';
@@ -47,7 +53,9 @@ import { useCurrencyLabel } from 'src/utils/currency';
 
 import { creditApi } from 'src/api/creditApi';
 import { customerApi } from 'src/api/customerApi';
-import { useIsHeadOffice } from 'src/store/useAuthStore';
+import { isManagerOrAbove } from 'src/config/role-access';
+import { useBranchContext } from 'src/contexts/branch-context';
+import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
 import { VersionTag } from 'src/components/version-tag';
 import { ServerDataGrid } from 'src/components/server-data-grid';
@@ -55,11 +63,33 @@ import { CustomerAddressFields, CustomerRegisterDialog } from 'src/components/cu
 
 const fullName = (c?: Customer | null) => (c ? `${c.first_name || ''} ${c.last_name || ''}`.trim() : '');
 
+/** What a credit account's balance means to the customer: a negative balance is owed. */
+const owedOf = (c: Customer) => {
+  const balance = c.credit_account?.current_balance || '0';
+  return MoneyUtil.greaterThan('0', balance) ? MoneyUtil.subtract('0', balance) : '0';
+};
+
+/** The rates HAMI's data shows: 10% and 20% cover most friends and family. */
+const FAMILY_PRESETS = ['10', '15', '20'];
+
 export function CustomersPage() {
   const { t } = useTranslation();
   const currency = useCurrencyLabel();
   const navigate = useNavigate();
   const isHeadOffice = useIsHeadOffice();
+  const userRole = useAuthStore((state) => state.user?.role);
+  // Friends and family are each branch's own: a manager keeps theirs, head office any branch's.
+  const canSetFamily = isManagerOrAbove(userRole);
+  const { branches, selectedBranch, canChangeScope } = useBranchContext();
+  const branchName = (id?: string | null) => branches.find((b) => b.id === id)?.name || '—';
+  const [filter, setFilter] = useState<CustomerListFilter | ''>('');
+
+  // Friends-and-family dialog: one person's percent at one branch.
+  const [familyFor, setFamilyFor] = useState<Customer | null>(null);
+  const [familyBranchId, setFamilyBranchId] = useState('');
+  const [familyPercent, setFamilyPercent] = useState('');
+  const [familyNote, setFamilyNote] = useState('');
+  const [familySaving, setFamilySaving] = useState(false);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
@@ -101,7 +131,14 @@ export function CustomersPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await customerApi.getCustomersPage({ search: query.length >= 3 ? query : undefined, page: paging.page + 1, limit: paging.pageSize });
+      const res = await customerApi.getCustomersPage({
+        search: query.length >= 3 ? query : undefined,
+        page: paging.page + 1,
+        limit: paging.pageSize,
+        has: filter || undefined,
+        // Head office looking at one branch sees that branch's friends and family.
+        branchId: filter === 'FAMILY' && selectedBranch ? selectedBranch.id : undefined,
+      });
       setCustomers(res.items);
       setTotal(res.total);
       setError(null);
@@ -110,11 +147,51 @@ export function CustomersPage() {
     } finally {
       setLoading(false);
     }
-  }, [query, paging, t]);
+  }, [query, paging, filter, selectedBranch, t]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // The rates this screen shows: a branch sees its own; head office every branch's.
+  const visibleFamily = (c: Customer) =>
+    (c.family_discounts || []).filter((f) => canChangeScope || f.branch_id === selectedBranch?.id);
+
+  const openFamily = (c: Customer) => {
+    const branchId = selectedBranch?.id || branches[0]?.id || '';
+    const current = (c.family_discounts || []).find((f) => f.branch_id === branchId);
+    setFamilyFor(c);
+    setFamilyBranchId(branchId);
+    setFamilyPercent(current ? String(Number(current.percent)) : '');
+    setFamilyNote(current?.note || '');
+  };
+
+  const pickFamilyBranch = (branchId: string) => {
+    const current = (familyFor?.family_discounts || []).find((f) => f.branch_id === branchId);
+    setFamilyBranchId(branchId);
+    setFamilyPercent(current ? String(Number(current.percent)) : '');
+    setFamilyNote(current?.note || '');
+  };
+
+  /** Saves the percent, or takes it away when `remove` (or the box is empty). */
+  const saveFamily = async (remove = false) => {
+    if (!familyFor) return;
+    setFamilySaving(true);
+    try {
+      await customerApi.setFamilyDiscount({
+        customer_id: familyFor.id,
+        branch_id: familyBranchId || undefined,
+        percent: remove || !familyPercent ? null : familyPercent,
+        note: familyNote.trim() || null,
+      });
+      setFamilyFor(null);
+      loadData();
+    } catch (err: any) {
+      setError(err.detail || t('customers.family.saveFailed'));
+    } finally {
+      setFamilySaving(false);
+    }
+  };
 
   const handleOpenCredit = useCallback(
     async (c: Customer) => {
@@ -181,20 +258,35 @@ export function CustomersPage() {
         </Alert>
       )}
 
-      <Box sx={{ mb: 3, maxWidth: 400 }}>
+      <Stack direction="row" sx={{ mb: 3, gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         <TextField
           size="small"
-          fullWidth
           placeholder={t('customers.directory.searchPlaceholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          sx={{ width: 400, maxWidth: '100%' }}
           slotProps={{
             input: {
               startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />,
             },
           }}
         />
-      </Box>
+        {/* The few customers each of these is about, without a page of their own. */}
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={filter}
+          onChange={(_e, value) => {
+            setFilter(value ?? '');
+            setPaging((p) => ({ ...p, page: 0 }));
+          }}
+        >
+          <ToggleButton value="">{t('customers.filters.all')}</ToggleButton>
+          <ToggleButton value="FAMILY">{t('customers.filters.family')}</ToggleButton>
+          <ToggleButton value="WALLET">{t('customers.filters.wallet')}</ToggleButton>
+          {isHeadOffice && <ToggleButton value="OWES">{t('customers.filters.owes')}</ToggleButton>}
+        </ToggleButtonGroup>
+      </Stack>
 
       <ServerDataGrid
         rows={customers}
@@ -221,34 +313,81 @@ export function CustomersPage() {
             width: 170,
             renderCell: (params) => <span dir="ltr">{params.value}</span>,
           },
+          {
+            field: 'family_discounts',
+            headerName: t('customers.family.column'),
+            width: 190,
+            sortable: false,
+            renderCell: (params) => {
+              const rates = visibleFamily(params.row as Customer);
+              if (rates.length === 0) return <Typography variant="body2" color="text.disabled">—</Typography>;
+              return (
+                <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap', py: 1 }}>
+                  {rates.map((f) => (
+                    <Chip
+                      key={f.id}
+                      size="small"
+                      color="secondary"
+                      variant="outlined"
+                      label={canChangeScope ? `${Number(f.percent)}% · ${branchName(f.branch_id)}` : `${Number(f.percent)}%`}
+                      sx={{ fontWeight: 600 }}
+                    />
+                  ))}
+                </Stack>
+              );
+            },
+          },
+          {
+            field: 'wallet_balance',
+            headerName: t('customers.directory.walletColumn'),
+            width: 160,
+            renderCell: (params) => {
+              const balance = (params.row as Customer).wallet_balance || '0';
+              return MoneyUtil.greaterThan(balance, '0') ? (
+                <Chip
+                  icon={<AccountBalanceWalletIcon sx={{ '&&': { fontSize: 16 } }} />}
+                  label={`${MoneyUtil.formatCurrency(balance)} ${currency}`}
+                  color="success"
+                  size="small"
+                  variant="outlined"
+                  sx={{ fontWeight: 600 }}
+                />
+              ) : (
+                <Typography variant="body2" color="text.disabled">—</Typography>
+              );
+            },
+          },
           ...(isHeadOffice
             ? [
                 {
-                  field: 'wallet_balance',
-                  headerName: t('customers.directory.creditColumn'),
-                  width: 240,
+                  field: 'credit_owed',
+                  headerName: t('customers.directory.owesColumn'),
+                  width: 200,
+                  sortable: false,
                   renderHeader: () => (
                     <>
-                      {t('customers.directory.creditColumn')} <VersionTag feature="customers.credit" sx={{ ml: 1 }} />
+                      {t('customers.directory.owesColumn')} <VersionTag feature="customers.credit" sx={{ ml: 1 }} />
                     </>
                   ),
                   renderCell: (params: any) => {
                     const c = params.row as Customer;
-                    const walletBal = c.wallet_balance || c.credit_account?.current_balance || '0.0000';
-                    const credLim = c.credit_limit || c.credit_account?.credit_limit || '0.0000';
-                    const isPositive = MoneyUtil.greaterThan(walletBal, '0');
+                    const owed = owedOf(c);
+                    const limit = c.credit_account?.credit_limit || '0';
+                    if (!c.credit_account || (MoneyUtil.isZero(owed) && !MoneyUtil.greaterThan(limit, '0'))) {
+                      return <Typography variant="body2" color="text.disabled">—</Typography>;
+                    }
                     return (
                       <Stack spacing={0.5} sx={{ alignItems: 'flex-start', py: 1 }}>
                         <Chip
-                          icon={<AccountBalanceWalletIcon sx={{ '&&': { fontSize: 16 } }} />}
-                          label={`${MoneyUtil.formatCurrency(walletBal)} ${currency}`}
-                          color={isPositive ? 'success' : 'default'}
+                          icon={<CreditScoreIcon sx={{ '&&': { fontSize: 16 } }} />}
+                          label={`${MoneyUtil.formatCurrency(owed)} ${currency}`}
+                          color={MoneyUtil.greaterThan(owed, '0') ? 'error' : 'default'}
                           size="small"
                           onClick={() => handleOpenCredit(c)}
                           sx={{ fontWeight: 600, cursor: 'pointer' }}
                         />
                         <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
-                          {t('customers.directory.limit', { amount: `${MoneyUtil.formatCurrency(credLim)} ${currency}` })}
+                          {t('customers.directory.limit', { amount: `${MoneyUtil.formatCurrency(limit)} ${currency}` })}
                         </Typography>
                       </Stack>
                     );
@@ -271,7 +410,7 @@ export function CustomersPage() {
           {
             field: 'actions',
             headerName: t('customers.directory.actions'),
-            width: 170,
+            width: 200,
             sortable: false,
             renderCell: (params) => {
               const c = params.row as Customer;
@@ -280,9 +419,14 @@ export function CustomersPage() {
                   <IconButton size="small" title={t('customers.directory.viewProfile')} onClick={() => navigate(paths.app.customers.detail(c.id))}>
                     <VisibilityIcon fontSize="small" />
                   </IconButton>
+                  {canSetFamily && (
+                    <IconButton size="small" title={t('customers.family.title')} color="secondary" onClick={() => openFamily(c)}>
+                      <VolunteerActivismIcon fontSize="small" />
+                    </IconButton>
+                  )}
                   {isHeadOffice && (
                     <IconButton size="small" title={t('customers.directory.credit.title')} color="primary" onClick={() => handleOpenCredit(c)}>
-                      <AccountBalanceWalletIcon fontSize="small" />
+                      <CreditScoreIcon fontSize="small" />
                     </IconButton>
                   )}
                   <IconButton size="small" title={t('customers.directory.addresses')} color="info" onClick={() => handleOpenAddresses(c)}>
@@ -323,13 +467,16 @@ export function CustomersPage() {
           {creditAccount && (
             <Grid container spacing={2} sx={{ mb: 3, mt: 1 }}>
               <Grid size={{ xs: 12, md: 4 }}>
-                <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'success.50', borderColor: 'success.200' }}>
+                <Card variant="outlined" sx={{ borderRadius: 2, bgcolor: 'error.50', borderColor: 'error.200' }}>
                   <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                    <Typography variant="caption" color="success.dark" sx={{ fontWeight: 600 }}>
-                      {t('customers.directory.credit.balance')}
+                    <Typography variant="caption" color="error.dark" sx={{ fontWeight: 600 }}>
+                      {t('customers.directory.credit.owed')}
                     </Typography>
-                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'success.main', mt: 0.5 }}>
-                      {MoneyUtil.formatCurrency(creditAccount.current_balance)} {currency}
+                    <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'error.main', mt: 0.5 }}>
+                      {MoneyUtil.formatCurrency(
+                        MoneyUtil.greaterThan('0', creditAccount.current_balance) ? MoneyUtil.subtract('0', creditAccount.current_balance) : '0'
+                      )}{' '}
+                      {currency}
                     </Typography>
                   </CardContent>
                 </Card>
@@ -353,7 +500,7 @@ export function CustomersPage() {
                       {t('customers.directory.credit.spendable')}
                     </Typography>
                     <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'primary.main', mt: 0.5 }}>
-                      {MoneyUtil.formatCurrency(MoneyUtil.add(creditAccount.current_balance || '0', creditAccount.credit_limit || '0'))} {currency}
+                      {MoneyUtil.formatCurrency(creditAccount.availableCredit || '0')} {currency}
                     </Typography>
                   </CardContent>
                 </Card>
@@ -402,6 +549,77 @@ export function CustomersPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreditDialogOpen(false)}>{t('common.close')}</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Friends and family: one person's percent off at one branch, filled in on the till. */}
+      <Dialog open={!!familyFor} onClose={() => setFamilyFor(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>
+          {t('customers.family.title')} — {fullName(familyFor)}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {t('customers.family.help')}
+          </Typography>
+          <Stack spacing={2}>
+            {canChangeScope && (
+              <TextField
+                select
+                size="small"
+                label={t('customers.family.branch')}
+                value={familyBranchId}
+                onChange={(e) => pickFamilyBranch(e.target.value)}
+              >
+                {branches.map((b) => (
+                  <MenuItem key={b.id} value={b.id}>
+                    {b.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+            <TextField
+              size="small"
+              autoFocus
+              label={t('customers.family.percent')}
+              value={familyPercent}
+              onChange={(e) => setFamilyPercent(e.target.value.replace(/[^0-9.]/g, ''))}
+              slotProps={{ input: { endAdornment: <InputAdornment position="end">%</InputAdornment> } }}
+            />
+            <Stack direction="row" spacing={1}>
+              {FAMILY_PRESETS.map((pct) => (
+                <Chip
+                  key={pct}
+                  label={`${pct}%`}
+                  size="small"
+                  variant={familyPercent === pct ? 'filled' : 'outlined'}
+                  color="secondary"
+                  onClick={() => setFamilyPercent(pct)}
+                />
+              ))}
+            </Stack>
+            <TextField
+              size="small"
+              label={t('customers.family.note')}
+              placeholder={t('customers.family.notePlaceholder')}
+              value={familyNote}
+              onChange={(e) => setFamilyNote(e.target.value)}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          {(familyFor?.family_discounts || []).some((f) => f.branch_id === familyBranchId) && (
+            <Button color="error" disabled={familySaving} onClick={() => saveFamily(true)} sx={{ mr: 'auto' }}>
+              {t('customers.family.remove')}
+            </Button>
+          )}
+          <Button onClick={() => setFamilyFor(null)}>{t('common.cancel')}</Button>
+          <Button
+            variant="contained"
+            disabled={familySaving || !familyPercent || Number(familyPercent) <= 0 || Number(familyPercent) > 100 || !familyBranchId}
+            onClick={() => saveFamily()}
+          >
+            {t('common.save')}
+          </Button>
         </DialogActions>
       </Dialog>
 

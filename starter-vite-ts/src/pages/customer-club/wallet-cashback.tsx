@@ -5,7 +5,6 @@ import {
   Box,
   Card,
   Grid,
-  Chip,
   Table,
   Stack,
   Alert,
@@ -39,6 +38,7 @@ interface CreditAccount {
     first_name?: string;
     last_name?: string;
     phone_number?: string;
+    mobile?: string;
   };
 }
 
@@ -62,7 +62,8 @@ export default function WalletCashbackPage({ isEmbedded = false }: WalletCashbac
     setError(null);
     try {
       const [accRes, settingsRes] = await Promise.all([
-        axios.get('/api/v1/credit-accounts').then((res) => res.data),
+        // Wallets only: cashback the customers hold, apart from what they owe on credit.
+        axios.get('/api/v1/credit-accounts', { params: { kind: 'WALLET' } }).then((res) => res.data),
         axios.get('/api/v1/settings').then((res) => res.data),
       ]);
 
@@ -158,22 +159,16 @@ export default function WalletCashbackPage({ isEmbedded = false }: WalletCashbac
 
       {/* Balance Summary Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ p: 3, bgcolor: 'background.neutral' }}>
             <Typography variant="overline">{t('wallet.totalActiveWallets', 'Active Customer Wallets')}</Typography>
             <Typography variant="h3">{accounts.length}</Typography>
           </Card>
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
           <Card sx={{ p: 3, bgcolor: 'background.neutral' }}>
             <Typography variant="overline">{t('wallet.totalWalletBalance', 'Total Net Wallet Credit Balance')}</Typography>
             <Typography variant="h3">{MoneyUtil.formatCurrency(totalBalance)} {currency}</Typography>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <Card sx={{ p: 3, bgcolor: 'background.neutral' }}>
-            <Typography variant="overline">{t('wallet.loyaltySource', 'Ledger Source Type')}</Typography>
-            <Typography variant="h6" sx={{ mt: 1 }}>LOYALTY_CASHBACK</Typography>
           </Card>
         </Grid>
       </Grid>
@@ -199,15 +194,14 @@ export default function WalletCashbackPage({ isEmbedded = false }: WalletCashbac
             <TableHead>
               <TableRow>
                 <TableCell>{t('wallet.customer', 'Customer')}</TableCell>
-                <TableCell>{t('wallet.currency', 'Currency')}</TableCell>
+                <TableCell>{t('customers.directory.mobileCode')}</TableCell>
                 <TableCell>{t('wallet.currentBalance', 'Available Balance')}</TableCell>
-                <TableCell>{t('wallet.status', 'Status')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {accounts.map((acc) => {
                 const name = acc.customer
-                  ? `${acc.customer.first_name || ''} ${acc.customer.last_name || ''}`.trim() || acc.customer.phone_number || acc.customer_id
+                  ? `${acc.customer.first_name || ''} ${acc.customer.last_name || ''}`.trim() || acc.customer.mobile || acc.customer_id
                   : acc.customer_id;
 
                 return (
@@ -215,18 +209,13 @@ export default function WalletCashbackPage({ isEmbedded = false }: WalletCashbac
                     <TableCell>
                       <Typography variant="subtitle2">{name}</Typography>
                     </TableCell>
-                    <TableCell>{acc.currency_code}</TableCell>
+                    <TableCell>
+                      <span dir="ltr">{acc.customer?.mobile || '—'}</span>
+                    </TableCell>
                     <TableCell>
                       <Typography variant="subtitle2" color="success.main">
                         {MoneyUtil.formatCurrency(acc.current_balance)} {currency}
                       </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={acc.status === 'ACTIVE' ? t('common.active', 'Active') : acc.status}
-                        color={acc.status === 'ACTIVE' ? 'success' : 'default'}
-                        size="small"
-                      />
                     </TableCell>
                   </TableRow>
                 );

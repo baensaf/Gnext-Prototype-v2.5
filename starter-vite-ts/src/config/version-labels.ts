@@ -57,8 +57,8 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   // A customer's profile page (`*` is one path segment: the customer's id)
   '/app/customers/*': 'V4',
   '/app/credit': 'V3',
-  // Customer-specific rates and the wallet belong to the customer club.
-  '/app/discounts': 'V4',
+  // The wallet and its cashback rule (customer club).
+  '/app/wallet': 'V4',
 };
 
 /** Features that ship later than the page they sit on. */

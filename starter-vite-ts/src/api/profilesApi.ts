@@ -56,26 +56,33 @@ export interface CustomerProfile {
   addresses: { id: string; title: string; address_text: string; postal_code?: string | null; is_default: boolean }[];
   stats: ProfileOrderStats;
   orders: ProfileOrder[];
-  credit: {
-    account: {
-      id: string;
-      credit_limit: string;
-      current_balance: string;
-      currency_code: string;
-    };
-    entries: {
-      id: string;
-      entry_type: string;
-      amount: string;
-      balance_after: string;
-      currency_code: string;
-      order_id: string | null;
-      reason_text: string | null;
-      reference: string | null;
-      posted_at: string;
-    }[];
-  } | null;
+  /** Pay later: what the customer owes against a limit. */
+  credit: ProfileLedger | null;
+  /** Cashback the customer earned, kept apart from credit. */
+  wallet: ProfileLedger | null;
+  /** Friends-and-family rates, one per branch that gives one. */
+  family_discounts: { id: string; branch_id: string | null; percent: string; note?: string | null }[];
   audit: ProfileAuditEvent[];
+}
+
+export interface ProfileLedger {
+  account: {
+    id: string;
+    credit_limit: string;
+    current_balance: string;
+    currency_code: string;
+  };
+  entries: {
+    id: string;
+    entry_type: string;
+    amount: string;
+    balance_after: string;
+    currency_code: string;
+    order_id: string | null;
+    reason_text: string | null;
+    reference: string | null;
+    posted_at: string;
+  }[];
 }
 
 export interface UserProfile {

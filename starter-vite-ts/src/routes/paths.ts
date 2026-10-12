@@ -60,10 +60,7 @@ export const paths = {
       changes: `${ROOTS.APP}/pricing/changes`,
       snappfood: `${ROOTS.APP}/pricing/snappfood`,
     },
-    discounts: {
-      customerRates: `${ROOTS.APP}/discounts/customer-rates`,
-      wallet: `${ROOTS.APP}/discounts/wallet`,
-    },
+    wallet: `${ROOTS.APP}/wallet`,
     operations: {
       branches: `${ROOTS.APP}/operations/branches`,
       branchNew: `${ROOTS.APP}/operations/branches/new`,
@@ -85,10 +82,6 @@ export const paths = {
     reports: {
       root: `${ROOTS.APP}/reports`,
       code: (code: string) => `${ROOTS.APP}/reports/${code}`,
-    },
-    customerClub: {
-      discounts: `${ROOTS.APP}/discounts/customer-rates`,
-      wallet: `${ROOTS.APP}/discounts/wallet`,
     },
     settings: {
       root: `${ROOTS.APP}/settings`,

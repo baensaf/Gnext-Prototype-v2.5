@@ -143,10 +143,11 @@ const GROUPS: { titleKey: string; title: string; rows: Capability[] }[] = [
         write: { CASHIER: 'NONE', MANAGER: 'NONE', HEAD_OFFICE: 'FULL' },
       },
       {
-        path: '/app/discounts/customer-rates',
+        path: '/app/customers',
         labelKey: 'rolesPage.caps.discounts',
-        label: 'Run customer rates',
-        write: { CASHIER: 'NONE', MANAGER: 'NONE', HEAD_OFFICE: 'FULL' },
+        label: 'Set friends-and-family discounts',
+        write: { CASHIER: 'NONE', MANAGER: 'FULL', HEAD_OFFICE: 'FULL' },
+        note: "A manager sets their own branch's people; head office any branch's.",
       },
       {
         path: '/app/settings/general',

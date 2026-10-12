@@ -262,7 +262,7 @@ export const orderApi = {
   /** Place a draft: the kitchen ticket and the call number. The key is the press of Place's own. */
   submitOrder: async (
     id: string,
-    data?: { quoteVersion?: string; approvalRequestIds?: string[]; manualDiscount?: ManualDiscount },
+    data?: { quoteVersion?: string; approvalRequestIds?: string[]; manualDiscount?: ManualDiscount; skipCustomerDiscount?: boolean },
     options?: { idempotencyKey?: string }
   ): Promise<OrderHeader> => {
     const res = await httpClient.post(`/api/v1/orders/${id}/submit`, data || {}, idempotencyHeaders(options?.idempotencyKey));
