@@ -319,6 +319,15 @@ export class PaymentService {
         );
         payment.status = 'SUCCEEDED';
       } else {
+        // A card charged by hand is recorded from its slip: without the slip's reference there is
+        // nothing to find the charge by later.
+        if (dto.offTerminal && !(dto.externalReference || '').trim()) {
+          throw new BadRequestException({
+            code: 'OFF_TERMINAL_REFERENCE_REQUIRED',
+            title: 'Slip Reference Required',
+            detail: 'A card charged outside the terminal needs the slip reference.',
+          });
+        }
         // A card tender at a branch whose terminal the agent drives goes to the real terminal.
         // Unless the cashier took it on another reader, the mobile one kept for when this fails.
         const terminal = dto.offTerminal ? null : await this.agentPayments.terminalFor(em, payment, order);
