@@ -10,6 +10,7 @@ import { useNavigate, useSearchParams } from 'react-router';
 import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 
 import EditIcon from '@mui/icons-material/Edit';
+import UndoIcon from '@mui/icons-material/Undo';
 import CloseIcon from '@mui/icons-material/Close';
 import PrintIcon from '@mui/icons-material/Print';
 import CancelIcon from '@mui/icons-material/Cancel';
@@ -102,7 +103,9 @@ import { CheckoutModal } from 'src/components/CheckoutModal';
 import { ServerDataGrid } from 'src/components/server-data-grid';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 import { OrderEditDialog } from 'src/components/orders/OrderEditDialog';
+import { RefundDialog, refundableOf } from 'src/components/orders/RefundDialog';
 
+import { RefundsGrid, useRefundList } from './refunds-list';
 import {
   textFilters,
   numberFilters,
@@ -347,6 +350,8 @@ export function OrdersWorkflowPage() {
   const [orderAuditLogs, setOrderAuditLogs] = useState<any[]>([]);
   const [orderPayments, setOrderPayments] = useState<PaymentRecord[]>([]);
   const [orderRefunds, setOrderRefunds] = useState<RefundRecord[]>([]);
+  // The order the refund dialog is open on.
+  const [refundOrder, setRefundOrder] = useState<OrderHeader | null>(null);
   const [loadingDrawerDetails, setLoadingDrawerDetails] = useState(false);
   const [drawerTab, setDrawerTab] = useState<'details' | 'payments' | 'audit'>('details');
   const [drawerMenuAnchor, setDrawerMenuAnchor] = useState<HTMLElement | null>(null);
@@ -493,6 +498,14 @@ export function OrdersWorkflowPage() {
 
   const canReport = (order: OrderHeader) => !readOnly && reportMinutesLeft(order, Date.now()) > 0;
 
+  // A finished order that took money and has some left to give back. Snappfood refunds its own
+  // customers. A cashier raises the refund; the dialog asks for a manager's PIN.
+  const canRefund = (order: OrderHeader) =>
+    !readOnly &&
+    order.status === 'COMPLETED' &&
+    !isSnappfoodOrder(order) &&
+    MoneyUtil.greaterThan(refundableOf(order), '0');
+
   // A receipt is for money taken; an unpaid order has a guest bill instead.
   const hasReceipt = (order: OrderHeader) => MoneyUtil.greaterThan(order.paid_amount || order.paid_total || '0', '0');
 
@@ -560,7 +573,26 @@ export function OrdersWorkflowPage() {
 
   // An order placed at the till, paid, sent or finished anywhere in the branch shows up here
   // without a refresh. The list re-reads in place, keeping the page and filters.
-  useLiveRefresh(['orders'], () => loadData(true), branchId);
+  // The Refunded tab lists the refunds of the window in view, not orders; its count is read
+  // on every tab.
+  const refundList = useRefundList({
+    branchId,
+    filters: listQuery.filters,
+    q: query || undefined,
+    page,
+    pageSize,
+    rowsWanted: tab === 'REFUNDED',
+  });
+  const reloadRefunds = refundList.reload;
+
+  useLiveRefresh(
+    ['orders'],
+    () => {
+      loadData(true);
+      reloadRefunds(true);
+    },
+    branchId
+  );
 
   const loadDrawerDetails = useCallback(
     async (orderId: string) => {
@@ -1244,6 +1276,29 @@ export function OrdersWorkflowPage() {
     () => ({ ...filterModel, quickFilterValues: query ? [query] : [] }),
     [filterModel, query]
   );
+  const handleFilterModelChange = (model: GridFilterModel) => {
+    // The grid also reports the model it was given; only a real change resets the page.
+    const next = encodeFilterModel(model);
+    const nextQuery = (model.quickFilterValues ?? []).join(' ').trim();
+    const changes: Record<string, string | null> = {};
+    if (next !== encodeFilterModel(filterModel)) Object.assign(changes, { f: next }, LEGACY_FILTER_PARAMS);
+    if (nextQuery !== query) changes.q = nextQuery || null;
+    if (Object.keys(changes).length) setParams(changes);
+  };
+  // The Refunded tab filters by the time of the refund alone. Its grid knows no other column, so
+  // the orders tabs' other filters are kept as they were while it is open.
+  const handleRefundFilterModelChange = (model: GridFilterModel) =>
+    handleFilterModelChange({
+      ...model,
+      items: [
+        ...filterModel.items.filter((item) => item.field !== 'placed_at'),
+        ...model.items.filter((item) => item.field === 'placed_at'),
+      ],
+    });
+  const refundFilterModel = useMemo<GridFilterModel>(
+    () => ({ ...gridFilterModel, items: gridFilterModel.items.filter((item) => item.field === 'placed_at') }),
+    [gridFilterModel]
+  );
   const sortModel = useMemo<GridSortModel>(() => [{ field: sortField || 'placed_at', sort: sortDir }], [sortField, sortDir]);
   const menuPrimary = menuOrder && !readOnly ? primaryActionOf(menuOrder) : null;
 
@@ -1264,7 +1319,7 @@ export function OrdersWorkflowPage() {
           label={t(`orders.tabs.${label}`)}
           icon={
             <Label variant={key === tab ? 'filled' : 'soft'} color={key === 'ALL' && key === tab ? 'default' : color}>
-              {counts[key] ?? 0}
+              {key === 'REFUNDED' ? refundList.total : (counts[key] ?? 0)}
             </Label>
           }
           sx={{ minHeight: 48 }}
@@ -1286,7 +1341,7 @@ export function OrdersWorkflowPage() {
         </Typography>
 
         {/* No refresh button: the list follows the branch live (useLiveRefresh below). */}
-        {canExport && (
+        {canExport && tab !== 'REFUNDED' && (
           <Button
             disabled={exporting || total === 0}
             onClick={handleExport}
@@ -1325,7 +1380,32 @@ export function OrdersWorkflowPage() {
         </Alert>
       )}
 
-      <ServerDataGrid<OrderListRow>
+      {tab === 'REFUNDED' && (
+        <>
+          {refundList.error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {refundList.error}
+            </Alert>
+          )}
+          <RefundsGrid
+            rows={refundList.rows}
+            total={refundList.total}
+            loading={refundList.loading}
+            toolbarStart={tabsBar}
+            filterModel={refundFilterModel}
+            onFilterModelChange={handleRefundFilterModelChange}
+            paginationModel={{ page, pageSize }}
+            onPaginationModelChange={(model) => {
+              if (model.pageSize !== pageSize) setParams({ page: null, size: model.pageSize }, true);
+              else if (model.page !== page) setParams({ page: model.page }, true);
+            }}
+            pageSizeOptions={PAGE_SIZES}
+            onOpenOrder={(orderId) => setParams({ order: orderId }, true)}
+          />
+        </>
+      )}
+
+      {tab !== 'REFUNDED' && <ServerDataGrid<OrderListRow>
         columns={columns}
         toolbarStart={tabsBar}
         columnVisibilityModel={columnVisibilityModel}
@@ -1335,15 +1415,7 @@ export function OrdersWorkflowPage() {
         emptyTitle={t('orders.table.empty')}
         emptyDescription={filterModel.items.length ? t('orders.table.emptyHint') : undefined}
         filterModel={gridFilterModel}
-        onFilterModelChange={(model) => {
-          // The grid also reports the model it was given; only a real change resets the page.
-          const next = encodeFilterModel(model);
-          const nextQuery = (model.quickFilterValues ?? []).join(' ').trim();
-          const changes: Record<string, string | null> = {};
-          if (next !== encodeFilterModel(filterModel)) Object.assign(changes, { f: next }, LEGACY_FILTER_PARAMS);
-          if (nextQuery !== query) changes.q = nextQuery || null;
-          if (Object.keys(changes).length) setParams(changes);
-        }}
+        onFilterModelChange={handleFilterModelChange}
         getRowHeight={() => 'auto'}
         height={680}
         loading={loading}
@@ -1370,7 +1442,7 @@ export function OrdersWorkflowPage() {
           '& .MuiDataGrid-row': { cursor: 'pointer' },
           '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center', py: 1 },
         }}
-      />
+      />}
 
       {/* A row's other actions. The row itself opens the order. */}
       <Menu anchorEl={menuAnchor} onClose={closeMenu} open={!!menuAnchor}>
@@ -1411,6 +1483,14 @@ export function OrdersWorkflowPage() {
               <SwapHorizIcon fontSize="small" />
             </ListItemIcon>
             <ListItemText>{t('orders.actions.changeType', 'Change type')}</ListItemText>
+          </MenuItem>
+        )}
+        {menuOrder && canRefund(menuOrder) && (
+          <MenuItem onClick={fromMenu(setRefundOrder)}>
+            <ListItemIcon>
+              <UndoIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{t('orders.actions.refund')}</ListItemText>
           </MenuItem>
         )}
         {menuOrder && canCancel(menuOrder) && [
@@ -1996,6 +2076,7 @@ export function OrdersWorkflowPage() {
                 !readOnly && { key: 'reprint', icon: <PrintIcon fontSize="small" />, label: t('orders.actions.reprint'), run: () => handleOpenReprintDialog(order) },
                 // Snappfood's lines are Snappfood's: it has no call for a store to change them.
                 canEditLines(order) && { key: 'edit', icon: <EditIcon fontSize="small" />, label: t('orders.actions.editOrder', 'Edit lines'), run: () => setEditDialogOpen(true) },
+                canRefund(order) && { key: 'refund', icon: <UndoIcon fontSize="small" />, label: t('orders.actions.refund'), run: () => setRefundOrder(order) },
                 canReport(order) && primary !== 'report' && { key: 'report', icon: <ScheduleIcon fontSize="small" />, label: t('orders.actions.reportToSnappfood'), run: () => handleOpenReport(order) },
                 canChangeType(order) && {
                   key: 'type',
@@ -2091,6 +2172,18 @@ export function OrdersWorkflowPage() {
           </Box>
         )}
       </Drawer>
+
+      <RefundDialog
+        order={refundOrder}
+        orderRef={orderRefOf(refundOrder, showOrderCode)}
+        onClose={() => setRefundOrder(null)}
+        onRefunded={() => {
+          loadData(true);
+          reloadRefunds(true);
+          // The refund reads under the order's Payments.
+          if (drawerOrderId) loadDrawerDetails(drawerOrderId);
+        }}
+      />
 
       <OrderEditDialog
         open={editDialogOpen}

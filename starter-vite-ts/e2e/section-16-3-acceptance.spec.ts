@@ -245,7 +245,7 @@ test.describe('Specification §16.3 End-to-End Acceptance Workflows', () => {
     await closeTxBtn.click();
     await page.waitForTimeout(300);
 
-    await navigateViaSidebar(page, '/app/refunds', '/app/refunds');
+    await navigateViaSidebar(page, '/app/orders', '/app/orders');
     await navigateViaSidebar(page, '/app/audit', '/app/audit');
   });
 

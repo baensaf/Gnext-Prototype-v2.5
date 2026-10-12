@@ -58,7 +58,6 @@
     "cashier": "Cashier Shifts",
     "businessDays": "Business Days",
     "payments": "Payments",
-    "refunds": "Refunds",
     "printers": "Printers & Routes",
     "printQueue": "Print Queue",
     "customerClubGroup": "Customer Club & Loyalty",
@@ -575,6 +574,7 @@
       "editOrder": "Edit lines",
       "reportToSnappfood": "Report to Snappfood",
       "changeType": "Change type",
+      "refund": "Refund",
       "more": "More actions",
       "moreShort": "More"
     },
@@ -1310,37 +1310,24 @@
     "reference": "Reference"
   },
   "refunds": {
-    "title": "Refunds",
-    "subtitle": "A paid order goes back in full, released by a manager PIN.",
     "reason": "Reason",
-    "new": "New refund",
-    "order": "Order",
     "amount": "Amount",
     "continue": "Continue",
     "pinNotice": "Money going back out needs a manager PIN. You will be asked for one before the refund is created.",
     "approvalDetails": "Refund against a paid order",
-    "noPaidOrders": "No paid order matches",
-    "orderSearch": "Order no., customer or phone",
     "createFailed": "Could not create the refund.",
     "loadFailed": "Could not load the refunds.",
-    "detailFailed": "Could not open the refund.",
+    "searchPlaceholder": "Order no., refund no. or reason",
+    "dialog": {
+      "title": "Refund order {{number}}"
+    },
     "col": {
+      "order": "Order",
       "code": "Refund no.",
-      "status": "Status",
-      "time": "Time"
+      "time": "Refunded",
+      "approvedBy": "Approved by"
     },
-    "empty": "No refunds yet.",
-    "status": {
-      "APPROVED": "Approved",
-      "PENDING": "Pending",
-      "REJECTED": "Rejected",
-      "COMPLETED": "Completed",
-      "SUCCEEDED": "Paid back",
-      "PROCESSING": "In progress",
-      "FAILED": "Failed"
-    },
-    "detailTitle": "Refund {{code}}",
-    "notCompleted": "Order {{number}} is still open. Complete it in the orders list first: only a completed order can be refunded.",
+    "empty": "No refunds in this period.",
     "paidCancellation": "Paid order cancelled",
     "payBack": {
       "label": "Paid back by"
