@@ -110,6 +110,8 @@ export interface OrderListRow extends OrderHeader {
   delivery_state: string | null;
   courier_name: string | null;
   delivery_address: string | null;
+  /** A card charge on the order has not been answered by the terminal yet: "check terminal". */
+  has_unconfirmed_card_charge?: boolean;
 }
 
 /**

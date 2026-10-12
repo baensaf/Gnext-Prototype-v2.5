@@ -271,10 +271,10 @@ export const paymentApi = {
     return { queued: !!res.data?.queued };
   },
 
-  /** A manager settles an unconfirmed charge from the terminal's own receipt or report. */
+  /** The cashier settles an unconfirmed charge from the terminal's slip: charged (with its RRN) or not. */
   resolveTerminal: async (
     id: string,
-    data: { outcome: 'APPROVED' | 'NOT_CHARGED'; rrn?: string; reason: string }
+    data: { outcome: 'APPROVED' | 'NOT_CHARGED'; rrn?: string; reason?: string }
   ): Promise<PaymentRecord> => {
     const res = await httpClient.post(`/api/v1/payments/${id}/resolve-terminal`, data);
     return withAliases(res.data);
