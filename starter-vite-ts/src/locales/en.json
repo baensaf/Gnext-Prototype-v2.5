@@ -1793,7 +1793,7 @@
     },
     "channelPrices": {
       "title": "Snappfood prices",
-      "subtitle": "Snappfood price for every item: the in-store price plus the markup, rounded up, unless an item has a fixed price. Copy these into the Snappfood vendor panel.",
+      "subtitle": "What Snappfood gets for every item at a branch: its price group's Snappfood price, or the in-store price plus the markup, rounded up. Copy these into the Snappfood vendor panel.",
       "ruleTitle": "Markup rule",
       "markup": "Markup",
       "roundTo": "Round up to (Toman)",
@@ -1816,19 +1816,6 @@
       "noList": "This branch has no price list, so it uses base prices",
       "off": "Off on Snappfood",
       "offUntil": "Off until {{time}}",
-      "shownDiscount": {
-        "default": "Shown discount",
-        "help": "The menu also shows a struck-through price this much higher. Nothing is taken off the bill.",
-        "column": "Shown discount",
-        "categoryTitle": "Shown discount for a category",
-        "categoryHelp": "Sets the shown discount on every item in the category. Leave the percent empty to put them back on the default; 0 shows none.",
-        "category": "Category",
-        "percent": "Percent",
-        "useDefault": "Default",
-        "apply": "Apply to category",
-        "applied": "Shown discount set on {{count}} items",
-        "strikeHint": "Shown as {{percent}}% off; the customer pays the price beside it"
-      },
       "parityWarning": "Snappfood requires the same price as in store and on other channels; its contract fines a price that differs. A markup on this sheet is the chain's own risk."
     },
     "changes": {
