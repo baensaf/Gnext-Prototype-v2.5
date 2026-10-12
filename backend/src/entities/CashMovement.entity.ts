@@ -9,6 +9,10 @@ import {
 } from 'typeorm';
 import { CashierShift } from './CashierShift.entity';
 
+/**
+ * PAID_IN / PAID_OUT are no longer posted by a person; courier settlement writes them when a
+ * courier hands back more (PAID_IN, "courier over") or less (PAID_OUT, "courier short") cash than owed.
+ */
 export type CashMovementType =
   | 'OPENING_FLOAT'
   | 'CASH_PAYMENT'
@@ -33,7 +37,7 @@ export class CashMovement {
   type: CashMovementType;
 
   @Column({ type: 'numeric', precision: 19, scale: 4 })
-  amount: string; // signed: positive for opening/payment/paid-in, negative for refund/paid-out
+  amount: string; // signed: positive for opening/payment/courier over, negative for refund/courier short
 
   @Column({ type: 'uuid', nullable: true })
   payment_id: string;

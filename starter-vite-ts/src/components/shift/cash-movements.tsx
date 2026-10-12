@@ -33,8 +33,8 @@ export function CashMovements({ movements }: { movements: CashMovement[] }) {
       OPENING_FLOAT: t('shift.movementTypes.OPENING_FLOAT', 'Opening float'),
       CASH_PAYMENT: t('shift.movementTypes.CASH_PAYMENT', 'Cash sale'),
       CASH_REFUND: t('shift.movementTypes.CASH_REFUND', 'Cash refund'),
-      PAID_IN: t('shift.movementTypes.PAID_IN', 'Pay in'),
-      PAID_OUT: t('shift.movementTypes.PAID_OUT', 'Pay out'),
+      PAID_IN: t('shift.movementTypes.PAID_IN', 'Courier over'),
+      PAID_OUT: t('shift.movementTypes.PAID_OUT', 'Courier short'),
       CLOSE_ADJUSTMENT: t('shift.movementTypes.CLOSE_ADJUSTMENT', 'Difference at count'),
     })[type] || type;
 

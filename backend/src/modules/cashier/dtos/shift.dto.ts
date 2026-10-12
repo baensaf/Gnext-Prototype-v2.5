@@ -1,11 +1,9 @@
 import {
   IsString,
-  IsNotEmpty,
   IsOptional,
   IsUUID,
   IsInt,
   IsNumberString,
-  IsIn,
 } from 'class-validator';
 
 export class ShiftOpenDto {
@@ -23,35 +21,6 @@ export class ShiftOpenDto {
   @IsOptional()
   @IsString()
   businessDate?: string;
-}
-
-export class CashMovementDto {
-  @IsString()
-  @IsIn(['PAID_IN', 'PAID_OUT'])
-  type: 'PAID_IN' | 'PAID_OUT';
-
-  @IsNumberString()
-  amount: string;
-
-  @IsOptional()
-  @IsUUID()
-  reasonCodeId?: string;
-
-  @IsOptional()
-  @IsString()
-  reason?: string;
-
-  @IsOptional()
-  @IsString()
-  reasonText?: string;
-
-  @IsOptional()
-  @IsString()
-  reference?: string;
-
-  @IsOptional()
-  @IsInt()
-  version?: number;
 }
 
 export class ShiftCloseDto {

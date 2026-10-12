@@ -130,8 +130,8 @@ export function ShiftReport({ summary: s }: { summary: ShiftSalesSummary }) {
         <Line label={t('cashier.openingFloat', 'Opening Float')} value={money(c.openingFloat)} />
         <Line label={t('shift.close.cashSales', 'Cash sales')} value={money(c.cashSales)} />
         {positive(c.cashRefunds) && <Line label={t('shift.close.cashRefunds', 'Cash refunds')} value={minus(c.cashRefunds)} />}
-        {positive(c.paidIn) && <Line label={t('shift.movement.paidIn', 'Pay in')} value={money(c.paidIn)} />}
-        {positive(c.paidOut) && <Line label={t('shift.movement.paidOut', 'Pay out')} value={minus(c.paidOut)} />}
+        {positive(c.paidIn) && <Line label={t('shift.movementTypes.PAID_IN', 'Courier over')} value={money(c.paidIn)} />}
+        {positive(c.paidOut) && <Line label={t('shift.movementTypes.PAID_OUT', 'Courier short')} value={minus(c.paidOut)} />}
         <Line strong label={t('cashier.expectedCash', 'Expected Cash')} value={money(c.expectedCash)} />
         {s.closed && (
           <>

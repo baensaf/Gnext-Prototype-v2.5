@@ -1,6 +1,5 @@
 import type { Terminal } from 'src/api/tenantApi';
 import type { CashierShift, ShiftStatement } from 'src/api/shiftApi';
-import type { MovementType } from 'src/components/shift/movement-dialog';
 
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -9,10 +8,8 @@ import { useState, useEffect, useCallback } from 'react';
 import LockIcon from '@mui/icons-material/Lock';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
-import AddCircleIcon from '@mui/icons-material/AddCircle';
 import ReceiptLongIcon from '@mui/icons-material/ReceiptLong';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
-import RemoveCircleIcon from '@mui/icons-material/RemoveCircle';
 import {
   Box,
   Card,
@@ -46,7 +43,6 @@ import { useBranchContext } from 'src/contexts/branch-context';
 import { isApproverRole, homePathForRole } from 'src/config/role-access';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
-import { MovementDialog } from 'src/components/shift/movement-dialog';
 import { OpenShiftDialog } from 'src/components/shift/open-shift-dialog';
 import { useRegisterShift } from 'src/components/shift/use-register-shift';
 import { DeviceTerminalDialog } from 'src/components/shift/device-terminal-dialog';
@@ -77,8 +73,9 @@ function Figure({ label, value, color }: { label: string; value: string; color?:
  * on Business Days, once every drawer here is counted.
  *
  * A drawer is opened at its own register, so only this device's card offers Open. A
- * manager may pay into, pay out of or count down any drawer in the branch — a cashier who
- * went home without closing leaves one for them — while a cashier works their own.
+ * manager may count down any drawer in the branch — a cashier who went home without
+ * closing leaves one for them — while a cashier works their own. Counting down goes through
+ * the End shift page, which refuses to close while orders are unsettled.
  */
 export function CashDrawerPage() {
   const { t } = useTranslation();
@@ -96,7 +93,6 @@ export function CashDrawerPage() {
 
   const [setupOpen, setSetupOpen] = useState(false);
   const [openFor, setOpenFor] = useState<Terminal | null>(null);
-  const [movement, setMovement] = useState<{ shiftId: string; type: MovementType } | null>(null);
 
   const load = useCallback(async () => {
     if (!selectedBranchId) return;
@@ -179,8 +175,12 @@ export function CashDrawerPage() {
                     <Divider />
                     <Figure label={t('cashier.openingFloat', 'Opening Float')} value={MoneyUtil.formatCurrency(stmt.openingFloat)} />
                     <Figure label={t('shift.close.cashSales', 'Cash sales')} value={MoneyUtil.formatCurrency(stmt.cashSales)} />
-                    <Figure label={t('shift.movement.paidIn', 'Pay in')} value={MoneyUtil.formatCurrency(stmt.paidIn)} />
-                    <Figure label={t('shift.movement.paidOut', 'Pay out')} value={MoneyUtil.formatCurrency(stmt.paidOut)} />
+                    {MoneyUtil.greaterThan(stmt.paidIn, '0') && (
+                      <Figure label={t('shift.movementTypes.PAID_IN', 'Courier over')} value={MoneyUtil.formatCurrency(stmt.paidIn)} />
+                    )}
+                    {MoneyUtil.greaterThan(stmt.paidOut, '0') && (
+                      <Figure label={t('shift.movementTypes.PAID_OUT', 'Courier short')} value={`-${MoneyUtil.formatCurrency(stmt.paidOut)}`} />
+                    )}
                     <Figure
                       label={t('cashier.expectedCash', 'Expected Cash')}
                       value={MoneyUtil.formatCurrency(stmt.expectedCash)}
@@ -190,16 +190,6 @@ export function CashDrawerPage() {
                 )}
                 <Divider />
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
-                  {mayWork && shift.state === 'OPEN' && (
-                    <>
-                      <Button size="small" startIcon={<AddCircleIcon />} onClick={() => setMovement({ shiftId: shift.id, type: 'PAID_IN' })}>
-                        {t('shift.movement.paidIn', 'Pay in')}
-                      </Button>
-                      <Button size="small" color="warning" startIcon={<RemoveCircleIcon />} onClick={() => setMovement({ shiftId: shift.id, type: 'PAID_OUT' })}>
-                        {t('shift.movement.paidOut', 'Pay out')}
-                      </Button>
-                    </>
-                  )}
                   {mayWork ? (
                     <Button size="small" color="error" variant="outlined" startIcon={<LockIcon />} onClick={() => navigate(paths.app.cashier.shiftDetail(shift.id))} sx={{ ml: 'auto' }}>
                       {t('shift.end.open', 'Review & end shift')}
@@ -362,10 +352,6 @@ export function CashDrawerPage() {
           defaultFloat={register.defaultFloat}
           onOpened={refreshAll}
         />
-      )}
-
-      {movement && (
-        <MovementDialog open onClose={() => setMovement(null)} shiftId={movement.shiftId} type={movement.type} onPosted={load} />
       )}
 
       <DeviceTerminalDialog

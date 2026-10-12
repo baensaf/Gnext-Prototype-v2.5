@@ -37,6 +37,8 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
   /** Open orders the closing till rang up, and cash payments begun at its drawer. */
   let tillOrders: any[];
   let pendingCash: any[];
+  /** Orders that have a delivery row (out with a courier, or delivered and not settled). */
+  let deliveryOrderIds: string[];
 
   beforeEach(async () => {
     shiftRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn(), createQueryBuilder: jest.fn() };
@@ -71,13 +73,18 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
         qb.getMany = jest.fn(async () => tillOrders);
         return qb;
       }),
-      query: jest.fn(async (sql: string) => (sql.includes('FROM payment') ? pendingCash : [])),
+      query: jest.fn(async (sql: string) => {
+        if (sql.includes('FROM payment')) return pendingCash;
+        if (sql.includes('FROM delivery')) return deliveryOrderIds.map((order_id) => ({ order_id }));
+        return [];
+      }),
       count: jest.fn(async () => 1),
     };
 
     settingRows = [];
     tillOrders = [];
     pendingCash = [];
+    deliveryOrderIds = [];
     dataSource = {
       transaction: jest.fn(async (cb) => await cb(mockEntityManager)),
       manager: mockEntityManager,
@@ -200,45 +207,24 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       expect(statement.expectedCash).toBe('70000.0000');
     });
 
-    it('posts a pay-out as cash leaving the drawer and totals it in the statement', async () => {
+    it('totals courier short and courier over in the statement', async () => {
       shiftRepo.findOne.mockResolvedValue({ id: 'shf-1', tenant_id: 't-1', state: 'OPEN', currency_code: 'IRR' });
-      movementRepo.find.mockResolvedValue([{ type: 'OPENING_FLOAT', amount: '5000000.0000' }]);
-      const saved = await shiftService.recordMovement('t-1', 'shf-1', { type: 'PAID_OUT', amount: '2000000', reason: 'Gas bottle' });
-      expect(saved.amount).toBe('-2000000.0000');
-
       movementRepo.find.mockResolvedValue([
         { type: 'OPENING_FLOAT', amount: '5000000.0000' },
         { type: 'PAID_OUT', amount: '-2000000.0000' },
         { type: 'PAID_OUT', amount: '-100000.0000' },
+        { type: 'PAID_IN', amount: '30000.0000' },
       ]);
       const statement = await shiftService.getShiftStatement('t-1', 'shf-1');
       expect(statement.paidOut).toBe('2100000.0000');
-      expect(statement.expectedCash).toBe('2900000.0000');
+      expect(statement.paidIn).toBe('30000.0000');
+      expect(statement.expectedCash).toBe('2930000.0000');
     });
 
-    it('refuses a pay-out with no reason', async () => {
-      shiftRepo.findOne.mockResolvedValue({ id: 'shf-1', tenant_id: 't-1', state: 'OPEN', currency_code: 'IRR' });
-      movementRepo.find.mockResolvedValue([{ type: 'OPENING_FLOAT', amount: '5000000.0000' }]);
-      await expect(shiftService.recordMovement('t-1', 'shf-1', { type: 'PAID_OUT', amount: '50000' })).rejects.toThrow(
-        BadRequestException,
-      );
-      await expect(
-        shiftService.recordMovement('t-1', 'shf-1', { type: 'PAID_OUT', amount: '50000', reason: 'Milk for the kitchen' }),
-      ).resolves.toMatchObject({ amount: '-50000.0000' });
-    });
-
-    it('refuses taking more cash out than the drawer holds', async () => {
-      shiftRepo.findOne.mockResolvedValue({ id: 'shf-1', tenant_id: 't-1', state: 'OPEN', currency_code: 'IRR' });
-      movementRepo.find.mockResolvedValue([
-        { type: 'OPENING_FLOAT', amount: '5000000.0000' },
-        { type: 'CASH_PAYMENT', amount: '1000000.0000' },
-      ]);
-      await expect(
-        shiftService.recordMovement('t-1', 'shf-1', { type: 'PAID_OUT', amount: '6000001', reason: 'Too much' }),
-      ).rejects.toThrow(BadRequestException);
-      await expect(
-        shiftService.recordMovement('t-1', 'shf-1', { type: 'PAID_OUT', amount: '6000000', reason: 'All of it' }),
-      ).resolves.toMatchObject({ amount: '-6000000.0000' });
+    it('has no manual pay in or pay out left', () => {
+      expect((shiftService as any).recordMovement).toBeUndefined();
+      const controller = new ShiftsController(shiftService);
+      expect((controller as any).recordMovement).toBeUndefined();
     });
 
     it('keeps a closed drawer expected cash apart from the difference booked at the count', async () => {
@@ -260,14 +246,6 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       await shiftService.closeShift('t-1', 'shf-1', { actualCash: '45000.0000' });
       // Loading the movements relation made the cascade null the new adjustment's shift_id.
       expect(shiftRepo.findOne.mock.calls[0][0].relations).toBeUndefined();
-    });
-
-    it('should throw BadRequestException for paid-out movement with non-positive amount', async () => {
-      shiftRepo.findOne.mockResolvedValue({ id: 'shf-1', tenant_id: 't-1', state: 'OPEN' });
-
-      await expect(
-        shiftService.recordMovement('t-1', 'shf-1', { type: 'PAID_OUT', amount: '0.0000' }),
-      ).rejects.toThrow(BadRequestException);
     });
   });
 
@@ -432,7 +410,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       movementRepo.find.mockResolvedValue([{ type: 'OPENING_FLOAT', amount: '50000.0000' }]);
     });
 
-    it('closes with unpaid or unaccepted orders still open, and notes them in the audit', async () => {
+    it('refuses to close over an unpaid order or one waiting to be accepted, and lists them', async () => {
       tillOrders = [
         order({ id: 'waiting', state: 'PENDING_ACCEPTANCE' }),
         order({ id: 'owing', outstanding_total: '90000.0000' }),
@@ -443,11 +421,61 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       await expect(shiftService.getCloseCheck('t-1', 'shf-1')).resolves.toMatchObject({
         openOrders: [{ id: 'waiting', issue: 'AWAITING_ACCEPTANCE' }, { id: 'owing', issue: 'UNPAID' }],
       });
+      await expect(
+        shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000' }, 'cashier-1'),
+      ).rejects.toMatchObject({
+        status: 409,
+        response: {
+          code: 'SHIFT_HAS_OPEN_ORDERS',
+          context: { openOrders: [{ id: 'waiting' }, { id: 'owing' }] },
+        },
+      });
+      expect(shift.state).toBe('OPEN');
+    });
+
+    it('holds the close for cash on delivery out with a courier, or delivered and not yet settled', async () => {
+      tillOrders = [
+        order({ id: 'out', order_type: 'DELIVERY', state: 'OUT_FOR_DELIVERY', outstanding_total: '90000.0000' }),
+      ];
+      deliveryOrderIds = ['out'];
+      const shift = openShift();
+      shiftRepo.findOne.mockResolvedValue(shift);
+
+      await expect(shiftService.getCloseCheck('t-1', 'shf-1')).resolves.toMatchObject({
+        openOrders: [{ id: 'out', issue: 'UNPAID', awaitingCourier: true }],
+      });
+      await expect(
+        shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000' }, 'cashier-1'),
+      ).rejects.toMatchObject({ response: { code: 'SHIFT_HAS_OPEN_ORDERS' } });
+      expect(shift.state).toBe('OPEN');
+    });
+
+    it('looks at the whole branch for an order waiting to be accepted, since Snappfood orders carry no register', async () => {
+      tillOrders = [order({ id: 'snapp', state: 'PENDING_ACCEPTANCE', channel: 'SNAPPFOOD', terminal_id: null, shift_id: null })];
+      const shift = openShift();
+      shiftRepo.findOne.mockResolvedValue(shift);
+
+      await expect(
+        shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000' }, 'cashier-1'),
+      ).rejects.toMatchObject({
+        response: { code: 'SHIFT_HAS_OPEN_ORDERS', context: { openOrders: [{ id: 'snapp', issue: 'AWAITING_ACCEPTANCE' }] } },
+      });
+
+      // The query is held to the shift's branch and also reads its pending orders from any register.
+      const qb = dataSource.manager.createQueryBuilder.mock.results[0].value;
+      const clauses = qb.andWhere.mock.calls.map((c: any[]) => String(c[0]));
+      expect(clauses.some((c: string) => c.includes('o.branch_id = :branchId'))).toBe(true);
+      const pending = qb.andWhere.mock.calls.find((c: any[]) => String(c[0]).includes(':pendingState'));
+      expect(pending[1]).toMatchObject({ pendingState: 'PENDING_ACCEPTANCE' });
+    });
+
+    it('closes once every order is settled', async () => {
+      tillOrders = [];
+      const shift = openShift();
+      shiftRepo.findOne.mockResolvedValue(shift);
+
       await shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000' }, 'cashier-1');
       expect(shift.state).toBe('CLOSED');
-      expect(auditWriter.write).toHaveBeenCalledWith(
-        expect.objectContaining({ action: 'SHIFT_CLOSED', details: { openOrderIds: ['waiting', 'owing'] } }),
-      );
     });
 
     it('does not hold the close for a paid order the kitchen has not handed over', async () => {
@@ -459,7 +487,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       expect(shift.state).toBe('CLOSED');
     });
 
-    it('lists the orders an earlier shift on this register left open, without holding the close', async () => {
+    it('lists the orders an earlier shift on this register left unpaid, and holds the close for them', async () => {
       tillOrders = [order({ id: 'yesterday', shift_id: 'shf-0', outstanding_total: '90000.0000' })];
       const shift = openShift();
       shiftRepo.findOne.mockResolvedValue(shift);
@@ -467,8 +495,10 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
       await expect(shiftService.getCloseCheck('t-1', 'shf-1')).resolves.toMatchObject({
         openOrders: [{ id: 'yesterday', issue: 'UNPAID' }],
       });
-      await shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000' }, 'cashier-1');
-      expect(shift.state).toBe('CLOSED');
+      await expect(
+        shiftService.closeShift('t-1', 'shf-1', { actualCash: '50000.0000' }, 'cashier-1'),
+      ).rejects.toMatchObject({ response: { code: 'SHIFT_HAS_OPEN_ORDERS' } });
+      expect(shift.state).toBe('OPEN');
     });
 
     it('keeps what stays in the drawer for the next shift, and hands over the rest', async () => {

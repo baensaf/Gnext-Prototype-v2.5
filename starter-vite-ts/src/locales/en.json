@@ -1023,7 +1023,8 @@
       "issue": {
         "UNPAID": "Unpaid",
         "AWAITING_ACCEPTANCE": "Waiting for acceptance",
-        "DELIVERY_NOT_FINISHED": "Delivery not finished"
+        "DELIVERY_NOT_FINISHED": "Delivery not finished",
+        "COURIER_SETTLEMENT": "Waiting for courier settlement"
       }
     },
     "noBusinessDays": "No business day has been closed yet",
@@ -1070,7 +1071,6 @@
       "countedLabel": "Counted",
       "cashSales": "Cash sales",
       "cashRefunds": "Cash refunds",
-      "paidInOut": "Paid in / out",
       "balanced": "Shift closed. The drawer balanced.",
       "closedWithDifference": "Shift closed with a difference.",
       "done": "Done",
@@ -1080,8 +1080,6 @@
       "takeCash": "Take cash",
       "cancelPayment": "Cancel payment",
       "paymentFailed": "Could not settle the payment",
-      "openOrders": "{{count}} order(s) from this till are still open",
-      "openOrdersManager": "Settle them, or close anyway and leave them open for the next shift.",
       "recheck": "Check again",
       "dayHelp": "Every drawer at the branch is counted. Closing the day fixes its sales for",
       "skipDay": "Not now",
@@ -1151,22 +1149,14 @@
       "empty": "No shift has been closed at this branch yet."
     },
     "movement": {
-      "paidIn": "Pay in",
-      "paidOut": "Pay out",
-      "paidInHelp": "Cash put into the drawer that is not a sale, such as extra change.",
-      "paidOutHelp": "Cash taken from the drawer and spent. Say what on.",
-      "amount": "Amount ({{currency}})",
-      "reasonCode": "Reason code",
-      "note": "Note",
-      "post": "Record",
-      "error": "Could not record the movement"
+      "amount": "Amount ({{currency}})"
     },
     "movementTypes": {
       "OPENING_FLOAT": "Opening float",
       "CASH_PAYMENT": "Cash sale",
       "CASH_REFUND": "Cash refund",
-      "PAID_IN": "Pay in",
-      "PAID_OUT": "Pay out",
+      "PAID_IN": "Courier over",
+      "PAID_OUT": "Courier short",
       "CLOSE_ADJUSTMENT": "Difference at count"
     },
     "detail": {
@@ -1184,7 +1174,8 @@
       "title": "End shift",
       "reportTitle": "Shift report",
       "stepOrders": "Open orders",
-      "noOpenOrders": "Nothing rung up at this till is left open.",
+      "noOpenOrders": "Nothing at this till is waiting to be paid or accepted.",
+      "ordersBlock": "The shift cannot close until these are paid or answered.",
       "stepCash": "Unfinished cash payments",
       "noPendingCash": "Every cash payment was finished.",
       "stepCount": "Count the cash",

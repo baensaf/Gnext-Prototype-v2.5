@@ -41,7 +41,9 @@ export interface ShiftStatement {
   openingFloat: string;
   cashSales: string;
   cashRefunds: string;
+  /** Courier over. */
   paidIn: string;
+  /** Courier short. */
   paidOut: string;
   expectedCash: string;
   actualCash?: string;
@@ -71,10 +73,11 @@ export interface BusinessDayClose {
   closed_at: string;
 }
 
-/** An order a till left open at its shift close. */
+/** An order that stops a shift closing. */
 export interface DayCloseOpenOrder {
   id: string;
   orderNumber: string;
+  callNumber: number | null;
   orderType: string;
   channel: string;
   state: string;
@@ -83,6 +86,8 @@ export interface DayCloseOpenOrder {
   grandTotal: string;
   outstandingTotal: string;
   issue?: 'UNPAID' | 'AWAITING_ACCEPTANCE' | 'DELIVERY_NOT_FINISHED';
+  /** Unpaid, and the cash is with a courier or owed by one until the courier settles. */
+  awaitingCourier?: boolean;
 }
 
 /** A cash payment begun at a drawer and never taken or cancelled. */
@@ -96,12 +101,12 @@ export interface PendingCashPayment {
   initiatedAt: string;
 }
 
-/** What closing a shift would leave behind. */
+/** What stands in the way of closing a shift. */
 export interface ShiftCloseCheck {
   shiftId: string;
   branchId: string;
   businessDate: string;
-  /** This till's unpaid or unaccepted orders. Closing leaves them open; nothing blocks. */
+  /** This till's unpaid orders and the branch's orders waiting to be accepted. The close is refused while any exist. */
   openOrders: DayCloseOpenOrder[];
   /** Cash payments on this drawer that must be finished or cancelled first. */
   pendingCash: PendingCashPayment[];
@@ -132,7 +137,9 @@ export interface ShiftSalesSummary {
     openingFloat: string;
     cashSales: string;
     cashRefunds: string;
+    /** Courier over: cash a courier handed back beyond what was owed. */
     paidIn: string;
+    /** Courier short: cash a courier handed back less than owed. */
     paidOut: string;
     expectedCash: string;
     actualCash: string | null;
@@ -176,20 +183,6 @@ export const shiftApi = {
     return res.data;
   },
 
-  recordMovement: async (
-    shiftId: string,
-    data: {
-      type: 'PAID_IN' | 'PAID_OUT';
-      amount: string;
-      reasonCodeId?: string;
-      reason?: string;
-      reference?: string;
-    },
-  ): Promise<CashMovement> => {
-    const res = await httpClient.post(`/api/v1/shifts/${shiftId}/movements`, data);
-    return res.data;
-  },
-
   closeShift: async (
     shiftId: string,
     data: {
@@ -225,7 +218,7 @@ export const shiftApi = {
     return res.data;
   },
 
-  /** Open orders and unfinished cash, read before the close. */
+  /** Unsettled orders and unfinished cash, read before the close. */
   getCloseCheck: async (shiftId: string): Promise<ShiftCloseCheck> => {
     const res = await httpClient.get(`/api/v1/shifts/${shiftId}/close-check`);
     return res.data;

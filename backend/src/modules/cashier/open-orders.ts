@@ -5,8 +5,8 @@ import { BusinessDateUtil } from '../../common/utils/business-date.util';
 
 /**
  * What counts as an order left open, and why it cannot simply be closed off. Shared by the
- * business day close, which settles the whole branch, and the shift close, which only looks at
- * the orders its own till rang up.
+ * business day close, which settles the whole branch, and the shift close, which refuses to
+ * go ahead while its own till's orders are unsettled.
  */
 
 /**
@@ -28,6 +28,8 @@ export type OpenOrderIssue = 'UNPAID' | 'AWAITING_ACCEPTANCE' | 'DELIVERY_NOT_FI
 export interface DayCloseOpenOrder {
   id: string;
   orderNumber: string;
+  /** The daily call number the customer and the kitchen know the order by. */
+  callNumber: number | null;
   orderType: string;
   channel: string;
   state: string;
@@ -36,6 +38,8 @@ export interface DayCloseOpenOrder {
   grandTotal: string;
   outstandingTotal: string;
   issue?: OpenOrderIssue;
+  /** Set by the shift close check: an unpaid delivery whose cash is still with, or owed by, a courier. */
+  awaitingCourier?: boolean;
 }
 
 /**
@@ -48,6 +52,20 @@ export async function ordersAwaitingCourier(em: EntityManager, tenantId: string,
   const rows: Array<{ order_id: string }> = await em.query(
     `SELECT order_id FROM delivery
       WHERE tenant_id = $1 AND order_id = ANY($2::uuid[]) AND state NOT IN ('DELIVERED', 'CANCELLED')`,
+    [tenantId, orders.map((o) => o.id)],
+  );
+  return new Set(rows.map((r) => r.order_id));
+}
+
+/**
+ * Orders that have a delivery which has not been cancelled: out with a courier, or delivered
+ * and waiting for the courier's settlement. The shift close names these apart from plain unpaid.
+ */
+export async function ordersWithCourier(em: EntityManager, tenantId: string, orders: OrderHeader[]): Promise<Set<string>> {
+  if (orders.length === 0) return new Set();
+  const rows: Array<{ order_id: string }> = await em.query(
+    `SELECT order_id FROM delivery
+      WHERE tenant_id = $1 AND order_id = ANY($2::uuid[]) AND state <> 'CANCELLED'`,
     [tenantId, orders.map((o) => o.id)],
   );
   return new Set(rows.map((r) => r.order_id));
@@ -66,6 +84,7 @@ export function openOrderView(order: OrderHeader, issue?: OpenOrderIssue): DayCl
   return {
     id: order.id,
     orderNumber: order.order_number,
+    callNumber: order.call_number ?? null,
     orderType: order.order_type,
     channel: order.channel,
     state: order.state,
