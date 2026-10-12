@@ -298,8 +298,7 @@ export function OrderWorkflowSettingsPage() {
                   label={
                     <Box>
                       <Typography variant="subtitle2">
-                        {t('settings.orderWorkflow.allowReopenLabel', 'Allow Reopening Closed Orders')}{' '}
-                        <VersionTag feature="settings.reopenOrders" />
+                        {t('settings.orderWorkflow.allowReopenLabel', 'Allow Reopening Closed Orders')}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {t(
