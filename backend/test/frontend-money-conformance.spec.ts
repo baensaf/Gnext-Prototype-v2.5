@@ -33,7 +33,7 @@ describe('Fullstack Money Conformance & Decimal-Safe Financial Business Logic Sp
       'pages/pos/order.tsx',
       'pages/pos/kiosk.tsx',
       'pages/pos/receipt.tsx',
-      'pages/customers/credit.tsx',
+      'components/customer-credit/customer-credit-dialog.tsx',
       'pages/customers/directory.tsx',
       'pages/operations/delivery.tsx',
       'pages/operations/settlements.tsx',

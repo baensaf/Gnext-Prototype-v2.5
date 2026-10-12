@@ -43,10 +43,6 @@ export const paths = {
       root: `${ROOTS.APP}/customers`,
       detail: (id: string) => `${ROOTS.APP}/customers/${id}`,
     },
-    credit: {
-      accounts: `${ROOTS.APP}/credit/accounts`,
-      accountDetail: (id: string) => `${ROOTS.APP}/credit/accounts/${id}`,
-    },
     catalog: {
       categories: `${ROOTS.APP}/catalog/categories`,
       products: `${ROOTS.APP}/catalog/products`,

@@ -22,6 +22,12 @@ import {
 export class CreditController {
   constructor(private readonly creditService: CreditService) {}
 
+  /** The chain's credit in one line: what is owed, by how many, the limits and what is left. */
+  @Get('credit-accounts/summary')
+  async getSummary(@Req() req: Request) {
+    return await this.creditService.getSummary((req as any).tenantId);
+  }
+
   @Get('credit-accounts')
   async getAccounts(@Query() query: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

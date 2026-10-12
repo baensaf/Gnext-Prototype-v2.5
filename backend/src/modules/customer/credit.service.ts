@@ -91,6 +91,20 @@ export class CreditService {
     return { data, total, page, limit };
   }
 
+  /** Totals over the chain's credit accounts (not wallets), for the strip above the customer list. */
+  async getSummary(tenantId: string) {
+    const [row] = await this.accountRepo.query(
+      `SELECT COALESCE(SUM(-current_balance) FILTER (WHERE current_balance < 0), 0)::text AS total_owed,
+              COUNT(*) FILTER (WHERE current_balance < 0)::int AS owing_count,
+              COALESCE(SUM(credit_limit) FILTER (WHERE mode <> 'UNLIMITED'), 0)::text AS total_limit,
+              COALESCE(SUM(GREATEST(COALESCE(credit_limit, 0) + current_balance, 0)) FILTER (WHERE mode <> 'UNLIMITED'), 0)::text AS total_available
+         FROM credit_account
+        WHERE tenant_id = $1 AND kind = 'CREDIT' AND deleted_at IS NULL`,
+      [tenantId],
+    );
+    return row;
+  }
+
   // The account with its transactions, newest first: the one list a credit screen reads.
   async getAccountById(tenantId: string, id: string) {
     const acc = await this.accountRepo.findOne({

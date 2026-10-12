@@ -50,7 +50,6 @@ const MANAGER_PATHS = [
   '/app/delivery',
   '/app/payments',
   '/app/customers',
-  '/app/credit',
   '/app/catalog',
   '/app/pricing',
   '/app/operations',
@@ -96,8 +95,8 @@ const CHAIN_ONLY_PATHS = [
   // Credit and the wallet are held centrally: one limit, one ledger and one cashback rule
   // per customer across the chain. The counter takes a credit or wallet payment through the
   // payment module, not through these screens. The customer list is open to a branch
-  // manager, who keeps their own branch's friends-and-family rates on it.
-  '/app/credit',
+  // manager, who keeps their own branch's friends-and-family rates on it; its credit column
+  // and dialog are head office's.
   '/app/wallet',
   // The sandbox drives the chain's integrations — Snappfood, the payment and printer mocks,
   // the offline queue — and its API has been head office's only all along, so a branch
