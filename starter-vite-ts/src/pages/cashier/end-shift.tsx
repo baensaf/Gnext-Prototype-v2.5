@@ -96,10 +96,12 @@ function Row({ label, value, color, strong }: { label: string; value: string; co
  * the shift's statement, read-only.
  *
  * The cashier counts the cash and closes: the report already shows what the drawer should hold,
- * and the difference is stored as a number, with no reason and no manager. Orders the till left
- * open are listed as a notice and do not stop the close. What stays in the drawer for the next
- * shift starts at the policy's float (none, where the drawer is emptied at every close); the
- * rest is handed over.
+ * and the difference is stored as a number, with no reason and no manager. The shift cannot close
+ * while an order of this till is unpaid (cash on delivery out with a courier included) or an
+ * order at the branch is waiting to be accepted: the page lists them, linked to where each is
+ * settled, and the Close button stays off until the list is empty. What stays in the drawer for
+ * the next shift starts at the policy's float (none, where the drawer is emptied at every
+ * close); the rest is handed over.
  */
 export function EndShiftPage() {
   const { t } = useTranslation();
@@ -146,6 +148,7 @@ export function EndShiftPage() {
   const openOrders = check?.openOrders ?? [];
   const pendingCash = check?.pendingCash ?? [];
   const cashDone = !!check && pendingCash.length === 0;
+  const ordersDone = !!check && openOrders.length === 0;
 
   // What stays starts at the policy's float, never more than what was counted.
   const countedRials = counted || '0';
@@ -155,7 +158,7 @@ export function EndShiftPage() {
   const handedOver = MoneyUtil.subtract(countedRials, leftRials);
 
   const countReady = counted !== '' && !leftTooMuch;
-  const canClose = !!check && cashDone && countReady && !submitting;
+  const canClose = !!check && ordersDone && cashDone && countReady && !submitting;
 
   // The difference the count will leave, from what the report says the drawer should hold.
   const expectedRials = summary?.cash.expectedCash ?? '0';
@@ -190,7 +193,7 @@ export function EndShiftPage() {
       setSummary(await shiftApi.getSummary(shiftId));
     } catch (err: any) {
       setError(serverText(errorText(err, t('shift.close.error', 'Could not close the shift')), t));
-      if (err.code === 'SHIFT_HAS_PENDING_CASH') {
+      if (err.code === 'SHIFT_HAS_PENDING_CASH' || err.code === 'SHIFT_HAS_OPEN_ORDERS') {
         shiftApi.getCloseCheck(shiftId).then(setCheck).catch(() => undefined);
       }
     } finally {
@@ -204,7 +207,7 @@ export function EndShiftPage() {
 
   const renderSteps = () => (
     <Stack spacing={2.5} divider={<Divider flexItem />}>
-      <Step n={1} title={t('shift.end.stepOrders', 'Open orders')} done>
+      <Step n={1} title={t('shift.end.stepOrders', 'Open orders')} done={ordersDone}>
         {heldCount > 0 && (
           <Alert severity="warning" sx={{ mb: 1 }}>
             {t('shift.end.heldCarts', { count: heldCount })}
@@ -217,7 +220,7 @@ export function EndShiftPage() {
         ) : (
           <>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              {t('shift.close.openOrdersManager', 'Settle them, or close anyway and leave them open for the next shift.')}
+              {t('shift.end.ordersBlock', 'The shift cannot close until these are paid or answered.')}
             </Typography>
             <Box sx={{ maxHeight: 200, overflowY: 'auto' }}>
               {openOrders.map((order) => (

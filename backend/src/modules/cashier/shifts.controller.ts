@@ -4,7 +4,7 @@ import { ShiftService } from './shift.service';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { CashierShift } from '../../entities/CashierShift.entity';
-import { ShiftOpenDto, CashMovementDto, ShiftCloseDto } from './dtos/shift.dto';
+import { ShiftOpenDto, ShiftCloseDto } from './dtos/shift.dto';
 
 /**
  * Every route that names a shift by id is held to the caller's own branch by
@@ -81,14 +81,6 @@ export class ShiftsController {
     return await this.shiftService.getShiftById(tenantId, id);
   }
 
-  @Post(':id/movements')
-  async recordMovement(@Param('id') id: string, @Body() body: CashMovementDto, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-    return await this.shiftService.recordMovement(tenantId, id, body, userId, correlationId);
-  }
-
   @Post(':id/close')
   async closeShift(@Param('id') id: string, @Body() body: ShiftCloseDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -97,7 +89,7 @@ export class ShiftsController {
     return await this.shiftService.closeShift(tenantId, id, body, userId, correlationId);
   }
 
-  /** What closing this shift would leave behind: open orders and unfinished cash. */
+  /** What stops this shift closing: unsettled orders and unfinished cash. */
   @Get(':id/close-check')
   async getCloseCheck(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
