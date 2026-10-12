@@ -180,11 +180,12 @@ export class DiscountEvaluationService {
 
     // 0. Automatic item discounts (V1, 2026-10-03), as HAMI does them: each line of a
     // discounted product loses its percent first, and the one order discount below works on
-    // what is left. Till orders only; Snappfood and kiosk orders are priced elsewhere. A line
+    // what is left. The till and the kiosk (in store); Snappfood orders are priced by the
+    // channel. A discount applies when the branch's price group is in its scope. A line
     // that already carries its percent (an order line keeps the one it was given) uses that;
     // otherwise today's discount for the product applies.
     const channel = (orderDraft.channel || 'POS').toUpperCase();
-    if (channel === 'POS') {
+    if (channel === 'POS' || channel === 'KIOSK') {
       const lookup = requestedItems.filter((item) => item.itemDiscountPercent === undefined).map((item) => item.productId);
       const today = lookup.length && this.itemDiscounts
         ? await this.itemDiscounts.activeFor(tenantId, orderDraft.branchId, lookup)

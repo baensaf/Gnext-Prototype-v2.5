@@ -64,6 +64,8 @@ interface KioskProduct {
   /** What this branch charges: its price list's price, else base. */
   price?: string;
   tax_rate?: string;
+  /** An item discount running in store today at this branch, in percent; the order takes it off. */
+  item_discount_percent?: string | null;
   image_url?: string;
   // Off today at this branch (86'd): shown, not sold.
   is_available?: boolean;
@@ -98,6 +100,7 @@ interface CartItem {
   variant_id?: string;
   variant_name?: string;
   tax_rate: string;
+  discount_percent: string;
   quantity: number;
   unit_price: string;
   line_total: string;
@@ -251,6 +254,7 @@ export function KioskPage() {
       variant_id: variant?.id,
       variant_name: variant?.name,
       tax_rate: customizingProduct.tax_rate || '0',
+      discount_percent: customizingProduct.item_discount_percent || '0',
       quantity: customQuantity,
       unit_price: unitPrice,
       line_total: lineTotal,
@@ -282,10 +286,16 @@ export function KioskPage() {
 
   const calculateSubtotal = () =>
     cart.reduce((acc, item) => MoneyUtil.add(acc, item.line_total, 2), '0');
-  // VAT at each product's own rate, as the order is charged.
+  // What each line's item discount takes off, as the order is charged.
+  const lineDiscount = (item: CartItem) => MoneyUtil.multiply(item.line_total, MoneyUtil.divide(item.discount_percent || '0', '100', 6), 2);
+  const calculateDiscount = () => cart.reduce((acc, item) => MoneyUtil.add(acc, lineDiscount(item), 2), '0');
+  // VAT at each product's own rate on what the line sells for, as the order is charged.
   const calculateTax = () =>
-    cart.reduce((acc, item) => MoneyUtil.add(acc, MoneyUtil.multiply(item.line_total, item.tax_rate || '0', 2), 2), '0');
-  const calculateTotal = () => MoneyUtil.add(calculateSubtotal(), calculateTax(), 2);
+    cart.reduce(
+      (acc, item) => MoneyUtil.add(acc, MoneyUtil.multiply(MoneyUtil.subtract(item.line_total, lineDiscount(item), 2), item.tax_rate || '0', 2), 2),
+      '0'
+    );
+  const calculateTotal = () => MoneyUtil.add(MoneyUtil.subtract(calculateSubtotal(), calculateDiscount(), 2), calculateTax(), 2);
 
   const handleProceedToPayment = async () => {
     if (cart.length === 0) return;
@@ -834,6 +844,12 @@ export function KioskPage() {
                   <Typography color="text.secondary">Subtotal:</Typography>
                   <Typography>{MoneyUtil.formatCurrency(calculateSubtotal())} {currency}</Typography>
                 </Stack>
+                {MoneyUtil.greaterThan(calculateDiscount(), '0') && (
+                  <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
+                    <Typography color="text.secondary">Discount:</Typography>
+                    <Typography>-{MoneyUtil.formatCurrency(calculateDiscount())} {currency}</Typography>
+                  </Stack>
+                )}
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                   <Typography color="text.secondary">Tax (9%):</Typography>
                   <Typography>{MoneyUtil.formatCurrency(calculateTax())} {currency}</Typography>

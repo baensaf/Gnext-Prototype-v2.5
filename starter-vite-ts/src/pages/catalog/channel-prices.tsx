@@ -207,7 +207,22 @@ export function ChannelPricesPage() {
                 <TableCell align="right">{MoneyUtil.formatCurrency(r.base_price)}</TableCell>
                 <TableCell align="right">{MoneyUtil.formatCurrency(r.rule_price)}</TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                  {r.before_price && (
+                    <Typography component="span" variant="body2" color="text.disabled" sx={{ textDecoration: 'line-through', mr: 1, fontWeight: 400 }}>
+                      {MoneyUtil.formatCurrency(r.before_price)}
+                    </Typography>
+                  )}
                   {MoneyUtil.formatCurrency(r.price)}
+                  {r.discount_percent && (
+                    <Chip
+                      size="small"
+                      color="error"
+                      variant="outlined"
+                      sx={{ ml: 1 }}
+                      title={t('pricing.channelPrices.discountHint')}
+                      label={t('pricing.channelPrices.discountChip', { percent: Number(r.discount_percent) })}
+                    />
+                  )}
                   {r.group_price && <Chip size="small" label={t('pricing.channelPrices.groupChip')} sx={{ ml: 1 }} />}
                   {/* Off on Snappfood right now: switch it off in the vendor panel too. */}
                   {r.off && (

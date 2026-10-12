@@ -33,12 +33,21 @@ import { useIsHeadOffice } from 'src/store/useAuthStore';
 
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 
-import { ItemDiscountDialog, itemDiscountStatus, itemDiscountErrorText, itemDiscountStatusColor } from './item-discount-dialog';
+import {
+  usePriceGroups,
+  ItemDiscountDialog,
+  itemDiscountStatus,
+  itemDiscountErrorText,
+  itemDiscountGroupsText,
+  itemDiscountChannelText,
+  itemDiscountStatusColor,
+} from './item-discount-dialog';
 
 /**
- * Automatic item discounts (V1): a dated percent off one item, taken off every till line of it
- * at every branch, before the order's own discount. Head office sets them; branches see them.
- * Each product page shows and edits its own discounts too.
+ * Automatic item discounts (V1): a dated percent off one item, taken off every line of it at the
+ * till and the kiosk (in store) and/or on the Snappfood menu, for all price groups or chosen ones,
+ * before the order's own discount. Head office sets them; branches see them. Each product page
+ * shows and edits its own discounts too.
  */
 export function ItemDiscountsPage() {
   const { t } = useTranslation();
@@ -50,6 +59,7 @@ export function ItemDiscountsPage() {
   const [editing, setEditing] = useState<ItemDiscount | null>(null);
   const [deleting, setDeleting] = useState<ItemDiscount | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const groups = usePriceGroups();
 
   const load = useCallback(async () => {
     try {
@@ -118,6 +128,8 @@ export function ItemDiscountsPage() {
               <TableRow>
                 <TableCell>{t('pricing.itemDiscounts.item')}</TableCell>
                 <TableCell align="center">{t('pricing.itemDiscounts.percent')}</TableCell>
+                <TableCell>{t('pricing.itemDiscounts.scope.where')}</TableCell>
+                <TableCell>{t('pricing.itemDiscounts.scope.groups')}</TableCell>
                 <TableCell>{t('pricing.itemDiscounts.from')}</TableCell>
                 <TableCell>{t('pricing.itemDiscounts.to')}</TableCell>
                 <TableCell>{t('common.status', 'Status')}</TableCell>
@@ -134,6 +146,8 @@ export function ItemDiscountsPage() {
                     <TableCell align="center">
                       <Chip size="small" color="error" variant="outlined" label={`${Number(r.percent)}%`} />
                     </TableCell>
+                    <TableCell>{itemDiscountChannelText(r, t)}</TableCell>
+                    <TableCell>{itemDiscountGroupsText(r, groups, t)}</TableCell>
                     <TableCell>{fDate(r.starts_on)}</TableCell>
                     <TableCell>{r.ends_on ? fDate(r.ends_on) : t('pricing.itemDiscounts.noEnd')}</TableCell>
                     <TableCell>
@@ -162,7 +176,7 @@ export function ItemDiscountsPage() {
               })}
               {rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                     {t('pricing.itemDiscounts.empty')}
                   </TableCell>
                 </TableRow>

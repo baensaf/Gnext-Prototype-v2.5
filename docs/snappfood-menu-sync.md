@@ -96,6 +96,12 @@ Snappfood price for each product or type:
 for the same product, and a branch on a group with no Snappfood price follows its own in-store
 price. Add-ons follow the markup rule only.
 
+**Item discounts.** An item discount for Snappfood (or both channels) that runs today, for the
+branch's price group or for all groups, is real: the sheet's `price` is the discounted price
+(rounded to a whole Toman) and the full price is kept as `before_price`. `buildMenu` sends the
+discounted `price` and, as `priceBeforeDiscount`, the full one. Orders from Snappfood still take
+their amounts from the order payload, so a discount run only on our side never changes a bill.
+
 Prices are whole Toman: our Rial divided by ten, rounded. The send is refused item by item where
 Snappfood would refuse it, and the simulator lists those as warnings first:
 
@@ -139,3 +145,6 @@ The line's price is `(price + toppings) × quantity`, in Rial. The order total i
    `YYYY-MM-DD HH:mm:ss` so "until the next shift" ends at the cutoff, not at midnight.
 6. **Webhook auth and answer.** Still open from the 2026-09-13 check: `Authorization: HMAC
    snappfood:<ts>:<base64(hmac('POST'+ts))>`, and answer 200/204, not 201.
+7. **The struck-through price on a product.** We send the full price as `priceBeforeDiscount`
+   next to the discounted `price`. That field name is ours; find out how Food Partner takes a
+   price cut (a field on the product, or a separate discount call) before the live connection.

@@ -179,7 +179,7 @@ export class OrderService {
   private async priceItemDiscounts(em: EntityManager, tenantId: string, order: OrderHeader, items: OrderItem[]) {
     const unpriced = items.filter((i) => i.item_discount_percent === null || i.item_discount_percent === undefined);
     if (!unpriced.length) return;
-    const active = order.channel === 'POS' && this.itemDiscounts
+    const active = (order.channel === 'POS' || order.channel === 'KIOSK') && this.itemDiscounts
       ? await this.itemDiscounts.activeFor(tenantId, order.branch_id, unpriced.map((i) => i.product_id), em)
       : new Map<string, { id: string; percent: string }>();
     for (const line of unpriced) {

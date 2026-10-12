@@ -15,7 +15,15 @@ import { discountsApi } from 'src/api/discountsApi';
 
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 
-import { ItemDiscountDialog, itemDiscountStatus, itemDiscountErrorText, itemDiscountStatusColor } from './item-discount-dialog';
+import {
+  usePriceGroups,
+  ItemDiscountDialog,
+  itemDiscountStatus,
+  itemDiscountErrorText,
+  itemDiscountGroupsText,
+  itemDiscountChannelText,
+  itemDiscountStatusColor,
+} from './item-discount-dialog';
 
 /**
  * The product page's view of its own automatic item discounts: what runs now and what is coming,
@@ -30,6 +38,7 @@ export function ProductItemDiscounts({ productId, canAuthor }: { productId: stri
   const [editing, setEditing] = useState<ItemDiscount | null>(null);
   const [deleting, setDeleting] = useState<ItemDiscount | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const groups = usePriceGroups();
 
   const load = useCallback(async () => {
     try {
@@ -99,6 +108,9 @@ export function ProductItemDiscounts({ productId, canAuthor }: { productId: stri
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2">
                   {fDate(r.starts_on)} – {r.ends_on ? fDate(r.ends_on) : t('pricing.itemDiscounts.noEnd')}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  {itemDiscountChannelText(r, t)} · {itemDiscountGroupsText(r, groups, t)}
                 </Typography>
                 {r.note && (
                   <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>

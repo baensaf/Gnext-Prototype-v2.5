@@ -14,6 +14,8 @@ import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { OrderItemOption } from '../../entities/OrderItemOption.entity';
+import { OrderAdjustment } from '../../entities/OrderAdjustment.entity';
+import { activeItemDiscounts } from '../../common/utils/item-discount.util';
 import { Payment } from '../../entities/Payment.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
@@ -123,6 +125,9 @@ export class KioskService {
     // The price this branch charges (its price list's, else base), so the screen shows what
     // the order will cost.
     const listed = await this.priceLists.pricesForBranch(tenantId, branch?.id);
+    // The item discounts running in store today for this branch's price group, so the screen
+    // can show the total the order will be charged.
+    const discountsToday = await activeItemDiscounts(this.productRepo.manager, tenantId, branch?.id, 'IN_STORE');
 
     const catalogProducts = products.map((p) => {
       const pLinks = productOptionGroups.filter((pog) => pog.product_id === p.id);
@@ -149,6 +154,7 @@ export class KioskService {
         price: inStorePrice(listed, p, null),
         option_groups: groups,
         variants: onSale.map((v) => ({ ...v, price: inStorePrice(listed, p, v) })),
+        item_discount_percent: discountsToday.get(p.id)?.percent ?? null,
         // Stays on the screen greyed out, so a guest sees it exists but is off today.
         is_available: fillable && !off.products.has(p.id) && (own.length === 0 || onSale.length > 0),
       };
@@ -374,14 +380,22 @@ export class KioskService {
       let subtotalStr = '0.0000';
 
       let taxAmountStr = '0.0000';
+      let itemDiscountStr = '0.0000';
       let lineNumber = 1;
+
+      // The item discounts running today for this branch's price group, in store: the kiosk
+      // gives them like the till does, once, as the order is placed.
+      const discountsToday = await activeItemDiscounts(em, tenantId, data.branch_id, 'IN_STORE', lines.map((l) => l.product.id));
 
       for (const line of lines) {
         const lineTotalStr = MoneyUtil.add(line.baseTotal, line.modifierTotal, 4);
-        // VAT at the product's own rate, as on the register.
-        const lineTaxStr = MoneyUtil.multiply(lineTotalStr, line.product.tax_rate || '0.0000', 4);
+        const found = discountsToday.get(line.product.id);
+        const lineDiscountStr = found ? MoneyUtil.multiply(lineTotalStr, MoneyUtil.divide(found.percent, '100', 6), 4) : '0.0000';
+        // VAT at the product's own rate on what the line sells for after its item discount, as on the register.
+        const lineTaxStr = MoneyUtil.multiply(MoneyUtil.subtract(lineTotalStr, lineDiscountStr, 4), line.product.tax_rate || '0.0000', 4);
         subtotalStr = MoneyUtil.add(subtotalStr, lineTotalStr, 4);
         taxAmountStr = MoneyUtil.add(taxAmountStr, lineTaxStr, 4);
+        itemDiscountStr = MoneyUtil.add(itemDiscountStr, lineDiscountStr, 4);
 
         const orderItem = orderItemRepo.create({
           tenant_id: tenantId,
@@ -400,12 +414,32 @@ export class KioskService {
           line_total: lineTotalStr,
           tax_amount: lineTaxStr,
           discount_amount: '0.0000',
-          total_amount: MoneyUtil.add(lineTotalStr, lineTaxStr, 4),
+          item_discount_percent: found ? found.percent : '0.00',
+          item_discount_id: found ? found.id : null,
+          item_discount_total: lineDiscountStr,
+          total_amount: MoneyUtil.add(MoneyUtil.subtract(lineTotalStr, lineDiscountStr, 4), lineTaxStr, 4),
           notes: line.notes || null,
           special_instructions: line.notes || null,
         });
 
         const savedItem = await orderItemRepo.save(orderItem);
+
+        if (found && MoneyUtil.greaterThan(lineDiscountStr, '0')) {
+          await em.save(
+            em.create(OrderAdjustment, {
+              tenant_id: tenantId,
+              order_id: savedHeader.id,
+              type: 'DISCOUNT',
+              source_type: 'ITEM',
+              source_id: found.id,
+              code: 'ITEM_DISCOUNT',
+              name: `${Number(found.percent)}% item discount`,
+              amount: lineDiscountStr,
+              funding_source: 'MERCHANT',
+              calculation_snapshot: { discountType: 'PERCENTAGE', amount: lineDiscountStr, productId: line.product.id, percent: found.percent },
+            }),
+          );
+        }
 
         for (const optData of line.options) {
           const itemOption = orderItemOptionRepo.create({
@@ -419,14 +453,15 @@ export class KioskService {
         orderItems.push(savedItem);
       }
 
-      const totalAmountStr = MoneyUtil.add(subtotalStr, taxAmountStr, 4);
+      const totalAmountStr = MoneyUtil.add(MoneyUtil.subtract(subtotalStr, itemDiscountStr, 4), taxAmountStr, 4);
 
       savedHeader.subtotal = subtotalStr;
       savedHeader.subtotal_amount = subtotalStr;
       savedHeader.tax_total = taxAmountStr;
       savedHeader.tax_amount = taxAmountStr;
-      savedHeader.discount_total = '0.0000';
-      savedHeader.discount_amount = '0.0000';
+      savedHeader.discount_total = itemDiscountStr;
+      savedHeader.discount_amount = itemDiscountStr;
+      savedHeader.item_discount_total = itemDiscountStr;
       savedHeader.grand_total = totalAmountStr;
       savedHeader.total_amount = totalAmountStr;
       savedHeader.outstanding_total = totalAmountStr;
