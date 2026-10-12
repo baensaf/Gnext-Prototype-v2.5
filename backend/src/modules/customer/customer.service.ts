@@ -147,7 +147,7 @@ export class CustomerService {
   async getCustomers(
     tenantId: string,
     query?: PaginationQueryDto & { search?: string; status?: string; has?: string; branchId?: string },
-  ): Promise<PagedResponse<any> | any[]> {
+  ): Promise<(PagedResponse<any> & { counts?: Record<string, number> }) | any[]> {
     if (!query || (!query.page && !query.limit && !query.search && !query.status && !query.has)) {
       const qb = this.customerRepo.createQueryBuilder('c')
         .where('c.tenant_id = :tenantId', { tenantId })
@@ -190,7 +190,26 @@ export class CustomerService {
 
     const [items, total] = await qb.getManyAndCount();
     const enriched = await this.enrichCustomersWithCredit(tenantId, items);
-    return createPagedResponse(enriched, total, page, limit);
+    return { ...createPagedResponse(enriched, total, page, limit), counts: await this.listCounts(tenantId, query.branchId) };
+  }
+
+  /**
+   * How many customers each tab of the list holds: everyone, friends and family (at the
+   * branch, or any), who has wallet money, who owes. The last three read small tables.
+   */
+  private async listCounts(tenantId: string, branchId?: string) {
+    const [row] = await this.customerRepo.query(
+      `SELECT (SELECT COUNT(*) FROM customer c WHERE c.tenant_id = $1 AND c.deleted_at IS NULL)::int AS "ALL",
+              (SELECT COUNT(DISTINCT f.customer_id) FROM customer_discount f
+                WHERE f.tenant_id = $1 AND f.is_active AND f.deleted_at IS NULL
+                  AND ($2::uuid IS NULL OR f.branch_id = $2::uuid))::int AS "FAMILY",
+              (SELECT COUNT(*) FROM credit_account a WHERE a.tenant_id = $1 AND a.kind = 'WALLET'
+                  AND a.current_balance > 0 AND a.deleted_at IS NULL)::int AS "WALLET",
+              (SELECT COUNT(*) FROM credit_account a WHERE a.tenant_id = $1 AND a.kind = 'CREDIT'
+                  AND a.current_balance < 0 AND a.deleted_at IS NULL)::int AS "OWES"`,
+      [tenantId, branchId || null],
+    );
+    return row as Record<'ALL' | 'FAMILY' | 'WALLET' | 'OWES', number>;
   }
 
   /**

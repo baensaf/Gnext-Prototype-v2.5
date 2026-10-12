@@ -95,6 +95,8 @@ export interface CustomerPage {
   total: number;
   page: number;
   limit: number;
+  /** How many customers each tab of the list holds. */
+  counts?: Record<'ALL' | CustomerListFilter, number>;
 }
 
 export const customerApi = {
