@@ -2,7 +2,7 @@ import type { Product, Category } from 'src/api/catalogApi';
 
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -23,7 +23,6 @@ import {
   Alert,
   Avatar,
   Button,
-  Drawer,
   Select,
   Switch,
   TableRow,
@@ -42,18 +41,11 @@ import {
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
-import { percentToTaxRate, taxRateToPercent } from 'src/utils/tax-rate';
-import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
+import { taxRateToPercent } from 'src/utils/tax-rate';
+import { useCurrencyLabel } from 'src/utils/currency';
 
 import { catalogApi } from 'src/api/catalogApi';
 import { useAuthStore } from 'src/store/useAuthStore';
-
-import { ImageUploader } from 'src/components/ImageUploader';
-
-// The whole catalog is rated at the standard 9% VAT, so a product added through
-// this form starts there too. The old 10% default meant every hand-added product
-// was silently off-rate against everything the seed produces.
-const DEFAULT_TAX_PERCENT = '9';
 
 /** A product's price, or the range of its sizes' prices when it is sold in sizes. */
 const priceLabel = (p: Product, currency: string) => {
@@ -86,17 +78,6 @@ export function ProductsPage() {
   const [_loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Form state
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [code, setCode] = useState('');
-  const [name, setName] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [basePrice, setBasePrice] = useState('1500000');
-  const [taxPercent, setTaxPercent] = useState(DEFAULT_TAX_PERCENT);
-  const [barcode, setBarcode] = useState('');
-  const [description, setDescription] = useState('');
-  const [imageAssetId, setImageAssetId] = useState<string | undefined>(undefined);
-
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -115,42 +96,6 @@ export function ProductsPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!categoryId) {
-      setError(t('catalog.productsPage.errors.selectCategory'));
-      return;
-    }
-    try {
-      await catalogApi.createProduct({
-        code: code.trim() || null,
-        name,
-        category_id: categoryId,
-        base_price: basePrice,
-        tax_rate: percentToTaxRate(taxPercent),
-        barcode: barcode.trim() || undefined,
-        description,
-        image_asset_id: imageAssetId,
-      });
-      setDrawerOpen(false);
-      resetForm();
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || t('catalog.productsPage.errors.createFailed'));
-    }
-  };
-
-  const resetForm = () => {
-    setCode('');
-    setName('');
-    setCategoryId('');
-    setBasePrice('1500000');
-    setTaxPercent(DEFAULT_TAX_PERCENT);
-    setBarcode('');
-    setDescription('');
-    setImageAssetId(undefined);
-  };
 
   // Search by name, code or barcode, within the picked category and status.
   const visibleProducts = useMemo(() => {
@@ -217,7 +162,7 @@ export function ProductsPage() {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => setDrawerOpen(true)}
+            onClick={() => navigate('/app/catalog/products/new')}
             sx={{ fontWeight: 'bold' }}
           >
             {t('catalog.productsPage.newProduct')}
@@ -422,95 +367,6 @@ export function ProductsPage() {
           </TableContainer>
         </CardContent>
       </Card>
-
-      {/* Create Product Drawer */}
-      <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <Box sx={{ width: { xs: '100vw', sm: 450 }, p: 3 }}>
-          <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            {t('catalog.productsPage.createDrawerTitle')}
-          </Typography>
-          <form onSubmit={handleCreate}>
-            <Stack spacing={2.5}>
-              <FormControl fullWidth required>
-                <InputLabel>{t('catalog.productsPage.category')}</InputLabel>
-                <Select
-                  value={categoryId}
-                  label={t('catalog.productsPage.category')}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                >
-                  {categories.map((c) => (
-                    <MenuItem key={c.id} value={c.id}>
-                      {c.name} ({c.code})
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <TextField
-                label={t('catalog.productsPage.name')}
-                placeholder={t('catalog.productsPage.nameHint')}
-                required
-                fullWidth
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-
-              <TextField
-                label={t('catalog.productsPage.basePrice')}
-                type="number"
-                required
-                fullWidth
-                value={toToman(basePrice)}
-                onChange={(e) => setBasePrice(fromToman(e.target.value))}
-                slotProps={{
-                  htmlInput: { min: 0, step: 1 },
-                  input: { endAdornment: <InputAdornment position="end">{currency}</InputAdornment> },
-                }}
-              />
-
-              <TextField
-                label={t('catalog.productsPage.taxRate')}
-                type="number"
-                fullWidth
-                value={taxPercent}
-                onChange={(e) => setTaxPercent(e.target.value)}
-                slotProps={{
-                  htmlInput: { min: 0, max: 100, step: 0.01 },
-                  input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
-                }}
-              />
-
-              <ImageUploader
-                label={t('catalog.productsPage.productImage')}
-                onUploadSuccess={(asset) => setImageAssetId(asset.id)}
-              />
-
-              <Typography variant="overline" color="text.secondary">
-                {t('catalog.productsPage.identifiersTitle')}
-              </Typography>
-              <TextField
-                label={t('catalog.productsPage.code')}
-                placeholder={t('catalog.productsPage.codeHint')}
-                helperText={t('catalog.productsPage.codeHelp')}
-                fullWidth
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                slotProps={{ htmlInput: { maxLength: 32 } }}
-              />
-              <TextField
-                label={t('catalog.productsPage.barcode')}
-                fullWidth
-                value={barcode}
-                onChange={(e) => setBarcode(e.target.value)}
-              />
-
-              <Button type="submit" variant="contained" size="large" fullWidth sx={{ fontWeight: 'bold' }}>
-                {t('catalog.productsPage.submitCreate')}
-              </Button>
-            </Stack>
-          </form>
-        </Box>
-      </Drawer>
     </Box>
   );
 }

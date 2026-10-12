@@ -227,6 +227,7 @@ export const routesSection: RouteObject[] = [
       { path: 'credit/accounts/:id', element: <CustomerCreditPage /> },
       { path: 'catalog/categories', element: <CategoriesPage /> },
       { path: 'catalog/products', element: <ProductsPage /> },
+      { path: 'catalog/products/new', element: <ProductDetailPage /> },
       { path: 'catalog/products/:id', element: <ProductDetailPage /> },
       // Add-on groups are set up on each product's page, as on Snappfood.
       { path: 'catalog/modifiers', element: <Navigate to="/app/catalog/products" replace /> },

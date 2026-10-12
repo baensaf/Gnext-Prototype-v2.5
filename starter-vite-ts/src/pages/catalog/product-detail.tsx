@@ -70,10 +70,15 @@ import { AddonGroupSheet } from './addon-group-sheet';
 import { ProductPriceHistory } from './product-price-history';
 import { ProductItemDiscounts } from './product-item-discounts';
 
+// The whole catalog is rated at the standard 9% VAT, so a new product starts there too.
+const DEFAULT_TAX_PERCENT = '9';
+
 export function ProductDetailPage() {
   const currencyLabel = useCurrencyLabel();
   const currency = useCurrencyLabel();
+  // No id on /catalog/products/new: the same page, empty, until the first Save creates the product.
   const { id } = useParams<{ id: string }>();
+  const creating = !id;
   const navigate = useNavigate();
   const { t } = useTranslation();
 
@@ -121,7 +126,19 @@ export function ProductDetailPage() {
   const [sheet, setSheet] = useState<{ group: OptionGroup | null } | null>(null);
 
   const loadData = useCallback(async () => {
-    if (!id) return;
+    if (!id) {
+      // A new product only needs the categories to pick from; the rest waits for the first Save.
+      try {
+        setCategories(await catalogApi.getCategories());
+        setTaxRate(DEFAULT_TAX_PERCENT);
+        setError(null);
+      } catch (err: any) {
+        setError(err.detail || err.message || t('catalog.productDetailPage.errors.loadFailed'));
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     setLoading(true);
     try {
       const [prod, cList, vList, ogList] = await Promise.all([
@@ -237,11 +254,36 @@ export function ProductDetailPage() {
 
   const handleSaveGeneral = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id) return;
     setSavingGeneral(true);
     setSuccessMsg(null);
     setError(null);
     try {
+      if (!id) {
+        if (!categoryId) {
+          setError(t('catalog.productsPage.errors.selectCategory'));
+          return;
+        }
+        const created = await catalogApi.createProduct({
+          code: code.trim() || null,
+          name,
+          category_id: categoryId,
+          base_price: basePrice,
+          tax_rate: percentToTaxRate(taxRate),
+          barcode: barcode.trim() || undefined,
+          description: description || undefined,
+          image_asset_id: photoIds[0] || undefined,
+        });
+        // Creating takes the main photo only; the rest of the photos and the cap follow at once.
+        const extras: Partial<Product> = {};
+        if (photoIds.length > 1) extras.gallery_asset_ids = photoIds.slice(1);
+        if (maxPerOrder) extras.max_per_order = parseInt(maxPerOrder, 10);
+        const saved = Object.keys(extras).length ? await catalogApi.updateProduct(created.id, extras) : created;
+        setProduct(saved);
+        setSuccessMsg(t('catalog.productDetailPage.messages.created'));
+        // Stay on the page, now as the saved product with every tab open.
+        navigate(`/app/catalog/products/${created.id}`, { replace: true });
+        return;
+      }
       const updated = await catalogApi.updateProduct(id, {
         // Blank clears them: a product may have no code or barcode.
         code: code.trim() || null,
@@ -258,7 +300,7 @@ export function ProductDetailPage() {
       setProduct(updated);
       setSuccessMsg(t('catalog.productDetailPage.messages.saved'));
     } catch (err: any) {
-      setError(err.detail || err.message || t('catalog.productDetailPage.errors.saveFailed'));
+      setError(err.detail || err.message || t(id ? 'catalog.productDetailPage.errors.saveFailed' : 'catalog.productsPage.errors.createFailed'));
     } finally {
       setSavingGeneral(false);
     }
@@ -358,7 +400,7 @@ export function ProductDetailPage() {
             {t('catalog.productDetailPage.backToProducts')}
           </Button>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            {product?.name || t('catalog.productDetailPage.defaultTitle')}
+            {product?.name || t(creating ? 'catalog.productDetailPage.newTitle' : 'catalog.productDetailPage.defaultTitle')}
           </Typography>
           {product?.code && <Chip label={product.code} variant="outlined" sx={{ fontWeight: 'bold' }} />}
           {currentCategory && <Chip label={currentCategory.name} color="primary" size="small" />}
@@ -403,11 +445,16 @@ export function ProductDetailPage() {
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
         <Tabs value={currentTab} onChange={(_, val) => setCurrentTab(val)}>
           <Tab label={t('catalog.productDetailPage.tabs.general')} />
-          <Tab label={t('catalog.productDetailPage.tabs.variants', { count: variants.length })} />
-          <Tab label={t('catalog.productDetailPage.tabs.modifiers', { count: product?.optionGroups?.length || 0 })} />
-          <Tab label={<Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><span>{t('catalog.productDetailPage.tabs.priceHistory')}</span><VersionTag feature="catalog.priceHistory" /></Stack>} />
+          <Tab disabled={creating} label={t('catalog.productDetailPage.tabs.variants', { count: variants.length })} />
+          <Tab disabled={creating} label={t('catalog.productDetailPage.tabs.modifiers', { count: product?.optionGroups?.length || 0 })} />
+          <Tab disabled={creating} label={<Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}><span>{t('catalog.productDetailPage.tabs.priceHistory')}</span><VersionTag feature="catalog.priceHistory" /></Stack>} />
         </Tabs>
       </Box>
+      {creating && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          {t('catalog.productDetailPage.saveFirst')}
+        </Alert>
+      )}
 
       {/* TAB 0: General Info & Pricing */}
       {currentTab === 0 && (
@@ -565,7 +612,7 @@ export function ProductDetailPage() {
                       label={row.name}
                       value={stockState(row.id)}
                       // A stop on the whole product covers its types; it is changed on the Availability page.
-                      disabled={!!row.id && !!liveStop(null)}
+                      disabled={creating || (!!row.id && !!liveStop(null))}
                       onChange={(e) => handleStockChange(row.id, e.target.value as 'AVAILABLE' | 'NEXT_SHIFT' | 'FURTHER_NOTICE')}
                       helperText={stockState(row.id) === 'NEXT_SHIFT' ? fDateTime(liveStop(row.id)!.suspended_until!) : undefined}
                     >
@@ -574,13 +621,24 @@ export function ProductDetailPage() {
                       <MenuItem value="FURTHER_NOTICE">{t('catalog.availabilityPage.modeManual')}</MenuItem>
                     </TextField>
                   ))}
-                  <Button size="small" variant="outlined" onClick={() => navigate('/app/catalog/availability')}>
+                  <Button size="small" variant="outlined" disabled={creating} onClick={() => navigate('/app/catalog/availability')}>
                     {t('catalog.productsPage.manageAvailability', 'Manage availability')}
                   </Button>
                 </Stack>
               </Card>
 
-              {id && <ProductItemDiscounts productId={id} canAuthor={canAuthor} />}
+              {id ? (
+                <ProductItemDiscounts productId={id} canAuthor={canAuthor} />
+              ) : (
+                <Card sx={{ p: 3, opacity: 0.6 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 1 }}>
+                    {t('pricing.itemDiscounts.title')}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('catalog.productDetailPage.saveFirstCard')}
+                  </Typography>
+                </Card>
+              )}
             </Grid>
           </Grid>
         </form>
