@@ -1815,7 +1815,9 @@
       "off": "Off on Snappfood",
       "offUntil": "Off until {{time}}",
       "parityWarning": "Snappfood requires the same price as in store and on other channels; its contract fines a price that differs. A markup on this sheet is the chain's own risk.",
-      "groupChip": "Price group"
+      "groupChip": "Price group",
+      "discountChip": "{{percent}}% off",
+      "discountHint": "Item discount running on Snappfood; the original price is struck through on the menu"
     },
     "changes": {
       "title": "Price changes",
@@ -1849,7 +1851,7 @@
     },
     "itemDiscounts": {
       "title": "Item discounts",
-      "subtitle": "A percent off an item between two dates, taken off every till sale of it at every branch. The order's own discount comes after it.",
+      "subtitle": "A percent off an item between two dates, for all price groups or chosen ones: at the till and kiosk, on Snappfood, or both. The order's own discount comes after it.",
       "add": "New item discount",
       "edit": "Edit item discount",
       "delete": "Delete item discount",
@@ -1869,17 +1871,32 @@
         "ended": "Ended"
       },
       "product": {
-        "help": "Taken off this item on every till sale, at every branch, before the order discount.",
+        "help": "Taken off this item before the order discount, where and for the groups chosen on each line.",
         "empty": "No discount on this item.",
         "all": "All item discounts"
       },
       "errors": {
         "loadFailed": "Could not load item discounts",
         "saveFailed": "Could not save the item discount",
-        "overlap": "This item already has a discount on some of these days",
+        "overlap": "This item already has a discount on some of these days for the same groups and place",
         "percent": "A discount is more than 0% and at most 100%",
         "dates": "The last day must be on or after the first day",
-        "product": "Pick the item the discount is for"
+        "product": "Pick the item the discount is for",
+        "groups": "Choose the price groups the discount is for",
+        "channel": "Choose where the discount runs"
+      },
+      "scope": {
+        "where": "Where",
+        "groups": "Price groups",
+        "allGroups": "All groups",
+        "pickGroups": "Choose groups",
+        "allHelp": "Includes branches with no price group.",
+        "noGroups": "No price groups yet",
+        "channel": {
+          "IN_STORE": "In store",
+          "SNAPPFOOD": "Snappfood",
+          "BOTH": "In store and Snappfood"
+        }
       }
     }
   },

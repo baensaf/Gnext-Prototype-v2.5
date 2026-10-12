@@ -401,6 +401,9 @@ export class SnappfoodCatalogService {
       const at = (position.get(s.product.category_id) || 0) + 1;
       position.set(s.product.category_id, at);
       const price = toman(sheetRow(s)?.price || '0');
+      // A running Snappfood item discount: the price above is the discounted one, and the full
+      // price goes along as the struck-through one.
+      const before = sheetRow(s)?.before_price ? toman(sheetRow(s)!.before_price!) : null;
       const title = s.variant ? s.variant.name : s.product.name;
       if (s.product.name.length > SNAPPFOOD_LIMITS.title || title.length > SNAPPFOOD_LIMITS.title) warnings.push({ item: s.title, problem: `title over ${SNAPPFOOD_LIMITS.title} characters` });
       if ((s.product.description || '').length > SNAPPFOOD_LIMITS.description) warnings.push({ item: s.title, problem: `description over ${SNAPPFOOD_LIMITS.description} characters` });
@@ -415,6 +418,7 @@ export class SnappfoodCatalogService {
         position: at,
         description: s.product.description || '',
         price,
+        ...(before ? { priceBeforeDiscount: before } : {}),
         vat: Math.round(Number(s.product.tax_rate || 0) * 100),
         containerPrice: 0,
         schedules: [] as unknown[],

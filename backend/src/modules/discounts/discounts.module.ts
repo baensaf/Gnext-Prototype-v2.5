@@ -6,6 +6,7 @@ import { Customer } from '../../entities/Customer.entity';
 import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
 import { Product } from '../../entities/Product.entity';
 import { ItemDiscount } from '../../entities/ItemDiscount.entity';
+import { PriceGroup } from '../../entities/PriceGroup.entity';
 import { DiscountsService } from './discounts.service';
 import { DiscountEvaluationService } from './discount-evaluation.service';
 import { ItemDiscountsService } from './item-discounts.service';
@@ -21,6 +22,7 @@ import { AuditModule } from '../audit/audit.module';
       ApprovalRequest,
       Product,
       ItemDiscount,
+      PriceGroup,
     ]),
     AuditModule,
   ],

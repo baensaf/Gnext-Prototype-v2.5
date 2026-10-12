@@ -1,11 +1,11 @@
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, In, IsNull, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { ItemDiscount } from '../../entities/ItemDiscount.entity';
 import { Product } from '../../entities/Product.entity';
+import { PriceGroup } from '../../entities/PriceGroup.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
-import { loadBusinessClock } from '../../common/utils/business-clock';
-import { MoneyUtil } from '../../common/utils/money.util';
+import { ActiveItemDiscount, DISCOUNT_APPLIES_TO, activeItemDiscounts, sharesScope } from '../../common/utils/item-discount.util';
 
 export interface ItemDiscountInput {
   product_id: string;
@@ -13,27 +13,31 @@ export interface ItemDiscountInput {
   starts_on: string;
   ends_on?: string | null;
   note?: string | null;
+  /** Every price group (the default), or only `price_group_ids`. */
+  all_groups?: boolean;
+  price_group_ids?: string[];
+  /** IN_STORE (the default; till and kiosk), SNAPPFOOD, or BOTH. */
+  applies_to?: 'IN_STORE' | 'SNAPPFOOD' | 'BOTH';
 }
 
-/** The discount a product gets on one business day. */
-export interface ActiveItemDiscount {
-  id: string;
-  percent: string;
-}
+export type { ActiveItemDiscount };
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * Automatic item discounts (V1, 2026-10-03): a dated percent off one product, applied to every
- * POS line of it at every branch. Head office sets them up; the quote engine asks
- * `activeFor` which apply on the branch's business day. One product has at most one discount
- * on any day, so overlapping periods are refused rather than resolved.
+ * line of it at the till and the kiosk, and on the Snappfood menu. Head office sets them up
+ * for all price groups or chosen ones, in store, on Snappfood or both (2026-10-12); the quote
+ * engine asks `activeFor` which apply on the branch's business day. A product has at most one
+ * discount for any group and channel on any day, so overlapping ones are refused rather than
+ * resolved.
  */
 @Injectable()
 export class ItemDiscountsService {
   constructor(
     @InjectRepository(ItemDiscount) private readonly repo: Repository<ItemDiscount>,
     @InjectRepository(Product) private readonly productRepo: Repository<Product>,
+    @InjectRepository(PriceGroup) private readonly groupRepo: Repository<PriceGroup>,
     private readonly auditWriter: AuditWriter,
   ) {}
 
@@ -49,7 +53,7 @@ export class ItemDiscountsService {
 
   async create(tenantId: string, input: ItemDiscountInput, actorId?: string, correlationId?: string) {
     const data = await this.validate(tenantId, input);
-    await this.refuseOverlap(tenantId, data.product_id, data.starts_on, data.ends_on, null);
+    await this.refuseOverlap(tenantId, data, null);
     const saved = await this.repo.save(this.repo.create({ tenant_id: tenantId, ...data, created_by: actorId || null }));
     await this.auditWriter.write({ tenantId, actorType: 'ADMIN', actorId, action: 'ITEM_DISCOUNT_CREATED', entityType: 'ItemDiscount', entityId: saved.id, correlationId, afterData: saved });
     return saved;
@@ -65,8 +69,11 @@ export class ItemDiscountsService {
       starts_on: input.starts_on ?? row.starts_on,
       ends_on: input.ends_on !== undefined ? input.ends_on : row.ends_on,
       note: input.note !== undefined ? input.note : row.note,
+      all_groups: input.all_groups ?? row.all_groups,
+      price_group_ids: input.price_group_ids ?? row.price_group_ids,
+      applies_to: input.applies_to ?? row.applies_to,
     });
-    await this.refuseOverlap(tenantId, data.product_id, data.starts_on, data.ends_on, id);
+    await this.refuseOverlap(tenantId, data, id);
     Object.assign(row, data);
     const saved = await this.repo.save(row);
     await this.auditWriter.write({ tenantId, actorType: 'ADMIN', actorId, action: 'ITEM_DISCOUNT_UPDATED', entityType: 'ItemDiscount', entityId: id, correlationId, beforeData: before, afterData: saved });
@@ -83,23 +90,17 @@ export class ItemDiscountsService {
   }
 
   /**
-   * The discount each product gets on the branch's business day (the day turns at the chain's
-   * cutoff, so a sale at 01:00 belongs to the day before). Products with none are absent.
+   * The discount each product gets at a branch on the branch's business day, in store by
+   * default or on Snappfood. Products with none are absent. See `activeItemDiscounts`.
    */
-  async activeFor(tenantId: string, branchId: string | null | undefined, productIds: string[], em?: EntityManager) {
-    const out = new Map<string, ActiveItemDiscount>();
-    const ids = [...new Set(productIds.filter((id) => /^[0-9a-f-]{36}$/i.test(id || '')))];
-    if (!ids.length) return out;
-    const manager = em || this.repo.manager;
-    const today = (await loadBusinessClock(manager, tenantId, branchId || null)).today();
-    const rows = await manager.find(ItemDiscount, {
-      where: [
-        { tenant_id: tenantId, product_id: In(ids), starts_on: LessThanOrEqual(today), ends_on: IsNull() },
-        { tenant_id: tenantId, product_id: In(ids), starts_on: LessThanOrEqual(today), ends_on: MoreThanOrEqual(today) },
-      ],
-    });
-    for (const r of rows) out.set(r.product_id, { id: r.id, percent: MoneyUtil.format(r.percent, 2) });
-    return out;
+  async activeFor(
+    tenantId: string,
+    branchId: string | null | undefined,
+    productIds: string[],
+    em?: EntityManager,
+    channel: 'IN_STORE' | 'SNAPPFOOD' = 'IN_STORE',
+  ) {
+    return activeItemDiscounts(em || this.repo.manager, tenantId, branchId, channel, productIds);
   }
 
   private async validate(tenantId: string, input: ItemDiscountInput) {
@@ -112,24 +113,43 @@ export class ItemDiscountsService {
     if (!DATE.test(startsOn)) throw refuse('ITEM_DISCOUNT_DATES', 'Pick the first day of the discount');
     const endsOn = input.ends_on ? String(input.ends_on).slice(0, 10) : null;
     if (endsOn && (!DATE.test(endsOn) || endsOn < startsOn)) throw refuse('ITEM_DISCOUNT_DATES', 'The last day is on or after the first day');
+    const appliesTo = input.applies_to ?? 'IN_STORE';
+    if (!(DISCOUNT_APPLIES_TO as readonly string[]).includes(appliesTo)) {
+      throw refuse('ITEM_DISCOUNT_CHANNEL', 'The discount is in store, on Snappfood or both');
+    }
+    const allGroups = input.all_groups ?? true;
+    const groupIds = allGroups ? [] : [...new Set((input.price_group_ids || []).map(String))];
+    if (!allGroups) {
+      const found = groupIds.length ? await this.groupRepo.count({ where: { tenant_id: tenantId, id: In(groupIds) } }) : 0;
+      if (!groupIds.length || found !== groupIds.length) throw refuse('ITEM_DISCOUNT_GROUPS', 'Pick the price groups the discount is for');
+    }
     return {
       product_id: product.id,
       percent: percent.toFixed(2),
       starts_on: startsOn,
       ends_on: endsOn,
       note: String(input.note || '').trim().slice(0, 160) || null,
+      all_groups: allGroups,
+      price_group_ids: groupIds,
+      applies_to: appliesTo,
     };
   }
 
-  /** One product has at most one discount on any day. */
-  private async refuseOverlap(tenantId: string, productId: string, startsOn: string, endsOn: string | null, exceptId: string | null) {
-    const others = (await this.repo.find({ where: { tenant_id: tenantId, product_id: productId } })).filter((r) => r.id !== exceptId);
-    const clash = others.find((r) => (r.ends_on === null || r.ends_on >= startsOn) && (endsOn === null || r.starts_on <= endsOn));
+  /** A product has at most one discount for any group and channel on any day. */
+  private async refuseOverlap(
+    tenantId: string,
+    next: Pick<ItemDiscount, 'product_id' | 'starts_on' | 'ends_on' | 'all_groups' | 'price_group_ids' | 'applies_to'>,
+    exceptId: string | null,
+  ) {
+    const others = (await this.repo.find({ where: { tenant_id: tenantId, product_id: next.product_id } })).filter((r) => r.id !== exceptId);
+    const clash = others.find(
+      (r) => (r.ends_on === null || r.ends_on >= next.starts_on) && (next.ends_on === null || r.starts_on <= next.ends_on) && sharesScope(r, next),
+    );
     if (clash) {
       throw new ConflictException({
         statusCode: 409,
         code: 'ITEM_DISCOUNT_OVERLAP',
-        message: `This item already has a ${Number(clash.percent)}% discount from ${clash.starts_on}${clash.ends_on ? ` to ${clash.ends_on}` : ''}`,
+        message: `This item already has a ${Number(clash.percent)}% discount from ${clash.starts_on}${clash.ends_on ? ` to ${clash.ends_on}` : ''} for the same price groups and channel`,
         discountId: clash.id,
       });
     }

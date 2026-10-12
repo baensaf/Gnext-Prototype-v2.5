@@ -227,7 +227,11 @@ export interface ChannelPriceSheet {
     rule_price: string;
     /** The branch's price group's own price on the channel; null when it follows the rule. */
     group_price: string | null;
+    /** What Snappfood gets: the above, less any item discount running there. */
     price: string;
+    /** With an item discount running on Snappfood: the price before it, struck through on the menu. */
+    before_price: string | null;
+    discount_percent: string | null;
     /** Off on the channel right now: a stop on it or everywhere. */
     off: { reason: string | null; until: string | null; everywhere: boolean; chain_wide: boolean } | null;
   }>;

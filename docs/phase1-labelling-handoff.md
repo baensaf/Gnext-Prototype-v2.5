@@ -254,13 +254,21 @@ applies to what is left, as HAMI does. A line keeps the percent it was given whe
 sent. The till shows "−20%" on the cart line; the receipt marks the line and the discount total
 includes it. Not a discount campaign (no targeting, no conditions); campaigns stay cut.
 
+**Item discounts on price groups and Snappfood (2026-10-12): V1.** A discount is for all price
+groups (branches with no group included) or a chosen list of groups, and runs in store, on
+Snappfood, or both. Two discounts on one item clash only when their dates, a group and a channel
+are all shared. In store means the till and the kiosk. On Snappfood the discount is real: the
+branch's price sheet and the menu sync send the discounted price, with the full price as the
+struck-through one. Snappfood orders still take their amounts from the order payload.
+
 | Feature | Label |
 |---|---|
 | Category-wide item discounts | V2 |
 | Fixed-amount item discounts; time-of-day | V2 |
-| Item discounts on the kiosk | V3 |
+| Item discounts on the kiosk | V1 (2026-10-12) |
 | Item discounts on offline agent tills (not built yet: needs an agent release; offline orders take no discounts today) | V1 |
-| Only some branches | V4 |
+| Only some price groups; on Snappfood | V1 (2026-10-12) |
+| Only one branch (not through a price group) | V4 |
 | Sending item discounts to Moadian | F |
 
 **Page group 11, operations (`/app/operations/…`): V1.** Decided 2026-09-29: branches, tills,

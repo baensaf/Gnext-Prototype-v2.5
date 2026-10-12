@@ -52,7 +52,10 @@ export interface ManualDiscountLimits {
   ceiling: { pct: string; maxFixed: string };
 }
 
-/** A dated percent off one product, applied by itself on the till (V1). */
+/** Where an item discount runs: in store (the till and the kiosk), on Snappfood, or both. */
+export type ItemDiscountChannel = 'IN_STORE' | 'SNAPPFOOD' | 'BOTH';
+
+/** A dated percent off one product, applied by itself at the till, the kiosk and on Snappfood (V1). */
 export interface ItemDiscount {
   id: string;
   product_id: string;
@@ -62,9 +65,15 @@ export interface ItemDiscount {
   starts_on: string;
   ends_on: string | null;
   note: string | null;
+  /** Every price group (and branches with no group); otherwise only `price_group_ids`. */
+  all_groups: boolean;
+  price_group_ids: string[];
+  applies_to: ItemDiscountChannel;
 }
 
-export type ItemDiscountInput = Pick<ItemDiscount, 'product_id' | 'starts_on' | 'ends_on' | 'note'> & { percent: string };
+export type ItemDiscountInput = Pick<ItemDiscount, 'product_id' | 'starts_on' | 'ends_on' | 'note' | 'all_groups' | 'price_group_ids' | 'applies_to'> & {
+  percent: string;
+};
 
 export const discountsApi = {
   getItemDiscounts: async (): Promise<ItemDiscount[]> => {

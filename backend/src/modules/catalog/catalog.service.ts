@@ -18,6 +18,7 @@ import { PriceListService } from './price-lists.service';
 import { PriceEntry } from '../../entities/PriceEntry.entity';
 import { applyChannelRule } from '../../common/utils/channel-price.util';
 import { inStorePrice, priceKey } from '../../common/utils/price-list.util';
+import { activeItemDiscounts, discountedPrice } from '../../common/utils/item-discount.util';
 import { addDays } from '../../common/utils/business-day';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 
@@ -1335,8 +1336,9 @@ export class CatalogService {
    * One row per product, or per size of a product sold in sizes, and one per add-on: the
    * in-store price (the branch's price list, else base), what the channel's markup rule makes
    * of it, the price group's own price on the channel if it sets one, and the price that
-   * applies: the group's price, else the rule's. Add-ons follow the rule only. With no branch,
-   * or a branch with no price group, it is base plus the markup.
+   * applies: the group's price, else the rule's, less any item discount running on the channel
+   * for the branch's group (the original is `before_price`). Add-ons follow the rule only.
+   * With no branch, or a branch with no price group, it is base plus the markup.
    */
   async getChannelPriceSheet(tenantId: string, channel: string, branchId: string | null = null) {
     const rule = await this.priceLists.channelRule(tenantId, channel);
@@ -1346,6 +1348,9 @@ export class CatalogService {
     const list = await this.priceLists.listForBranch(tenantId, branchId);
     const listed = await this.priceLists.pricesForBranch(tenantId, branchId, now);
     const groupPrices = list ? await this.priceLists.channelPricesOf(tenantId, list.id, channel, now) : new Map<string, string>();
+    // Item discounts running on the channel for this branch's group are real: the sheet prices
+    // the item discounted and keeps the original as the struck-through "before" price.
+    const discounts = channel === 'SNAPPFOOD' ? await activeItemDiscounts(this.prodRepo.manager, tenantId, branchId, 'SNAPPFOOD') : new Map<string, { id: string; percent: string }>();
     // What is off on the channel: stops on it and stops everywhere. With no branch, only the
     // chain-wide ones, since a branch's own stop says nothing about the others.
     const stops = (await this.getAvailabilities(tenantId, branchId || undefined)).filter(
@@ -1359,7 +1364,9 @@ export class CatalogService {
       const base = inStorePrice(listed, product, variant);
       const rulePrice = applyChannelRule(base, rule);
       const own = groupPrices.get(priceKey(product.id, variant?.id));
-      const price = own ?? rulePrice;
+      const regular = own ?? rulePrice;
+      const discount = discounts.get(product.id);
+      const price = discount ? discountedPrice(regular, discount.percent) : regular;
       return {
         product_id: product.id,
         variant_id: variant?.id || null,
@@ -1369,6 +1376,9 @@ export class CatalogService {
         rule_price: rulePrice,
         group_price: own ?? null,
         price,
+        // The price before the item discount, struck through on the Snappfood menu; null for none.
+        before_price: discount ? regular : null,
+        discount_percent: discount ? discount.percent : null,
         off: offOf(product, variant),
       };
     };

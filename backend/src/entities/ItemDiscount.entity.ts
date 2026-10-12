@@ -7,7 +7,11 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
  * order discount (manual or customer rate) then applies to what is left.
  *
  * Not campaigns: no customer targeting, no conditions, no minimum basket. Category-wide
- * discounts, fixed amounts, time-of-day and per-branch rules are later.
+ * discounts, fixed amounts and time-of-day rules are later.
+ *
+ * Scope (2026-10-12): all price groups, or a chosen list of them (`price_group_ids`); a branch
+ * with no group is covered only by "all groups". And a channel: in store (the till and the
+ * kiosk), Snappfood (a real price cut on the Snappfood menu), or both.
  */
 @Entity('item_discount')
 @Index(['tenant_id', 'product_id'])
@@ -35,6 +39,17 @@ export class ItemDiscount {
 
   @Column({ type: 'varchar', length: 160, nullable: true })
   note: string | null;
+
+  /** Every price group, branches with no group included. When false, only `price_group_ids`. */
+  @Column({ type: 'boolean', default: true })
+  all_groups: boolean;
+
+  @Column({ type: 'uuid', array: true, default: () => "'{}'" })
+  price_group_ids: string[];
+
+  /** IN_STORE (till and kiosk), SNAPPFOOD, or BOTH. */
+  @Column({ type: 'varchar', length: 12, default: 'IN_STORE' })
+  applies_to: 'IN_STORE' | 'SNAPPFOOD' | 'BOTH';
 
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
