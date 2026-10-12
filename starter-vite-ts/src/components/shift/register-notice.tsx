@@ -48,7 +48,7 @@ export function RegisterNotice({ terminal, mismatch, terminalBranchName, branchN
           <>
             <Typography variant="h6">
               {t('shift.device.mismatch', 'This device is {{register}} at {{branch}}', {
-                register: `${terminal.name} (${terminal.code})`,
+                register: terminal.name,
                 branch: terminalBranchName || '',
               })}
             </Typography>

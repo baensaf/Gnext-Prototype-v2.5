@@ -9,20 +9,27 @@ import { Chip } from '@mui/material';
 
 import { openStatus } from 'src/utils/opening-hours';
 
+import i18n from 'src/locales/i18n';
 import { tenantApi } from 'src/api/tenantApi';
+
+/** "11:00" in the reader's digits: ۱۱:۰۰ in Persian. */
+function localTime(hhmm: string): string {
+  if (!i18n.language?.startsWith('fa')) return hhmm;
+  return hhmm.replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+}
 
 /** "Open until 02:00", "Open 24 hours" or "Closed · opens Sat 11:00". */
 export function describeOpenStatus(status: OpenStatus, t: TFunction): string {
   if (status.open) {
     if (!status.until) return t('branchMgmt.status.openAllDay', 'Open 24 hours');
     if (status.until === '00:00') return t('branchMgmt.status.openUntilMidnight', 'Open until midnight');
-    return t('branchMgmt.status.openUntil', { defaultValue: 'Open until {{time}}', time: status.until });
+    return t('branchMgmt.status.openUntil', { defaultValue: 'Open until {{time}}', time: localTime(status.until) });
   }
   if (!status.opensDay) return t('branchMgmt.status.closedAlways', 'Closed every day');
   return t('branchMgmt.status.closedOpens', {
     defaultValue: 'Closed · opens {{day}} {{time}}',
     day: t(`branchMgmt.shortDays.${status.opensDay}`, status.opensDay),
-    time: status.opensAt,
+    time: status.opensAt ? localTime(status.opensAt) : status.opensAt,
   });
 }
 
