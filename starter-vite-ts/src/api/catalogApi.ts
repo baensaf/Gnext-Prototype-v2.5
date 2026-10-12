@@ -117,6 +117,10 @@ export interface PriceListSheet {
     base_price: string;
     list_price: string | null;
     price: string;
+    /** The list's own Snappfood price for the item; null while it follows the in-store price. */
+    snappfood_price: string | null;
+    /** What Snappfood gets while snappfood_price is empty: the in-store price plus the markup. */
+    snappfood_fallback: string;
   }>;
 }
 
@@ -221,7 +225,8 @@ export interface ChannelPriceSheet {
     name: string;
     base_price: string;
     rule_price: string;
-    fixed_price: string | null;
+    /** The branch's price group's own price on the channel; null when it follows the rule. */
+    group_price: string | null;
     price: string;
     /** Off on the channel right now: a stop on it or everywhere. */
     off: { reason: string | null; until: string | null; everywhere: boolean; chain_wide: boolean } | null;
@@ -357,8 +362,15 @@ export const catalogApi = {
     const res = await httpClient.get(`/api/v1/catalog/price-lists/${id}/prices`);
     return res.data;
   },
-  setListPrice: async (id: string, productId: string, variantId: string | null, amount: string | null): Promise<PriceListSheet> => {
-    const res = await httpClient.put(`/api/v1/catalog/price-lists/${id}/prices`, { productId, variantId, amount });
+  /** Sets or clears (amount null) a list's in-store price, or with `channel` SNAPPFOOD its Snappfood one. */
+  setListPrice: async (
+    id: string,
+    productId: string,
+    variantId: string | null,
+    amount: string | null,
+    channel: string | null = null
+  ): Promise<PriceListSheet> => {
+    const res = await httpClient.put(`/api/v1/catalog/price-lists/${id}/prices`, { productId, variantId, amount, channel });
     return res.data;
   },
   assignBranchPriceList: async (branchId: string, priceListId: string | null): Promise<void> => {
@@ -379,20 +391,10 @@ export const catalogApi = {
     return res.data;
   },
 
-  // Aggregator price sheet (Snappfood): the markup rule applied to every item, plus fixed
-  // prices. With a branch, the markup starts from that branch's in-store price.
+  // Aggregator price sheet (Snappfood), read only: what a branch gets, from its price group's
+  // Snappfood price or its in-store price plus the markup.
   getChannelPriceSheet: async (channel: string, branchId?: string | null): Promise<ChannelPriceSheet> => {
     const res = await httpClient.get('/api/v1/catalog/channel-prices', { params: { channel, branchId: branchId || undefined } });
-    return res.data;
-  },
-  setChannelFixedPrice: async (
-    channel: string,
-    productId: string,
-    variantId: string | null,
-    amount: string | null,
-    branchId?: string | null
-  ): Promise<ChannelPriceSheet> => {
-    const res = await httpClient.put('/api/v1/catalog/channel-prices', { channel, productId, variantId, amount, branchId: branchId || null });
     return res.data;
   },
 

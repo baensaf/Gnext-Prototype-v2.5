@@ -1,3 +1,4 @@
+import type { Branch } from 'src/api/tenantApi';
 import type { ChannelPriceSheet } from 'src/api/catalogApi';
 
 import { useTranslation } from 'react-i18next';
@@ -13,13 +14,17 @@ import {
   Alert,
   Table,
   Button,
+  Select,
+  MenuItem,
   TableRow,
   TableBody,
   TableCell,
   TableHead,
   TextField,
   Typography,
+  InputLabel,
   CardContent,
+  FormControl,
   TableContainer,
   InputAdornment,
 } from '@mui/material';
@@ -28,28 +33,27 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
 import { toToman, fromToman } from 'src/utils/currency';
 
+import { tenantApi } from 'src/api/tenantApi';
 import { catalogApi } from 'src/api/catalogApi';
 import { settingsApi } from 'src/api/settingsApi';
 import { useBranchContextOptional } from 'src/contexts/branch-context';
 
 const CHANNEL = 'SNAPPFOOD';
 /**
- * What each item costs on Snappfood: the in-store price with the channel's markup, rounded,
- * unless an item has a fixed Snappfood price. The prototype does not push the menu to
- * Snappfood, so this is the sheet someone copies into the vendor panel.
+ * What each item costs on Snappfood at one branch, read only: the price group's own Snappfood
+ * price, or the in-store price with the channel's markup, rounded. The group's prices are set
+ * on the price lists page. The markup rule is edited here. The menu sync sends this sheet.
  */
 export function ChannelPricesPage() {
   const { t } = useTranslation();
   const [sheet, setSheet] = useState<ChannelPriceSheet | null>(null);
   const [markup, setMarkup] = useState('0');
   const [roundTo, setRoundTo] = useState('0');
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [search, setSearch] = useState('');
-  // Whose in-store prices the markup starts from: the branch chosen in the header, or base
-  // prices at head office.
+  // Whose sheet to show: starts at the branch chosen in the header, or base prices.
   const branchScope = useBranchContextOptional();
-  const branchId = branchScope?.selectedBranchId ?? '';
-  const branchName = branchScope?.selectedBranch?.name ?? '';
+  const [branchId, setBranchId] = useState(branchScope?.selectedBranchId ?? '');
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -59,7 +63,6 @@ export function ChannelPricesPage() {
       setSheet(data);
       setMarkup(String(data.rule.markup_percent));
       setRoundTo(toToman(data.rule.round_to));
-      setDrafts({});
     } catch (err: any) {
       setError(err.detail || err.message || t('pricing.channelPrices.loadFailed'));
     }
@@ -68,6 +71,14 @@ export function ChannelPricesPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    // Only restaurants sell, so only they have a sheet.
+    tenantApi
+      .getBranches()
+      .then((all) => setBranches(all.filter((b) => b.is_active && (!b.branch_type || b.branch_type === 'RESTAURANT'))))
+      .catch(() => setBranches([]));
+  }, []);
 
   /** Rewrites this channel's part of the CHANNEL_PRICING setting, keeping what isn't changed. */
   const saveChannelSetting = async (change: (current: Record<string, any>) => Record<string, any>) => {
@@ -84,22 +95,6 @@ export function ChannelPricesPage() {
       }));
       setNotice(t('pricing.channelPrices.ruleSaved'));
       await load();
-    } catch (err: any) {
-      setError(err.detail || err.message || t('pricing.channelPrices.saveFailed'));
-    }
-  };
-
-  const key = (productId: string, variantId: string | null) => `${productId}:${variantId || ''}`;
-
-  const saveFixed = async (productId: string, variantId: string | null) => {
-    const value = (drafts[key(productId, variantId)] ?? '').trim();
-    try {
-      setSheet(await catalogApi.setChannelFixedPrice(CHANNEL, productId, variantId, value === '' ? null : fromToman(value), branchId || null));
-      setDrafts((prev) => {
-        const next = { ...prev };
-        delete next[key(productId, variantId)];
-        return next;
-      });
     } catch (err: any) {
       setError(err.detail || err.message || t('pricing.channelPrices.saveFailed'));
     }
@@ -166,9 +161,17 @@ export function ChannelPricesPage() {
       </Card>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 2, alignItems: { sm: 'center' } }}>
-        <Typography variant="subtitle2" sx={{ whiteSpace: 'nowrap' }}>
-          {branchId ? `${t('pricing.channelPrices.branch')} ${branchName}` : t('pricing.channelPrices.basePrices')}
-        </Typography>
+        <FormControl size="small" sx={{ minWidth: 220 }}>
+          <InputLabel shrink>{t('pricing.channelPrices.branch')}</InputLabel>
+          <Select displayEmpty notched value={branchId} label={t('pricing.channelPrices.branch')} onChange={(e) => setBranchId(e.target.value)}>
+            <MenuItem value="">{t('pricing.channelPrices.basePrices')}</MenuItem>
+            {branches.map((b) => (
+              <MenuItem key={b.id} value={b.id}>
+                {b.name}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
         <TextField
           size="small"
           placeholder={t('pricing.channelPrices.search')}
@@ -194,57 +197,35 @@ export function ChannelPricesPage() {
               <TableCell>{t('pricing.channelPrices.item')}</TableCell>
               <TableCell align="right">{t('pricing.channelPrices.inStore')}</TableCell>
               <TableCell align="right">{t('pricing.channelPrices.byRule')}</TableCell>
-              <TableCell align="right">{t('pricing.channelPrices.fixed')}</TableCell>
               <TableCell align="right">{t('pricing.channelPrices.onChannel')}</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {rows.map((r) => {
-              const k = key(r.product_id, r.variant_id);
-              const draft = drafts[k];
-              // Drafts are what was typed, in tomans; the sheet holds rials.
-              const changed = draft !== undefined && draft !== (r.fixed_price ? toToman(r.fixed_price) : '');
-              return (
-                <TableRow key={k}>
-                  <TableCell>{r.name}</TableCell>
-                  <TableCell align="right">{MoneyUtil.formatCurrency(r.base_price)}</TableCell>
-                  <TableCell align="right">{MoneyUtil.formatCurrency(r.rule_price)}</TableCell>
-                  <TableCell align="right">
-                    <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', alignItems: 'center' }}>
-                      <TextField
-                        size="small"
-                        type="number"
-                        placeholder={t('pricing.channelPrices.followsRule')}
-                        value={draft ?? (r.fixed_price ? toToman(r.fixed_price) : '')}
-                        onChange={(e) => setDrafts((prev) => ({ ...prev, [k]: e.target.value }))}
-                        sx={{ width: 150 }}
-                      />
-                      <Button size="small" disabled={!changed} onClick={() => saveFixed(r.product_id, r.variant_id)}>
-                        {t('common.save')}
-                      </Button>
-                    </Stack>
-                  </TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                    {MoneyUtil.formatCurrency(r.price)}
-                    {r.fixed_price && <Chip size="small" label={t('pricing.channelPrices.fixedChip')} sx={{ ml: 1 }} />}
-                    {/* Off on Snappfood right now: switch it off in the vendor panel too. */}
-                    {r.off && (
-                      <Chip
-                        size="small"
-                        color="warning"
-                        sx={{ ml: 1 }}
-                        title={r.off.reason || undefined}
-                        label={
-                          r.off.until
-                            ? t('pricing.channelPrices.offUntil', { time: fDateTime(r.off.until) })
-                            : t('pricing.channelPrices.off')
-                        }
-                      />
-                    )}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+            {rows.map((r) => (
+              <TableRow key={`${r.product_id}:${r.variant_id || ''}`}>
+                <TableCell>{r.name}</TableCell>
+                <TableCell align="right">{MoneyUtil.formatCurrency(r.base_price)}</TableCell>
+                <TableCell align="right">{MoneyUtil.formatCurrency(r.rule_price)}</TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                  {MoneyUtil.formatCurrency(r.price)}
+                  {r.group_price && <Chip size="small" label={t('pricing.channelPrices.groupChip')} sx={{ ml: 1 }} />}
+                  {/* Off on Snappfood right now: switch it off in the vendor panel too. */}
+                  {r.off && (
+                    <Chip
+                      size="small"
+                      color="warning"
+                      sx={{ ml: 1 }}
+                      title={r.off.reason || undefined}
+                      label={
+                        r.off.until
+                          ? t('pricing.channelPrices.offUntil', { time: fDateTime(r.off.until) })
+                          : t('pricing.channelPrices.off')
+                      }
+                    />
+                  )}
+                </TableCell>
+              </TableRow>
+              ))}
           </TableBody>
         </Table>
       </TableContainer>

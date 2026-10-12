@@ -1764,7 +1764,7 @@
   "pricing": {
     "priceLists": {
       "title": "Branch prices",
-      "subtitle": "Each branch sells at the prices of its price list. An item the list does not price, and every item at a branch with no list, sells at the base price from the product page. Snappfood prices start from these.",
+      "subtitle": "Each branch sells at the prices of its price list. An item the list does not price, and every item at a branch with no list, sells at the base price from the product page. Each list also sets a Snappfood price per item; left empty, Snappfood gets the in-store price plus the markup (greyed in the box).",
       "listsTitle": "Price lists",
       "newList": "New price list",
       "noLists": "No price lists yet. Every branch sells at base prices.",
@@ -1786,14 +1786,15 @@
       "basePrice": "Base price",
       "listPrice": "List price",
       "usesBase": "Base price",
-      "charged": "Charged",
+      "charged": "Charged in store",
       "onList": "List",
       "loadFailed": "Could not load the price lists",
-      "saveFailed": "Could not save"
+      "saveFailed": "Could not save",
+      "snappfoodPrice": "Snappfood price"
     },
     "channelPrices": {
       "title": "Snappfood prices",
-      "subtitle": "What Snappfood gets for every item at a branch: its price group's Snappfood price, or the in-store price plus the markup, rounded up. Copy these into the Snappfood vendor panel.",
+      "subtitle": "What Snappfood gets for every item at a branch: its price group's Snappfood price, or the in-store price plus the markup, rounded up. The group's prices are set on the Branch prices page. Copy these into the Snappfood vendor panel.",
       "ruleTitle": "Markup rule",
       "markup": "Markup",
       "roundTo": "Round up to (Toman)",
@@ -1806,17 +1807,15 @@
       "addOn": "Add-on",
       "inStore": "In store",
       "byRule": "By the rule",
-      "fixed": "Fixed Snappfood price",
-      "followsRule": "Follows the rule",
       "onChannel": "On Snappfood",
-      "fixedChip": "Fixed",
-      "branch": "In-store prices of",
-      "basePrices": "Base prices",
+      "branch": "Branch",
+      "basePrices": "Base prices (no branch)",
       "fromList": "In-store prices from the {{name}} list",
       "noList": "This branch has no price list, so it uses base prices",
       "off": "Off on Snappfood",
       "offUntil": "Off until {{time}}",
-      "parityWarning": "Snappfood requires the same price as in store and on other channels; its contract fines a price that differs. A markup on this sheet is the chain's own risk."
+      "parityWarning": "Snappfood requires the same price as in store and on other channels; its contract fines a price that differs. A markup on this sheet is the chain's own risk.",
+      "groupChip": "Price group"
     },
     "changes": {
       "title": "Price changes",

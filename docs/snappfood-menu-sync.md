@@ -26,7 +26,7 @@ is `backend/test/snappfood-menu-sync-postgres.spec.ts`.
 | Product off the menu | `active: false` | Only reactivated by our own call |
 | Most per order | `capacity` (`POST /va/v1/product/productDetails`) | |
 | Tax rate | `vat`, whole percent | |
-| Price (Rial) | `price`, whole Toman | Our Snappfood price sheet (markup or a fixed price). Snappfood's contract wants the in-store price |
+| Price (Rial) | `price`, whole Toman | The branch's price group's Snappfood price, else its in-store price plus the channel markup (see "Prices" below). Snappfood's contract wants the in-store price |
 | Packaging | `containerPrice: 0` | We charge packaging as a required add-on group, as Food Partner vendors do |
 | Selling hours, daily stock | `schedules: []`, `stock: null` | Removed from our product (S-11); always sent as full-time and unlimited |
 
@@ -77,6 +77,24 @@ In this order, for one branch (`buildMenu` returns the bodies; `pushMenu` logs t
 | 5 | `PUT /va/v1/product/` | `{vendorCode, products: [{id, active, disable, disableUntil?}]}`: every product's stock, products taken off our menu, and toppings |
 | 6 | `PUT /va/v1/menu/` | `{vendorCode, menus: [{id, active: false}]}` for categories taken off the menu |
 | 7 | `POST /va/v1/product/productDetails` | `{vendorCode, products: [{id, price, capacity}]}` for products with a per-order cap |
+
+### Prices
+
+Snappfood prices belong to the **price group** (2026-10-12), not the branch and not the whole
+chain. Each group has two prices per item: in store and Snappfood (`price_entry` rows with
+`price_group_id`, and `channel = 'SNAPPFOOD'` for the Snappfood one; dated, the old price is
+closed, not deleted). `getChannelPriceSheet(tenant, 'SNAPPFOOD', branch)` resolves a branch's
+Snappfood price for each product or type:
+
+1. the branch's group's Snappfood price, if the group sets one;
+2. else the group's in-store price (the base price when the group does not price the item)
+   with the channel markup rule (`CHANNEL_PRICING`: `markup_percent`, `round_to`) applied and
+   rounded up to its step;
+3. a branch with no group: the base price with the markup.
+
+`buildMenu` sends exactly this sheet, so two branches on different groups get different prices
+for the same product, and a branch on a group with no Snappfood price follows its own in-store
+price. Add-ons follow the markup rule only.
 
 Prices are whole Toman: our Rial divided by ten, rounded. The send is refused item by item where
 Snappfood would refuse it, and the simulator lists those as warnings first:
