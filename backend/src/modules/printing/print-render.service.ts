@@ -100,6 +100,7 @@ const PAYMENT_METHODS: Record<string, string> = {
   NETWORK_POS: 'کارتخوان',
   MOBILE_POS: 'کارتخوان سیار',
   CUSTOMER_CREDIT: 'اعتبار مشتری',
+  WALLET: 'کیف پول',
   BANK_TRANSFER: 'کارت به کارت',
   ONLINE: 'پرداخت آنلاین',
 };

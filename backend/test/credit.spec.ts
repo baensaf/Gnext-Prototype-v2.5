@@ -122,6 +122,59 @@ describe('Customer Credit Subledger Suite (R14)', () => {
     });
   });
 
+  // Cashback is the customer's money, credit is theirs to repay: two accounts since 2026-10-12.
+  describe('The wallet, apart from credit', () => {
+    it('opens a wallet with no credit limit on the first cashback, never a credit line', async () => {
+      accountRepo.findOne.mockResolvedValue(null);
+
+      const entry = await service.awardLoyaltyCashback('t-1', 'c-1', 'ord-1', '100000.0000', '5.00');
+
+      expect(accountRepo.findOne).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ kind: 'WALLET' }) }));
+      expect(entry?.amount).toBe('5000.0000');
+      expect(entry?.balance_after).toBe('5000.0000');
+    });
+
+    it('spends no more than the wallet holds', async () => {
+      const wallet = { id: 'w-1', tenant_id: 't-1', currency_code: 'IRR', kind: 'WALLET', mode: 'FINITE', credit_limit: null, current_balance: '30000.0000' };
+      accountRepo.findOne.mockResolvedValue(wallet);
+
+      await expect(service.postPurchase('t-1', 'w-1', { orderId: 'ord-1', amount: '40000.0000' })).rejects.toThrow(ForbiddenException);
+      const entry = await service.postPurchase('t-1', 'w-1', { orderId: 'ord-1', amount: '30000.0000' });
+      expect(entry.balance_after).toBe('0.0000');
+    });
+
+    it('is not repaid and has no limit to set', async () => {
+      const wallet = { id: 'w-1', tenant_id: 't-1', currency_code: 'IRR', kind: 'WALLET', mode: 'FINITE', credit_limit: null, current_balance: '-10000.0000' };
+      accountRepo.findOne.mockResolvedValue(wallet);
+
+      await expect(service.postRepayment('t-1', 'w-1', { amount: '10000.0000' })).rejects.toThrow(BadRequestException);
+      await expect(service.updateAccount('t-1', 'w-1', { creditLimit: '50000' })).rejects.toThrow(BadRequestException);
+    });
+
+    it('takes back only the cashback still in the wallet when the order is refunded', async () => {
+      const wallet = { id: 'w-1', tenant_id: 't-1', currency_code: 'IRR', kind: 'WALLET', mode: 'FINITE', credit_limit: null, current_balance: '1000.0000' };
+      accountRepo.findOne.mockResolvedValue(wallet);
+      dataSource.transaction.mockImplementationOnce(async (cb: any) =>
+        cb({
+          findOne: jest.fn((entityClass: any) =>
+            entityClass === CreditEntry
+              ? { id: 'e-1', account_id: 'w-1', order_id: 'ord-1', entry_type: 'LOYALTY_CASHBACK', amount: '5000.0000' }
+              : wallet,
+          ),
+          find: jest.fn().mockResolvedValue([]),
+          create: jest.fn((_: any, data: any) => ({ ...data })),
+          save: jest.fn((_: any, data: any) => Promise.resolve(data)),
+          query: jest.fn().mockResolvedValue([]),
+        }),
+      );
+
+      const reversal = await service.reverseLoyaltyCashback('t-1', 'ord-1', '100000.0000', '100000.0000');
+
+      expect(reversal?.amount).toBe('-1000.0000');
+      expect(wallet.current_balance).toBe('0.0000');
+    });
+  });
+
   describe('Account with its transactions', () => {
     it('should list the transactions newest first', async () => {
       accountRepo.findOne.mockResolvedValue({

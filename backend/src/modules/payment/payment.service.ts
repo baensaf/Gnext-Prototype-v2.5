@@ -187,7 +187,8 @@ export class PaymentService {
       // and remains the authority; without this, an over-limit or blocked account only
       // surfaces at capture, leaving a PENDING intent that blocks every other tender on the
       // order until someone voids it.
-      if (method.kind === 'CUSTOMER_CREDIT') {
+      // The wallet the same way: no more than it holds.
+      if (method.kind === 'CUSTOMER_CREDIT' || method.kind === 'WALLET') {
         if (!order.customer_id) {
           throw new BadRequestException('Customer credit payment requires an assigned customer on the order');
         }
@@ -197,6 +198,7 @@ export class PaymentService {
           order.currency_code || 'IRR',
           amountFormatted,
           em,
+          method.kind === 'WALLET' ? 'WALLET' : 'CREDIT',
         );
       }
 
@@ -294,12 +296,17 @@ export class PaymentService {
           : await this.shiftService.requireDrawer(tenantId, order.branch_id, order.terminal_id);
         await this.shiftService.recordCashPaymentMovement(tenantId, shift.id, payment.id, payment.amount, userId || undefined, em);
         payment.status = 'SUCCEEDED';
-      } else if (methodKind === 'CUSTOMER_CREDIT') {
+      } else if (methodKind === 'CUSTOMER_CREDIT' || methodKind === 'WALLET') {
         if (!order.customer_id) {
           throw new BadRequestException('Customer credit payment requires an assigned customer on the order');
         }
-        const acc = await this.creditService.getAccountByCustomer(tenantId, order.customer_id, payment.currency_code);
-        if (!acc) throw new NotFoundException(`No credit account found for customer ${order.customer_id}`);
+        const kind = methodKind === 'WALLET' ? 'WALLET' : 'CREDIT';
+        const acc = await this.creditService.getAccountByCustomer(tenantId, order.customer_id, payment.currency_code, em, kind);
+        if (!acc) {
+          throw new NotFoundException(
+            kind === 'WALLET' ? `Customer ${order.customer_id} has no wallet` : `No credit account found for customer ${order.customer_id}`,
+          );
+        }
 
         await this.creditService.postPurchase(
           tenantId,
@@ -518,8 +525,9 @@ export class PaymentService {
       }
 
       // Credit was debited when the payment succeeded, so it has to be handed back here —
-      // otherwise the order un-pays but the customer stays in debt for it.
-      if (payment.method_kind === 'CUSTOMER_CREDIT') {
+      // otherwise the order un-pays but the customer stays in debt for it. A wallet payment
+      // goes back into the wallet the same way.
+      if (payment.method_kind === 'CUSTOMER_CREDIT' || payment.method_kind === 'WALLET') {
         await this.creditService.reversePurchase(
           tenantId,
           payment.id,

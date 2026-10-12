@@ -12,6 +12,10 @@ import {
 } from 'typeorm';
 import { Customer } from './Customer.entity';
 
+/**
+ * A friend or family member's discount at one branch: a percent off their order there, filled
+ * in on the till when they are picked. Each branch keeps its own few people.
+ */
 @Entity('customer_discount')
 @Index(['tenant_id', 'customer_id', 'is_active'])
 export class CustomerDiscount {
@@ -23,6 +27,9 @@ export class CustomerDiscount {
 
   @Column({ type: 'uuid' })
   customer_id: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  branch_id: string | null;
 
   @Column({ type: 'numeric', precision: 5, scale: 2 })
   discount_percentage: string;

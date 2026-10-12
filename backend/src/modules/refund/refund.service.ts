@@ -251,8 +251,8 @@ export class RefundService {
       if (kind === 'CASH') {
         // Handed back from the drawer at the register doing the refund.
         await this.shiftService.recordCashRefundMovement(tenantId, drawer!.id, refund.id, refund.amount, ctx.userId, em);
-      } else if (kind === 'CUSTOMER_CREDIT') {
-        // The customer's credit was used for this sale: they get it back.
+      } else if (kind === 'CUSTOMER_CREDIT' || kind === 'WALLET') {
+        // The customer's credit or wallet was used for this sale: they get it back.
         await this.creditService.reversePurchase(
           tenantId,
           share.payment.id,

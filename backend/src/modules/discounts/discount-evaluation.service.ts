@@ -124,6 +124,16 @@ export class DiscountEvaluationService {
       : [];
     const productTaxRates = new Map(products.map((product) => [product.id, product.tax_rate || '0.0000']));
 
+    // Head office's list of categories a friends-and-family discount never touches (drinks,
+    // say). It covers the customer's own rate and a cashier's discount given for that reason.
+    const familySettings = await this.settingRepo.find({ where: { tenant_id: tenantId, key: 'DISCOUNT_AUTHORIZATIONS' } });
+    const familyExcluded = new Set<string>((pickSettingValue(familySettings) as any)?.familyExcludedCategoryIds || []);
+    const productCategories = new Map(products.map((product) => [product.id, product.category_id]));
+    const familyExcludedLine = requestedItems.map((item) => {
+      const category = item.categoryId || productCategories.get(item.productId);
+      return !!category && familyExcluded.has(category);
+    });
+
     // 1. Process items & subtotals
     const lineItems: QuotedLineItem[] = requestedItems.map((item) => {
       const qty = item.quantity || '1';
@@ -218,10 +228,11 @@ export class DiscountEvaluationService {
 
     // A. Workflow 3: Manual Cashier Discount Evaluation (Highest Precedence)
     if (manualDiscount && MoneyUtil.greaterThan(manualDiscount.value, '0')) {
+      const forFamily = manualDiscount.reasonCode === 'FRIENDS_FAMILY';
+      const manualSkips = (i: number) => !!(orderDraft.items || [])[i]?.neverDiscount || (forFamily && familyExcludedLine[i]);
       let manualEligibleSubtotal = '0.0000';
       for (let i = 0; i < lineItems.length; i++) {
-        const rawItem = (orderDraft.items || [])[i];
-        if (!rawItem?.neverDiscount) {
+        if (!manualSkips(i)) {
           manualEligibleSubtotal = MoneyUtil.add(manualEligibleSubtotal, remainingBases[i]);
         }
       }
@@ -318,7 +329,7 @@ export class DiscountEvaluationService {
         // recorded the discount while still charging, and taxing, the full price.
         const eligible = lineItems
           .map((_, i) => i)
-          .filter((i) => !(orderDraft.items || [])[i]?.neverDiscount && MoneyUtil.greaterThan(remainingBases[i], '0'));
+          .filter((i) => !manualSkips(i) && MoneyUtil.greaterThan(remainingBases[i], '0'));
         const shares = MoneyUtil.allocate(manualAmount, eligible.map((i) => remainingBases[i]));
         eligible.forEach((lineIndex, k) => {
           lineItems[lineIndex].discountTotal = MoneyUtil.add(lineItems[lineIndex].discountTotal, shares[k]);
@@ -337,10 +348,11 @@ export class DiscountEvaluationService {
       }
     }
 
-    // B. Workflow 1: Customer-Specific Discount (Second Precedence)
-    if (!singleDiscountApplied && orderDraft.customerId) {
+    // B. The customer's friends-and-family rate at this branch, on till orders, unless the
+    // cashier took it off. A manual discount replaces it.
+    if (!singleDiscountApplied && orderDraft.customerId && orderDraft.branchId && channel === 'POS' && !orderDraft.skipCustomerDiscount) {
       const customerDiscount = await this.customerDiscountRepo.findOne({
-        where: { tenant_id: tenantId, customer_id: orderDraft.customerId, is_active: true },
+        where: { tenant_id: tenantId, customer_id: orderDraft.customerId, branch_id: orderDraft.branchId, is_active: true },
       });
 
       if (customerDiscount) {
@@ -352,7 +364,7 @@ export class DiscountEvaluationService {
           let custDiscountAmt = '0.0000';
 
           for (let i = 0; i < lineItems.length; i++) {
-            if (!isDiscountableLine[i]) continue;
+            if (!isDiscountableLine[i] || familyExcludedLine[i]) continue;
             const lineEligible = remainingBases[i];
             if (MoneyUtil.lessThanOrEqual(lineEligible, '0')) continue;
 
@@ -366,7 +378,8 @@ export class DiscountEvaluationService {
             discountTotal = MoneyUtil.add(discountTotal, custDiscountAmt);
             consideredDiscounts.push({
               source: 'CUSTOMER',
-              name: `Customer Specific Discount (${customerDiscount.discount_percentage}%)`,
+              name: `Friends & family ${Number(customerDiscount.discount_percentage)}%`,
+              percent: customerDiscount.discount_percentage,
               discountType: 'CUSTOMER_DISCOUNT',
               status: 'APPLIED',
               amount: custDiscountAmt,

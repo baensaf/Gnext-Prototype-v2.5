@@ -225,6 +225,7 @@ describe('Payments & Split Settlement Suite (R15)', () => {
         'IRR',
         '50000.0000',
         expect.anything(),
+        'CREDIT',
       );
     });
 

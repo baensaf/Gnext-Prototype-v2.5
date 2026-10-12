@@ -308,6 +308,8 @@ export async function runSeed() {
     { tenant_id: tenant.id, code: 'CASH', name: 'Cash', kind: 'CASH', is_active: true },
     { tenant_id: tenant.id, code: 'CARD_POS', name: 'Bank Card POS', kind: 'CARD_POS', is_active: true },
     { tenant_id: tenant.id, code: 'CREDIT_ACCOUNT', name: 'Customer Credit Account', kind: 'CUSTOMER_CREDIT', is_active: true },
+    // Cashback the customer earned, spent at the till; apart from credit since 2026-10-12.
+    { tenant_id: tenant.id, code: 'WALLET', name: 'کیف پول', kind: 'WALLET', is_active: true },
     // The couriers carry company card readers, and the scope reports those separately from
     // cash and from the counter terminal.
     { tenant_id: tenant.id, code: 'MOBILE_POS', name: 'Courier Mobile POS', kind: 'MOBILE_POS', is_active: true },
@@ -495,7 +497,7 @@ export async function runSeed() {
     }
 
     let account = await creditAccountRepo.findOne({
-      where: { tenant_id: tenant.id, customer_id: customer.id, currency_code: 'IRR' },
+      where: { tenant_id: tenant.id, customer_id: customer.id, currency_code: 'IRR', kind: 'CREDIT' },
     });
     if (!account) {
       account = await creditAccountRepo.save(creditAccountRepo.create({

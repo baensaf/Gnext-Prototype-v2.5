@@ -13,8 +13,15 @@ import { CreditEntry } from './CreditEntry.entity';
 
 export type CreditMode = 'FINITE' | 'UNLIMITED' | 'POLICY';
 
+/**
+ * CREDIT is pay later: a limit, and a balance that never goes above zero (what is owed).
+ * WALLET is cashback the customer earned: a balance that never goes below zero. A customer
+ * has at most one of each; the two never share a balance.
+ */
+export type AccountKind = 'CREDIT' | 'WALLET';
+
 @Entity('credit_account')
-@Unique(['tenant_id', 'customer_id', 'currency_code'])
+@Unique(['tenant_id', 'customer_id', 'currency_code', 'kind'])
 export class CustomerCreditAccount {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -27,6 +34,9 @@ export class CustomerCreditAccount {
 
   @Column({ type: 'varchar', length: 3, default: 'IRR' })
   currency_code: string;
+
+  @Column({ type: 'varchar', length: 10, default: 'CREDIT' })
+  kind: AccountKind;
 
   @Column({ type: 'varchar', length: 16, default: 'FINITE' })
   mode: CreditMode;

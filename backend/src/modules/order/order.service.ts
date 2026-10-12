@@ -742,6 +742,7 @@ export class OrderService {
           orderType: order.order_type,
           currencyCode: order.currency_code,
           deliveryFee: order.delivery_fee,
+          skipCustomerDiscount: !!dto.skipCustomerDiscount,
           items: activeLines.map((i) => {
             const modPerUnit = (i.quantity && Number(i.quantity) > 0 && i.modifier_total)
               ? MoneyUtil.divide(i.modifier_total, i.quantity)
@@ -791,7 +792,10 @@ export class OrderService {
           calculation_snapshot: {
             discountType: disc.discountType,
             amount: disc.amount,
-            ...(disc.source === 'MANUAL' ? { approvalRequestId: submittedManualDiscount?.approvalRequestId || null } : {}),
+            ...(disc.source === 'MANUAL'
+              ? { approvalRequestId: submittedManualDiscount?.approvalRequestId || null, reasonCode: submittedManualDiscount?.reasonCode || null }
+              : {}),
+            ...(disc.source === 'CUSTOMER' ? { percent: disc.percent, reasonCode: 'FRIENDS_FAMILY' } : {}),
             ...(disc.source === 'ITEM' ? { productId: disc.productId, percent: disc.percent } : {}),
           },
         });

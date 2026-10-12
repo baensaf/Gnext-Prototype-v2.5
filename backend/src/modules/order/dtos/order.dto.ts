@@ -6,6 +6,7 @@ import {
   IsIn,
   IsInt,
   IsArray,
+  IsBoolean,
   ValidateNested,
   Min,
   Max,
@@ -197,6 +198,11 @@ export class OrderSubmitDto {
   @ValidateNested()
   @Type(() => ManualDiscountDto)
   manualDiscount?: ManualDiscountDto;
+
+  /** The cashier took the customer's friends-and-family rate off this order. */
+  @IsOptional()
+  @IsBoolean()
+  skipCustomerDiscount?: boolean;
 
   @IsOptional()
   @IsInt()
