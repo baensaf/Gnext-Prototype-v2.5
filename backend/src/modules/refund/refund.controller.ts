@@ -6,7 +6,6 @@ import { RefundCreateDto, PaidOrderCancelDto } from './dtos/refund.dto';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
-import { Refund } from '../../entities/Refund.entity';
 
 @Controller('api/v1')
 export class RefundController {
@@ -59,13 +58,6 @@ export class RefundController {
       correlationId,
       approvedBy: approver ?? userId,
     });
-  }
-
-  @BranchOwned(Refund, { through: { entity: OrderHeader, foreignKey: 'order_id' } })
-  @Get('refunds/:id')
-  async getRefundById(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    return await this.refundService.getRefundById(tenantId, id);
   }
 
   @BranchOwned(OrderHeader, { param: 'orderId' })
