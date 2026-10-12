@@ -23,7 +23,6 @@ import { DashboardPage } from 'src/pages/dashboard';
 import { ReceiptPage } from 'src/pages/pos/receipt';
 import { UsersPage } from 'src/pages/settings/users';
 import { useAuthStore } from 'src/store/useAuthStore';
-import { RefundsPage } from 'src/pages/orders/refunds';
 import { SettingsHubPage } from 'src/pages/settings/hub';
 import { AgentsPage } from 'src/pages/operations/agents';
 import { homePathForRole } from 'src/config/role-access';
@@ -216,7 +215,8 @@ export const routesSection: RouteObject[] = [
       { path: 'cashier/shifts/:shiftId/end', element: <EndShiftPage /> },
       { path: 'cashier/business-days', element: <RequiresBranch><BusinessDaysPage /></RequiresBranch> },
       { path: 'payments', element: <RequiresBranch><PaymentsPage /></RequiresBranch> },
-      { path: 'refunds', element: <RequiresBranch><RefundsPage /></RequiresBranch> },
+      // Refunds are made and listed on the Orders page now.
+      { path: 'refunds', element: <Navigate to="/app/orders?tab=REFUNDED" replace /> },
       // Friends-and-family rates are set on the customer list now; the wallet has its own page.
       { path: 'customer-club/discounts', element: <Navigate to="/app/customers" replace /> },
       { path: 'customer-club/wallet', element: <Navigate to="/app/wallet" replace /> },

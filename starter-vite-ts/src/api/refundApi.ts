@@ -28,7 +28,10 @@ export interface RefundRecord {
   allocations?: RefundAllocation[];
   /** The order's number and total, sent with the list so it needs no second request. */
   order_number?: string | null;
+  order_call_number?: number | null;
   order_total?: string | null;
+  /** Who released the money: the approver whose PIN was given, or whoever made the refund. */
+  approved_by_name?: string | null;
   // Legacy UI aliases
   code?: string;
   total_refund_amount?: string;
@@ -54,9 +57,26 @@ export const refundApi = {
     return list.map(toRecord);
   },
 
-  getRefundById: async (id: string): Promise<RefundRecord> => {
-    const res = await httpClient.get(`/api/v1/refunds/${id}`);
-    return toRecord(res.data);
+  /**
+   * One page of refunds, newest first, for the Orders page's Refunded tab. `from` and `to`
+   * bound the time the money went back (not the day the order was placed); `q` searches the
+   * order number, the refund number and the reason.
+   */
+  listRefunds: async (
+    params: { branchId?: string; from?: string; to?: string; q?: string; page?: number; limit?: number } = {}
+  ): Promise<{ data: RefundRecord[]; total: number }> => {
+    const res = await httpClient.get('/api/v1/refunds', {
+      params: {
+        branchId: params.branchId,
+        from: params.from,
+        to: params.to,
+        q: params.q,
+        page: params.page,
+        limit: params.limit,
+      },
+    });
+    const list = Array.isArray(res.data) ? res.data : res.data?.data || [];
+    return { data: list.map(toRecord), total: Number(res.data?.total ?? list.length) };
   },
 
   /**

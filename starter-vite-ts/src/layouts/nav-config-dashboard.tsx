@@ -31,7 +31,6 @@ const ICONS = {
   options: icon('ic-params'),
   pricing: icon('ic-invoice'),
   discounts: icon('ic-label'),
-  refunds: icon('ic-order'),
   // The MUI MoveToInbox shape, as the header's Incoming Orders button draws it.
   inbox: icon('ic-inbox'),
   customers: icon('ic-user'),
@@ -126,11 +125,6 @@ export function useNavData(): NavSectionProps['data'] {
           title: t('nav.payments', 'Payments'),
           path: '/app/payments',
           icon: ICONS.credit,
-        },
-        {
-          title: t('nav.refunds', 'Refunds'),
-          path: '/app/refunds',
-          icon: ICONS.refunds,
         },
         // The shop's own printers jamming mid-service — live work, not a report.
         {

@@ -73,7 +73,7 @@ const GROUPS: { titleKey: string; title: string; rows: Capability[] }[] = [
         write: { CASHIER: 'FULL', MANAGER: 'FULL', HEAD_OFFICE: 'FULL' },
       },
       {
-        path: '/app/refunds',
+        path: '/app/orders',
         labelKey: 'rolesPage.caps.refund',
         label: 'Hand back money',
         write: { CASHIER: 'READ', MANAGER: 'FULL', HEAD_OFFICE: 'FULL' },

@@ -27,8 +27,6 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/orders/incoming': 'V3',
   // Shifts, their statements and business days
   '/app/cashier': 'V1',
-  // In V1 money goes back only by cancelling a paid order from the Orders page.
-  '/app/refunds': 'V2',
   '/app/payments': 'V1',
   '/app/operations/card-terminals': 'V1',
   // Branches, tills, kitchen stations and routing, printers, the print queue, branch agents

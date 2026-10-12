@@ -34,9 +34,6 @@ const CASHIER_PATHS = [
   '/app/pos',
   '/app/orders',
   '/app/cashier/shifts',
-  // A refund is handed over at the register, so this is the cashier's screen even though
-  // the money only moves once an approver has put their pin in.
-  '/app/refunds',
   // At the counter it is the cashier who hands a delivery to the courier and counts the
   // cash-on-delivery back in, and who adds a courier who turns up to ride. The rest of the
   // fleet (zones, pay, moving a courier between branches) stays the manager's.
@@ -116,10 +113,9 @@ const CHAIN_ONLY_PATHS = [
 const SITE_ONLY_PATHS = [
   '/app/delivery',
   '/app/cashier',
-  // Money is taken and handed back at a till, so the payment and refund desks are the
-  // branch's. Orders are not listed here: head office looks them up, read-only.
+  // Money is taken at a till, so the payment desk is the branch's. Orders are not listed
+  // here: head office looks them up, read-only.
   '/app/payments',
-  '/app/refunds',
   '/app/operations/terminals',
   '/app/operations/card-terminals',
   '/app/operations/printers',
@@ -148,7 +144,6 @@ const SELLING_SITE_PATHS = [
   '/app/delivery',
   '/app/cashier',
   '/app/payments',
-  '/app/refunds',
   '/app/operations/terminals',
   '/app/operations/card-terminals',
   '/app/operations/print-routing',
