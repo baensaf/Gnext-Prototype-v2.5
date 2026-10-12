@@ -507,6 +507,8 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       <Box sx={{ width: 110, flexShrink: 0 }}>
         {/* Click to put the whole bill in this box; a greyed-out box's label does nothing. */}
         <ButtonBase
+          // Clicked, not tabbed to: Tab still goes box to box, as the cashier's hands learned it.
+          tabIndex={-1}
           disabled={locked || opts.disabled}
           onClick={() => fillWhole(name)}
           sx={{ display: 'block', textAlign: 'start', borderRadius: 0.5, '&:hover .MuiTypography-root': { color: 'primary.main' } }}
