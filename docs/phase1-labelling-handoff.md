@@ -209,11 +209,9 @@ switch, so a category turned back on brings its items back as they were.
 **Page group 9, pricing.** Decided 2026-09-29. Branch prices (`/app/pricing/price-lists`)
 are V4: a V1 branch sells at base prices. Price changes (`/app/pricing/changes`) are V1:
 raise or lower base prices now, by percent or amount, by category, with rounding. Snappfood
-prices (`/app/pricing/snappfood`) are V3. So is the shown ("fake") discount on them (added
-2026-10-03): a percent, as a channel default, per item, or set on a whole category; the menu
-prints a struck-through price that much higher (the price ÷ (1 − %), rounded up to the
-rule's step, at most 90%) while the customer pays the real price. Nothing is taken off the
-bill, so it is not a discount campaign (those stay cut). Not on the item page or the till.
+prices (`/app/pricing/snappfood`) are V3. The shown ("fake") discount added on them on
+2026-10-03 was removed on 2026-10-12: a discount on Snappfood is a real item discount now,
+set on the price group (see item discounts).
 
 | Feature | Label |
 |---|---|
