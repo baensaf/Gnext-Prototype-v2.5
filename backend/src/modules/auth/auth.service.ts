@@ -25,7 +25,9 @@ export class AuthService {
     });
 
     if (!user || !user.is_active) {
-      const defaultTenant = !user ? await this.tenantRepo.findOne({}) : null;
+      // findOne({}) throws in TypeORM 0.3 ("You must provide selection conditions"), which
+      // turned an unknown username into a 500 instead of "invalid username or password".
+      const defaultTenant = !user ? (await this.tenantRepo.find({ take: 1 }))[0] : null;
       await this.auditWriter.write({
         tenantId: user ? user.tenant_id : (defaultTenant?.id || ''),
         actorType: 'ADMIN',

@@ -23,6 +23,7 @@ describe('AuthService (Unit)', () => {
     };
     tenantRepo = {
       findOne: jest.fn(),
+      find: jest.fn().mockResolvedValue([]),
     };
     sessionService = {
       createSession: jest.fn(),
@@ -52,6 +53,8 @@ describe('AuthService (Unit)', () => {
     await expect(authService.login('unknown@gnext.local', 'password')).rejects.toThrow(
       UnauthorizedException,
     );
+    // findOne({}) throws in TypeORM 0.3; the fallback tenant must come from find().
+    expect(tenantRepo.findOne).not.toHaveBeenCalled();
   });
 
   it('refuses a courier account, which cannot sign in until the tracking app', async () => {
