@@ -17,6 +17,7 @@ import {
   OrderAcceptDto,
   OrderRejectDto,
   OrderOnlineReportDto,
+  PriceQuoteRequestDto,
 } from './dtos/order.dto';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
@@ -88,6 +89,15 @@ export class OrdersController {
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
     return await this.orderService.createDraft(tenantId, body, userId, correlationId);
+  }
+
+  // A cart line's prices as the item is added, signed so the order keeps them (see priceQuotes).
+  @Post('price-quotes')
+  async priceQuotes(@Body() body: PriceQuoteRequestDto, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const branchId = effectiveBranchId((req as any).userBranchId, body.branch_id);
+    if (!branchId) throw new BadRequestException('branch_id is required');
+    return await this.orderService.priceQuotes(tenantId, branchId, body.lines || []);
   }
 
   // The till's Online panel: the branch's platform orders in lanes, with what each platform

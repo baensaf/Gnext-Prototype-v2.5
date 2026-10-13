@@ -7,6 +7,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * - An item discount covers several products (`product_ids`) and can be paused (`is_active`).
  * - Add-ons are never stopped: their stops are deleted and the column goes.
  * - Every menu record has a permanent Snappfood id from the moment it is made.
+ * - An order line keeps the tax rate it was sold at.
  */
 const CHANNEL_ID_TABLES: Array<[string, string]> = [
   ['category', 'CATEGORY'],
@@ -25,6 +26,9 @@ export class AlignWithPrds1700000000127 implements MigrationInterface {
     await queryRunner.query(`UPDATE "item_discount" SET "product_ids" = ARRAY["product_id"] WHERE "product_id" IS NOT NULL AND "product_ids" = '{}'`);
     await queryRunner.query(`ALTER TABLE "item_discount" DROP COLUMN IF EXISTS "product_id"`);
     await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_item_discount_tenant" ON "item_discount" ("tenant_id")`);
+
+    // A line keeps the tax rate it was sold at (fixed when the item was added to the cart).
+    await queryRunner.query(`ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "tax_rate" numeric(5,4)`);
 
     await queryRunner.query(`DELETE FROM "product_availability" WHERE "option_item_id" IS NOT NULL`);
     await queryRunner.query(`ALTER TABLE "product_availability" DROP COLUMN IF EXISTS "option_item_id"`);
@@ -76,6 +80,7 @@ export class AlignWithPrds1700000000127 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE "order_item" DROP COLUMN IF EXISTS "tax_rate"`);
     for (const [table] of CHANNEL_ID_TABLES) {
       await queryRunner.query(`DROP TRIGGER IF EXISTS "trg_${table}_channel_id" ON "${table}"`);
     }

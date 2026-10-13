@@ -63,6 +63,13 @@ export class OrderItem {
   @Column({ type: 'uuid', nullable: true })
   item_discount_id: string | null;
 
+  /**
+   * The tax rate this line was sold at, as a fraction (0.1000): the product's when the item was
+   * added to the cart. Null on lines from before 2026-10-13, which use the product's rate.
+   */
+  @Column({ type: 'numeric', precision: 5, scale: 4, nullable: true })
+  tax_rate: string | null;
+
   /** What the item discount took off this line (part of the order's discount_total). */
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   item_discount_total: string = '0.0000';
