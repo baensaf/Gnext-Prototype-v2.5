@@ -29,8 +29,8 @@ import { fDateTime } from 'src/utils/format-time';
 
 import { agentsApi } from 'src/api/agentsApi';
 
-import { toast, showErrorToast } from 'src/components/snackbar';
 import { VersionTag } from 'src/components/version-tag';
+import { toast, showErrorToast } from 'src/components/snackbar';
 
 // ----------------------------------------------------------------------
 
