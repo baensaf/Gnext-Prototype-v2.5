@@ -173,10 +173,10 @@ const AUDIT_EVENT_KEYS = [
 type ColumnRole = 'cashier' | 'manager' | 'headOffice';
 const DEFAULT_HIDDEN_COLUMNS: Record<ColumnRole, GridColumnVisibilityModel> = {
   // Nearly every order comes from the till in opening hours; Amount already shows what is due.
-  cashier: { channel: false, after_hours: false, is_late_entry: false, outstanding_total: false },
-  manager: { is_late_entry: false, outstanding_total: false },
+  cashier: { channel: false, after_hours: false, outstanding_total: false },
+  manager: { outstanding_total: false },
   // Head office compares branches and looks orders up; it seldom needs the lines.
-  headOffice: { items: false, is_late_entry: false, outstanding_total: false },
+  headOffice: { items: false, outstanding_total: false },
 };
 // The order number is held at the start, and Status and the actions at the end, so a narrow
 // till screen scrolls the middle and never loses the state or the Pay button.
@@ -1176,23 +1176,6 @@ export function OrdersWorkflowPage() {
         ) : null,
     } as GridColDef<OrderListRow>,
     {
-      // A forgotten order rung up now. Hidden by default, since Status already carries its chip;
-      // the column is here to list only these (Columns, then the filter).
-      field: 'is_late_entry',
-      headerName: t('orders.lateEntry.column'),
-      width: 130,
-      sortable: false,
-      type: 'singleSelect',
-      valueGetter: (_value, row) => (row.is_late_entry ? 'yes' : 'no'),
-      valueOptions: [
-        { value: 'yes', label: t('orders.lateEntry.yes') },
-        { value: 'no', label: t('orders.lateEntry.no') },
-      ],
-      filterOperators: selectFilters('is_late_entry'),
-      renderCell: ({ row }) =>
-        row.is_late_entry ? <Chip size="small" variant="outlined" label={t('orders.lateEntry.chip')} /> : null,
-    } as GridColDef<OrderListRow>,
-    {
       field: 'status',
       headerName: t('orders.table.status'),
       width: 120,
@@ -1208,7 +1191,6 @@ export function OrdersWorkflowPage() {
           />
           {renderProgressChip(row.status)}
           {renderSnappfoodChips(row)}
-          {row.is_late_entry && <Chip size="small" variant="outlined" color="info" label={t('orders.lateEntry.chip')} />}
           {row.has_unconfirmed_card_charge && (
             <Chip size="small" color="warning" label={t('payments.unconfirmed.status')} sx={{ fontWeight: 700 }} />
           )}
@@ -1696,9 +1678,6 @@ export function OrdersWorkflowPage() {
                   />
                   {renderProgressChip(selectedDrawerOrder.status)}
                   {renderSnappfoodChips(selectedDrawerOrder)}
-                  {selectedDrawerOrder.is_late_entry && (
-                    <Chip size="small" variant="outlined" color="info" label={t('orders.lateEntry.chip')} />
-                  )}
                   <Chip
                     label={getOrderTypeLabel(selectedDrawerOrder.order_type)}
                     size="small"
@@ -1776,34 +1755,6 @@ export function OrdersWorkflowPage() {
                 </Box>
               ) : drawerTab === 'details' ? (
                 <Stack spacing={3}>
-                  {/* Rung up late: why, roughly when it was served, and the manager who allowed it. */}
-                  {selectedDrawerOrder.is_late_entry && (
-                    <Alert severity="info" icon={false} sx={{ borderRadius: 2 }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
-                        {t('orders.lateEntry.chip')}
-                      </Typography>
-                      {[
-                        [t('orders.lateEntry.reason'), selectedDrawerOrder.late_entry_reason],
-                        [
-                          t('orders.lateEntry.servedAt'),
-                          selectedDrawerOrder.late_served_at ? formatCalendarDateTime(selectedDrawerOrder.late_served_at) : null,
-                        ],
-                        [
-                          t('orders.lateEntry.approvedBy'),
-                          selectedDrawerOrder.late_entry_approved_by
-                            ? selectedDrawerOrder.context?.actor_names?.[selectedDrawerOrder.late_entry_approved_by]
-                            : null,
-                        ],
-                      ]
-                        .filter(([, value]) => !!value)
-                        .map(([label, value]) => (
-                          <Typography key={String(label)} variant="body2">
-                            <b>{label}:</b> {value}
-                          </Typography>
-                        ))}
-                    </Alert>
-                  )}
-
                   {/* Who and where */}
                   <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>

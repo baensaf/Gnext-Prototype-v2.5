@@ -1,6 +1,5 @@
 import {
   IsString,
-  IsNotEmpty,
   IsOptional,
   IsUUID,
   IsIn,
@@ -11,8 +10,6 @@ import {
   Min,
   Max,
   IsNumberString,
-  IsDateString,
-  MaxLength,
   Matches,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -224,36 +221,10 @@ export class OrderQuoteRequestDto {
   version?: string;
 }
 
-/**
- * The order was served and paid for earlier but never rung up. It is entered now (never
- * backdated), with a reason and a manager's PIN, as an approved `LATE_ENTRY` request.
- */
-export class LateEntryDto {
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(255)
-  reason: string;
-
-  /** Roughly when it was served, today; only explains the entry. */
-  @IsOptional()
-  @IsDateString()
-  servedAt?: string;
-
-  @IsOptional()
-  @IsUUID()
-  approvalRequestId?: string;
-}
-
 export class OrderSubmitDto {
   @IsOptional()
   @IsString()
   quoteVersion?: string;
-
-  /** A forgotten order rung up now: no kitchen chit, a manager's PIN, a reason. */
-  @IsOptional()
-  @ValidateNested()
-  @Type(() => LateEntryDto)
-  lateEntry?: LateEntryDto;
 
   @IsOptional()
   @IsArray()

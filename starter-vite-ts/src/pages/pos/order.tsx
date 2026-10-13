@@ -1,6 +1,5 @@
 import type { Theme } from '@mui/material/styles';
 import type { HeldCart } from './held-carts';
-import type { LateEntryInput } from './late-entry';
 import type { DeliveryZone } from 'src/api/deliveryApi';
 import type { LineQuote, OrderHeader } from 'src/api/orderApi';
 import type { Customer, CustomerAddress } from 'src/api/customerApi';
@@ -116,10 +115,6 @@ import { PosCustomerPicker } from './pos-customer-picker';
 import { ClosedBranchBanner } from './closed-branch-banner';
 import { readHeldCarts, writeHeldCarts } from './held-carts';
 import { placeOne, pricedKey, changeLine } from './cart-lines';
-import { LateEntryDialog, LateEntrySwitch, lateEntryErrorText } from './late-entry';
-
-/** A late entry with the manager's approval, as the server wants it with the order. */
-type LateEntryApproved = LateEntryInput & { approvalRequestId: string };
 
 export interface CartItem {
   product: Product;
@@ -236,11 +231,6 @@ export function PosOrderPage() {
 
   // Order Notes Dialog state
   const [orderNotes, setOrderNotes] = useState<string>('');
-  // A forgotten order rung up now: asked about as it is sent (reason, time), then a manager's PIN.
-  const [lateOn, setLateOn] = useState(false);
-  const [lateDialogOpen, setLateDialogOpen] = useState(false);
-  const [lateApprovalOpen, setLateApprovalOpen] = useState(false);
-  const [lateInput, setLateInput] = useState<LateEntryInput | null>(null);
   const [notesModalOpen, setNotesModalOpen] = useState(false);
   const [tempNotesInput, setTempNotesInput] = useState<string>('');
   // The cart line the dialog is writing a note for; null writes the order's note.
@@ -774,8 +764,6 @@ export function PosOrderPage() {
     setCouponCode(null);
     setCouponRefusal(null);
     setOrderNotes('');
-    setLateOn(false);
-    setLateInput(null);
     setSelectedCustomer(null);
     setSelectedCustomerId('');
     setSelectedDeliveryAddressId('');
@@ -1149,11 +1137,6 @@ export function PosOrderPage() {
       setApprovalModalOpen(true);
       return;
     }
-    // The card of a late entry was charged long ago; it is recorded from its slip at the pay window.
-    if (lateOn) {
-      toast.warning(t('pos.lateEntry.directPayBlocked'));
-      return;
-    }
 
     setTerminalPayLoading(true);
     let submitted: OrderHeader | null = null;
@@ -1249,7 +1232,6 @@ export function PosOrderPage() {
     cart,
     selectedBranchId,
     approvalRequired,
-    lateOn,
     orderType,
     selectedCustomerId,
     orderNotes,
@@ -1263,9 +1245,8 @@ export function PosOrderPage() {
     t,
   ]);
 
-  // Order Placement (Pay Later / Open Checkout). A late entry asks for its reason and a manager's PIN
-  // first, then comes back here with the approval.
-  const handlePlaceOrder = useCallback(async (late?: LateEntryApproved) => {
+  // Order Placement (Pay Later / Open Checkout).
+  const handlePlaceOrder = useCallback(async () => {
     if (cart.length === 0) {
       setError(t('pos.cartEmpty'));
       return;
@@ -1278,10 +1259,6 @@ export function PosOrderPage() {
     if (approvalRequired) {
       setError('Cannot place order: Manager approval is required for this discount.');
       setApprovalModalOpen(true);
-      return;
-    }
-    if (lateOn && !late) {
-      setLateDialogOpen(true);
       return;
     }
 
@@ -1319,8 +1296,7 @@ export function PosOrderPage() {
         setActiveDraftOrderId(draft.id);
       }
 
-      const submitPayload = late ? { ...buildSubmitPayload(), lateEntry: late } : buildSubmitPayload();
-      const submitted = await orderApi.submitOrder(draftId, submitPayload, { idempotencyKey });
+      const submitted = await orderApi.submitOrder(draftId, buildSubmitPayload(), { idempotencyKey });
 
       setPlacedOrder(submitted);
       setCheckoutModalOpen(true);
@@ -1328,7 +1304,7 @@ export function PosOrderPage() {
       handleClearCart();
       setError(null);
     } catch (err: any) {
-      const msg = lateEntryErrorText(t, err) || err.detail || err.message || 'Failed to place order';
+      const msg = err.detail || err.message || 'Failed to place order';
       setError(msg);
       showErrorToast(err, msg);
     }
@@ -1336,7 +1312,6 @@ export function PosOrderPage() {
     cart,
     selectedBranchId,
     approvalRequired,
-    lateOn,
     orderType,
     selectedCustomerId,
     orderNotes,
@@ -1360,13 +1335,12 @@ export function PosOrderPage() {
         else if (checkoutModalOpen) setCheckoutModalOpen(false);
         else if (quickAddCustomerOpen) setQuickAddCustomerOpen(false);
         else if (approvalModalOpen) setApprovalModalOpen(false);
-        else if (lateDialogOpen) setLateDialogOpen(false);
         else if (addAddressOpen) setAddAddressOpen(false);
         else if (searchQuery) setSearchQuery('');
         return;
       }
       // Let an open dialog own non-Escape keys so forms retain normal typing behavior.
-      if (notesModalOpen || optionDialogOpen || manualDiscountModalOpen || checkoutModalOpen || quickAddCustomerOpen || approvalModalOpen || lateDialogOpen || lateApprovalOpen || addAddressOpen) return;
+      if (notesModalOpen || optionDialogOpen || manualDiscountModalOpen || checkoutModalOpen || quickAddCustomerOpen || approvalModalOpen || addAddressOpen) return;
       // No shift, no till: the shortcuts would ring up and take payment behind the gate.
       if (shiftBlocked) return;
       // F2 or Ctrl+F / Ctrl+K: Focus search input
@@ -1443,8 +1417,6 @@ export function PosOrderPage() {
     checkoutModalOpen,
     quickAddCustomerOpen,
     approvalModalOpen,
-    lateDialogOpen,
-    lateApprovalOpen,
     addAddressOpen,
     searchQuery,
     shiftBlocked,
@@ -1893,8 +1865,6 @@ export function PosOrderPage() {
                     {t('pos.delivery')}
                   </ToggleButton>
                 </ToggleButtonGroup>
-
-                <LateEntrySwitch checked={lateOn} disabled={!!placedOrder} onChange={setLateOn} />
 
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                   <PosCustomerPicker
@@ -2359,7 +2329,7 @@ export function PosOrderPage() {
                   variant="contained"
                   color="primary"
                   size="large"
-                  disabled={cart.length === 0 || terminalPayLoading || lateOn}
+                  disabled={cart.length === 0 || terminalPayLoading}
                   onClick={handleDirectTerminalPay}
                   aria-keyshortcuts="F9"
                   startIcon={terminalPayLoading ? <CircularProgress size={20} color="inherit" /> : <PointOfSaleIcon sx={{ fontSize: 22 }} />}
@@ -2782,27 +2752,6 @@ export function PosOrderPage() {
         onSuccess={handleApprovalSuccess}
         actionName="DISCOUNT"
         detailsText={approvalReason || 'Manual cashier discount authorization'}
-        createRequest
-      />
-
-      {/* A late entry: the reason and time, then a manager's PIN, then the order is sent. */}
-      <LateEntryDialog
-        open={lateDialogOpen}
-        onClose={() => setLateDialogOpen(false)}
-        onContinue={(input) => {
-          setLateInput(input);
-          setLateDialogOpen(false);
-          setLateApprovalOpen(true);
-        }}
-      />
-      <ApprovalModal
-        open={lateApprovalOpen}
-        onClose={() => setLateApprovalOpen(false)}
-        onSuccess={(_pin, requestId) => {
-          if (lateInput && requestId) handlePlaceOrder({ ...lateInput, approvalRequestId: requestId });
-        }}
-        actionName="LATE_ENTRY"
-        detailsText={t('pos.lateEntry.approvalDetails', { reason: lateInput?.reason || '' })}
         createRequest
       />
 

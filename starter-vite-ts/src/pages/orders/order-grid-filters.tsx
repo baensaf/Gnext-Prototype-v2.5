@@ -32,7 +32,6 @@ export const FILTER_OPERATORS = {
   grand_total: ['=', '!=', '>', '>=', '<', '<='],
   outstanding_total: ['=', '!=', '>', '>=', '<', '<='],
   after_hours: ['is'],
-  is_late_entry: ['is'],
 } as const satisfies Record<string, readonly string[]>;
 
 type FilterField = keyof typeof FILTER_OPERATORS;

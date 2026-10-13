@@ -85,12 +85,6 @@ export interface OrderHeader {
   submitted_at?: string;
   /** Sent while the branch was outside its opening hours. It still sold; this only marks it. */
   after_hours?: boolean;
-  /** Served and paid for earlier, rung up now with a manager's PIN. Never backdated. */
-  is_late_entry?: boolean;
-  late_entry_reason?: string | null;
-  /** The cashier's rough word for when it was served; only explains the entry. */
-  late_served_at?: string | null;
-  late_entry_approved_by?: string | null;
   completed_at?: string;
   cancelled_at?: string;
   /** Snappfood's preparation time, the minutes it lets the store add, and how the order travels. */
@@ -302,8 +296,6 @@ export const orderApi = {
       skipCustomerDiscount?: boolean;
       /** A one-time coupon code, taken when the order is sent. */
       couponCode?: string;
-      /** A forgotten order rung up now: the reason, roughly when it was served, the manager's approval. */
-      lateEntry?: { reason: string; servedAt?: string; approvalRequestId: string };
     },
     options?: { idempotencyKey?: string }
   ): Promise<OrderHeader> => {
