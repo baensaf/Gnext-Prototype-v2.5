@@ -154,12 +154,7 @@ export function useNavData(): NavSectionProps['data'] {
               title: t('nav.availability', 'Availability & Suspensions'),
               path: '/app/catalog/availability',
             },
-            // Bulk-loading products and categories is catalogue work; it used to hide behind
-            // a card in Settings.
-            {
-              title: t('nav.importExport', 'Import & Export'),
-              path: '/app/catalog/import-export',
-            },
+            // Import & Export is a button on Products Catalog, not a sidebar entry.
           ],
         },
         {
