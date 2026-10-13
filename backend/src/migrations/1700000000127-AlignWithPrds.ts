@@ -28,6 +28,12 @@ export class AlignWithPrds1700000000127 implements MigrationInterface {
     await queryRunner.query(`ALTER TABLE "item_discount" DROP COLUMN IF EXISTS "product_id"`);
     await queryRunner.query(`CREATE INDEX IF NOT EXISTS "IDX_item_discount_tenant" ON "item_discount" ("tenant_id")`);
 
+    // A sent line keeps its kitchen printers, so a void goes to the same kitchens.
+    await queryRunner.query(`ALTER TABLE "order_item" ADD COLUMN IF NOT EXISTS "kitchen_printer_ids" uuid[]`);
+
+    // The hardware list the agent has taken, so a changed printer shows "waiting for the agent".
+    await queryRunner.query(`ALTER TABLE "agent" ADD COLUMN IF NOT EXISTS "config_version_applied" bigint`);
+
     // A receipt prints once; copies per printer are F.
     await queryRunner.query(`ALTER TABLE "terminal" DROP COLUMN IF EXISTS "receipt_copies"`);
 
@@ -84,6 +90,8 @@ export class AlignWithPrds1700000000127 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`ALTER TABLE "agent" DROP COLUMN IF EXISTS "config_version_applied"`);
+    await queryRunner.query(`ALTER TABLE "order_item" DROP COLUMN IF EXISTS "kitchen_printer_ids"`);
     await queryRunner.query(`ALTER TABLE "terminal" ADD COLUMN IF NOT EXISTS "receipt_copies" int NOT NULL DEFAULT 1`);
     await queryRunner.query(`ALTER TABLE "order_item" DROP COLUMN IF EXISTS "tax_rate"`);
     for (const [table] of CHANNEL_ID_TABLES) {

@@ -239,9 +239,55 @@ describe('printing via the branch agent (PostgreSQL)', () => {
     agent.ws.terminate();
     await agent.closed;
     const stale = await reprint(agentPrinterId, 'CUSTOMER_RECEIPT');
-    await commands.tick(new Date(Date.now() + 31 * 60_000), tenantId);
+    // A receipt waits a day for an offline agent; one never handed over certainly did not print.
+    await commands.tick(new Date(Date.now() + 25 * 3600_000), tenantId);
     await until(async () => (await job(stale.id)).status === 'FAILED');
     expect((await attemptsOf(stale.id))[0]).toMatchObject({ status: 'FAILED', error_code: 'EXPIRED' });
+  });
+
+  it('marks a job "check printer" when it may have printed, never resends it, and lets the cashier confirm it', async () => {
+    const { agent } = await connect();
+    const printed = await reprint(agentPrinterId);
+    const command = await agent.next((m) => m.type === 'print.job' && m.payload.job_id === printed.id);
+    const resultId = answer(agent, command, 'FAILED', { code: 'TIMEOUT', message: 'no answer mid-job' });
+    await agent.next((m) => m.ref === resultId);
+
+    expect(await job(printed.id)).toMatchObject({ status: 'UNCERTAIN' });
+    await expect(queue.retryJob(tenantId, printed.id, {})).rejects.toThrow('may have printed');
+    await queue.confirmPrinted(tenantId, printed.id);
+    expect(await job(printed.id)).toMatchObject({ status: 'SUCCESS' });
+  });
+
+  it('treats a job sent but never acknowledged as "check printer", and an unsent kitchen chit as expired at the cutoff', async () => {
+    const { agent } = await connect();
+    const sent = await reprint(agentPrinterId, 'CUSTOMER_RECEIPT');
+    await agent.next((m) => m.type === 'print.job' && m.payload.job_id === sent.id);
+    agent.ws.terminate();
+    await agent.closed;
+    const unsent = await reprint(agentPrinterId, 'KITCHEN_TICKET');
+
+    await commands.tick(new Date(Date.now() + 25 * 3600_000), tenantId);
+    await until(async () => (await job(sent.id)).status === 'UNCERTAIN' && (await job(unsent.id)).status === 'EXPIRED');
+
+    await expect(queue.retryJob(tenantId, unsent.id, {})).rejects.toThrow('expired');
+    await expect(queue.dismissJob(tenantId, unsent.id, '')).rejects.toThrow('Say why');
+    await queue.dismissJob(tenantId, unsent.id, 'Cooked from the reprint');
+    expect(await job(unsent.id)).toMatchObject({ status: 'DISMISSED' });
+  });
+
+  it('shows a changed printer as waiting for the agent until the agent takes its settings', async () => {
+    const { agent } = await connect();
+    const ready = async () => (await agentConfig.printersWithAgentState(tenantId, branchId)).find((p) => p.id === agentPrinterId)!.agent_ready;
+    expect(await ready()).toBe(true);
+
+    await new Promise((r) => setTimeout(r, 1100));
+    await dataSource.getRepository(Printer).update({ id: agentPrinterId }, { paper_width_mm: 58 });
+    expect(await ready()).toBe(false);
+
+    await agentConfig.pushToBranch(tenantId, branchId);
+    const update = await agent.next((m) => m.type === 'config.updated');
+    agent.send('ack', { ok: true }, undefined, update.id);
+    await until(async () => (await ready()) === true);
   });
 
   it('sends the agent the new printer list when a printer changes', async () => {

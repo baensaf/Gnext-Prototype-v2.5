@@ -7,6 +7,7 @@ import { Printer } from '../../entities/Printer.entity';
 import { AgentCommand } from '../../entities/AgentCommand.entity';
 import { AgentCommandsService, ResultOutcome } from '../agent-gateway/agent-commands.service';
 import { Envelope } from '../agent-gateway/agent-protocol';
+import { loadBusinessClock } from '../../common/utils/business-clock';
 
 /** Printing error codes an agent may report (protocol §8.3). Anything else is kept as PRINTER_ERROR. */
 const PRINT_ERROR_CODES = new Set([
@@ -30,8 +31,22 @@ const COMMAND_FAILURE_MESSAGES: Record<string, string> = {
 };
 
 /**
+ * A result that leaves it unknown whether paper came out: the printer took too long mid-job, or
+ * the agent restarted while printing. The job is "check printer", never resent by itself.
+ */
+const UNCERTAIN_CODES = new Set(['TIMEOUT', 'AGENT_RESTARTED']);
+
+/** How long a receipt or slip waits for an offline agent; a kitchen chit waits until the cutoff. */
+const OTHER_JOB_WAIT_MS = 24 * 3600_000;
+
+/**
  * Printing through the branch agent (protocol §7.1, §7.2): a print attempt becomes a
  * `print.job` command, and the agent's `print.result` settles the attempt and its job.
+ *
+ * What the cashier sees (Devices and Print Routing PRD): PROCESSING is "not printed yet" while
+ * it waits for the agent; SUCCESS is printed (a printer that cannot report its state counts as
+ * printed once it takes the job); FAILED certainly did not print; UNCERTAIN is "check printer";
+ * EXPIRED is a kitchen chit still unsent at the next business-day cutoff.
  */
 @Injectable()
 export class AgentPrintingService implements OnApplicationBootstrap {
@@ -79,7 +94,7 @@ export class AgentPrintingService implements OnApplicationBootstrap {
           copies: job.copies || 1,
           content: { format: 'html', html: job.rendered_html },
         },
-        { entityType: 'PrintAttempt', entityId: attempt.id },
+        { entityType: 'PrintAttempt', entityId: attempt.id, ttlMs: await this.waitFor(em, tenantId, job) },
       );
       attempt.agent_command_id = command.id;
       await em.save(PrintAttempt, attempt);
@@ -92,6 +107,18 @@ export class AgentPrintingService implements OnApplicationBootstrap {
     });
     await this.commands.flush(tenantId, job.branch_id);
     return saved;
+  }
+
+  /**
+   * How long a job may wait for an offline agent before it stops: a kitchen chit until the next
+   * business-day cutoff on the branch's clock (food not cooked by then is not cooked from a late
+   * chit), anything else a day.
+   */
+  private async waitFor(em: EntityManager, tenantId: string, job: PrintJob): Promise<number> {
+    if (job.document_type !== 'KITCHEN_TICKET') return OTHER_JOB_WAIT_MS;
+    const clock = await loadBusinessClock(em, tenantId, job.branch_id);
+    const now = new Date();
+    return Math.max(60_000, clock.endOf(clock.today(now)).getTime() - now.getTime());
   }
 
   /**
@@ -139,7 +166,7 @@ export class AgentPrintingService implements OnApplicationBootstrap {
     attempt.finished_at = finishedAt;
     await em.save(PrintAttempt, attempt);
 
-    await this.settleJob(em, attempt, success, errorCode, errorMessage);
+    await this.settleJob(em, attempt, success ? 'SUCCESS' : UNCERTAIN_CODES.has(errorCode!) ? 'UNCERTAIN' : 'FAILED', errorCode, errorMessage);
     return success ? { status: 'DONE' } : { status: 'FAILED', errorCode, errorMessage };
   }
 
@@ -159,26 +186,37 @@ export class AgentPrintingService implements OnApplicationBootstrap {
       attempt.error_message = message;
       attempt.finished_at = new Date();
       await em.save(PrintAttempt, attempt);
-      await this.settleJob(em, attempt, false, code, message);
+      // Never handed over: it certainly did not print, and a kitchen chit has expired at the
+      // cutoff. Handed over but never acknowledged: the agent may have printed it.
+      const job = await em.findOne(PrintJob, { where: { id: attempt.job_id, tenant_id: attempt.tenant_id } });
+      const status =
+        code !== 'EXPIRED' ? 'FAILED' : (command.send_count || 0) > 0 ? 'UNCERTAIN' : job?.document_type === 'KITCHEN_TICKET' ? 'EXPIRED' : 'FAILED';
+      await this.settleJob(em, attempt, status, code, message);
     });
   }
 
   /**
    * The job follows its latest attempt. A failure leaves the job FAILED in the print queue,
-   * where it is retried once the printer is fixed.
+   * where it is retried once the printer is fixed; an unsure one waits for the cashier.
    */
-  private async settleJob(em: EntityManager, attempt: PrintAttempt, success: boolean, code: string | null, message: string | null) {
+  private async settleJob(
+    em: EntityManager,
+    attempt: PrintAttempt,
+    status: 'SUCCESS' | 'FAILED' | 'UNCERTAIN' | 'EXPIRED',
+    code: string | null,
+    message: string | null,
+  ) {
     const job = await em.findOne(PrintJob, { where: { id: attempt.job_id, tenant_id: attempt.tenant_id } });
     if (!job) return;
     const latest = await em.findOne(PrintAttempt, { where: { job_id: job.id }, order: { attempt_no: 'DESC' } });
     // An older attempt answering late does not overrule a newer one.
     if (latest && latest.id !== attempt.id) return;
 
-    job.status = success ? 'SUCCESS' : 'FAILED';
-    job.completed_at = success ? new Date() : (null as any);
+    job.status = status;
+    job.completed_at = status === 'SUCCESS' ? new Date() : (null as any);
     await em.save(PrintJob, job);
 
-    if (success) return;
+    if (status === 'SUCCESS') return;
     this.logger.warn(`print job ${job.id} failed on ${attempt.printer_id}: ${code}`);
   }
 }
