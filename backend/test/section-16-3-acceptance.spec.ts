@@ -1169,7 +1169,8 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     const importedProd = await prodRepo.findOne({ where: { tenant_id: tenantId, code: `PROD-FA-${tag}` } });
     expect(importedProd).toBeDefined();
     expect(importedProd?.name).toBe('چلوکباب کوبیده سیخی');
-    expect(MoneyUtil.format(importedProd?.base_price || '0')).toBe('280000.0000');
+    // The file's price is in Toman; it is kept in Rial.
+    expect(MoneyUtil.format(importedProd?.base_price || '0')).toBe('2800000.0000');
 
     // Step 3: Save Layout & System Preferences
     const layoutSettings = await settingsService.updateSetting(

@@ -34,6 +34,23 @@ export class AlignWithPrds1700000000127 implements MigrationInterface {
     // The hardware list the agent has taken, so a changed printer shows "waiting for the agent".
     await queryRunner.query(`ALTER TABLE "agent" ADD COLUMN IF NOT EXISTS "config_version_applied" bigint`);
 
+    // An unrouted item now prints only on a default kitchen printer someone chose. A branch that
+    // relied on "its first kitchen printer" gets that printer marked once, so nothing stops printing.
+    await queryRunner.query(`
+      UPDATE "printer" p SET "kitchen_default" = true
+        FROM (
+          SELECT DISTINCT ON ("tenant_id", "branch_id") "id"
+            FROM "printer" k
+           WHERE "deleted_at" IS NULL AND "is_active" AND upper("printer_type") LIKE 'KITCHEN%'
+             AND NOT EXISTS (
+               SELECT 1 FROM "printer" d
+                WHERE d."tenant_id" = k."tenant_id" AND d."branch_id" = k."branch_id" AND d."kitchen_default" AND d."deleted_at" IS NULL
+             )
+           ORDER BY "tenant_id", "branch_id", "code", "id"
+        ) first
+       WHERE p."id" = first."id"
+    `);
+
     // A receipt prints once; copies per printer are F.
     await queryRunner.query(`ALTER TABLE "terminal" DROP COLUMN IF EXISTS "receipt_copies"`);
 

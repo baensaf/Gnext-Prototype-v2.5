@@ -10,6 +10,7 @@ import {
   Stack,
   Button,
   Dialog,
+  Switch,
   MenuItem,
   TextField,
   DialogTitle,
@@ -18,7 +19,6 @@ import {
   DialogActions,
   InputAdornment,
   FormControlLabel,
-  Switch,
 } from '@mui/material';
 
 import { catalogApi } from 'src/api/catalogApi';

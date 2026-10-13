@@ -3,14 +3,14 @@ import type { PrintJob, PrinterDevice } from 'src/api/printingApi';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
+import DoneIcon from '@mui/icons-material/Done';
 import PrintIcon from '@mui/icons-material/Print';
+import ClearIcon from '@mui/icons-material/Clear';
 import ReplayIcon from '@mui/icons-material/Replay';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import PrintDisabledIcon from '@mui/icons-material/PrintDisabled';
-import DoneIcon from '@mui/icons-material/Done';
-import ClearIcon from '@mui/icons-material/Clear';
 import {
   Box,
   Card,

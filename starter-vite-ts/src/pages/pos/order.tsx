@@ -1,8 +1,8 @@
 import type { Theme } from '@mui/material/styles';
 import type { HeldCart } from './held-carts';
 import type { LateEntryInput } from './late-entry';
-import type { LineQuote, OrderHeader } from 'src/api/orderApi';
 import type { DeliveryZone } from 'src/api/deliveryApi';
+import type { LineQuote, OrderHeader } from 'src/api/orderApi';
 import type { Customer, CustomerAddress } from 'src/api/customerApi';
 import type { ManualDiscount, ManualDiscountLimits } from 'src/api/discountsApi';
 import type {
@@ -111,11 +111,11 @@ import { useRegisterShift } from 'src/components/shift/use-register-shift';
 import { PosShiftBar, PosShiftGate, PosShiftAccountLink } from 'src/components/shift/pos-shift';
 
 import { PosStopDialog } from './pos-stop-dialog';
-import { placeOne, pricedKey, changeLine } from './cart-lines';
 import { useFillViewport } from './use-fill-viewport';
 import { PosCustomerPicker } from './pos-customer-picker';
 import { ClosedBranchBanner } from './closed-branch-banner';
 import { readHeldCarts, writeHeldCarts } from './held-carts';
+import { placeOne, pricedKey, changeLine } from './cart-lines';
 import { LateEntryDialog, LateEntrySwitch, lateEntryErrorText } from './late-entry';
 
 /** A late entry with the manager's approval, as the server wants it with the order. */
@@ -1008,7 +1008,7 @@ export function PosOrderPage() {
     } catch {
       // A quote that fails leaves the figures as they were; submitting prices the order again.
     }
-  }, [cart, selectedCustomerId, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, priceOf, familySkipped, couponCode, t]);
+  }, [cart, selectedCustomerId, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, lineUnitPrice, familySkipped, couponCode, t]);
 
   /** Puts a typed code on the order; it replaces the cashier's own discount. */
   const applyCoupon = () => {

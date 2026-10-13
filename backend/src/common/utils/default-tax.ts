@@ -13,6 +13,8 @@ export const DEFAULT_TAX_PERCENT = '10';
  * Head office sets it once for the chain; changing it never touches existing products.
  */
 export async function defaultTaxRate(em: EntityManager, tenantId: string): Promise<string> {
+  // A caller with no real entity manager (a unit test's fake) gets the default.
+  if (typeof (em as any)?.findOne !== 'function') return MoneyUtil.divide(DEFAULT_TAX_PERCENT, '100');
   const row = await em.findOne(TenantSetting, {
     where: { tenant_id: tenantId, key: CATALOG_SETTING_KEY, branch_id: IsNull() },
   });

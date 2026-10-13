@@ -796,7 +796,7 @@ export function OrdersWorkflowPage() {
   useEffect(() => {
     if (!drawerOrderId) {
       setPrintTrouble(null);
-      return;
+      return undefined;
     }
     let live = true;
     printingApi
