@@ -40,7 +40,8 @@ describe('KioskService (Unit)', () => {
   let orderItemOptionRepo: any;
   let paymentRepo: any;
   let customerRepo: any;
-  let auditWriter: any;  let printQueueService: any;
+  let auditWriter: any;
+  let printQueueService: any;
   let variantRepo: any;
   let catalogService: any;
   let terminalRepo: any;
@@ -69,7 +70,8 @@ describe('KioskService (Unit)', () => {
     // The order is saved in one transaction; its repositories are these same fakes.
     const txRepos = new Map<any, any>([[OrderHeader, orderRepo], [OrderItem, orderItemRepo], [OrderItemOption, orderItemOptionRepo], [Customer, customerRepo]]);
     orderRepo.manager = { transaction: async (fn: any) => fn({ getRepository: (entity: any) => txRepos.get(entity) }) };
-    auditWriter = { write: jest.fn() };    printQueueService = { enqueueOrderPrintJobs: jest.fn().mockResolvedValue([]) };
+    auditWriter = { write: jest.fn() };
+    printQueueService = { enqueueOrderPrintJobs: jest.fn().mockResolvedValue([]) };
     variantRepo = { find: jest.fn().mockResolvedValue([]) };
     catalogService = {
       getUnavailableNow: jest.fn().mockResolvedValue({ products: new Set(), variants: new Set() }),
@@ -93,7 +95,8 @@ describe('KioskService (Unit)', () => {
         { provide: getRepositoryToken(OrderItemOption), useValue: orderItemOptionRepo },
         { provide: getRepositoryToken(Payment), useValue: paymentRepo },
         { provide: getRepositoryToken(Customer), useValue: customerRepo },
-        { provide: AuditWriter, useValue: auditWriter },        { provide: PrintQueueService, useValue: printQueueService },
+        { provide: AuditWriter, useValue: auditWriter },
+        { provide: PrintQueueService, useValue: printQueueService },
         { provide: getRepositoryToken(ProductVariant), useValue: variantRepo },
         { provide: CatalogService, useValue: catalogService },
         { provide: getRepositoryToken(Terminal), useValue: terminalRepo },
@@ -192,8 +195,9 @@ describe('KioskService (Unit)', () => {
     });
 
     expect(order.subtotal_amount).toBe('20.0000');
-    expect(order.tax_amount).toBe('1.8000');
-    expect(order.total_amount).toBe('21.8000');
+    // 9% of 20 Rial is 1.8 Rial, which rounds to a whole Toman: no tax.
+    expect(order.tax_amount).toBe('0.0000');
+    expect(order.total_amount).toBe('20.0000');
     expect(auditWriter.write).toHaveBeenCalledWith(expect.objectContaining({ action: 'KIOSK_ORDER_CREATED' }));
   });
 
@@ -378,8 +382,8 @@ describe('KioskService (Unit)', () => {
 
     // Should use authoritative base_price 15.00, NOT client override 1.00
     expect(order.subtotal_amount).toBe('15.0000');
-    expect(order.tax_amount).toBe('1.3500');
-    expect(order.total_amount).toBe('16.3500');
+    expect(order.tax_amount).toBe('0.0000');
+    expect(order.total_amount).toBe('15.0000');
   });
 
   it('leaves the order note empty when the guest wrote none, so nothing extra prints', async () => {

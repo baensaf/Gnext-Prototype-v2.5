@@ -145,7 +145,8 @@ describe('Branch price lists (PostgreSQL)', () => {
   });
 
   it("changes only the list's own prices in a list price change", async () => {
-    await priceChanges.commit(tenantId, { price_list_id: listId, adjustment: 'AMOUNT', value: '1000' }, null, 'test');
+    const listChange = { price_list_id: listId, adjustment: 'AMOUNT' as const, value: '1000', round_to: 0 };
+    await priceChanges.commit(tenantId, { ...listChange, expected: (await priceChanges.preview(tenantId, listChange)).items }, null, 'test');
     expect(await linePrices(uptown, [{ product_id: tea, quantity: '1' }])).toEqual(['66000.0000']);
     expect(await linePrices(uptown, [{ product_id: pizza, variant_id: large, quantity: '1' }])).toEqual(['451000.0000']);
     // Small is not on the list, so it keeps selling at base.

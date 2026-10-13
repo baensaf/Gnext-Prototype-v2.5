@@ -50,7 +50,8 @@ export function PriceChangesPage() {
   const [categoryId, setCategoryId] = useState(ALL);
   const [adjustment, setAdjustment] = useState<'PERCENT' | 'AMOUNT'>('PERCENT');
   const [value, setValue] = useState('');
-  const [roundTo, setRoundTo] = useState('0');
+  // New prices round up to 1,000 Toman unless the user changes it.
+  const [roundTo, setRoundTo] = useState('1000');
   const [preview, setPreview] = useState<PriceChangePreview | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +94,8 @@ export function PriceChangesPage() {
   const commit = async () => {
     setBusy(true);
     try {
-      const saved = await catalogApi.commitPriceChange(input());
+      // Save exactly what was previewed; the server refuses if prices moved in the meantime.
+      const saved = await catalogApi.commitPriceChange({ ...input(), expected: preview?.items || [] });
       setNotice(t('pricing.changes.applied', { count: saved.items }));
       setPreview(null);
       setValue('');

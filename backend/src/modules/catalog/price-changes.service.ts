@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, LessThanOrEqual, Repository } from 'typeorm';
 import Decimal from 'decimal.js';
@@ -25,9 +25,17 @@ export interface PriceChangeInput {
   /** A percentage (10 = +10%) or an amount in Rial added to each price. Negative lowers. */
   adjustment: 'PERCENT' | 'AMOUNT';
   value: string | number;
-  /** Round each new price up to this step (e.g. 1000); 0 or empty for none. */
+  /** Round each new price up to this step, in Rial; 0 for none. Left out, it is 1,000 Toman. */
   round_to?: number | null;
+  /**
+   * When saving: the lines of the preview the user saw. The change is saved only if they are
+   * still exactly what it would do now.
+   */
+  expected?: Array<Pick<ChangeLine, 'product_id' | 'variant_id' | 'current' | 'new'>> | null;
 }
+
+/** The default rounding step: 1,000 Toman, in Rial. */
+export const DEFAULT_ROUND_TO = 10000;
 
 /** One line of a change: a product, or one of its sizes. */
 export interface ChangeLine {
@@ -57,14 +65,16 @@ export class PriceChangeService {
     private readonly auditWriter: AuditWriter,
   ) {}
 
-  private adjust(price: string, input: PriceChangeInput): string {
+  /** The new price, rounded up to the step; null when the change would take it below zero. */
+  private adjust(price: string, input: PriceChangeInput): string | null {
     const value = new Decimal(input.value || 0);
     let next = input.adjustment === 'PERCENT'
       ? new Decimal(price).mul(new Decimal(100).plus(value)).div(100)
       : new Decimal(price).plus(value);
-    const step = Number(input.round_to) || 0;
+    if (next.isNegative()) return null;
+    const step = input.round_to === undefined || input.round_to === null ? DEFAULT_ROUND_TO : Number(input.round_to) || 0;
     if (step > 0) next = next.div(step).ceil().mul(step);
-    return Decimal.max(next, 0).toFixed(4);
+    return next.toFixed(4);
   }
 
   private validate(input: PriceChangeInput) {
@@ -77,8 +87,10 @@ export class PriceChangeService {
   }
 
   /**
-   * Every item the change touches, with the price it has now and the price it gets. Base changes cover every product, or each size of one sold in
-   * sizes. A list change covers the items the list prices; the others follow base.
+   * Every item the change touches, with the price it has now and the price it gets. A base
+   * change covers every product, and each size of one sold in sizes (its own, unused price too).
+   * A list change covers the items the list prices; the others follow base. A change that would
+   * take any price below zero is refused, naming the items.
    */
   async preview(tenantId: string, input: PriceChangeInput) {
     this.validate(input);
@@ -96,21 +108,33 @@ export class PriceChangeService {
       : [];
     const current = listPricesAt(await this.priceLists.entriesOf(tenantId, listId), at);
 
+    const belowZero: string[] = [];
     const items: ChangeLine[] = products.flatMap((product) => {
       const sizes = variants.filter((v) => v.product_id === product.id);
-      return (sizes.length ? sizes : [null]).flatMap((variant) => {
+      // A base change also moves the product's own price when it sells in sizes, so it is
+      // right if the sizes are ever removed.
+      const targets = list ? (sizes.length ? sizes : [null]) : [null, ...sizes];
+      return targets.flatMap((variant) => {
         const key = priceKey(product.id, variant?.id);
         if (list && !current.has(key)) return [];
         const before = list ? current.get(key)! : inStorePrice(current, product, variant);
-        return [{
-          product_id: product.id,
-          variant_id: variant?.id || null,
-          name: variant ? `${product.name} — ${variant.name}` : product.name,
-          current: before,
-          new: this.adjust(before, input),
-        }];
+        const name = variant ? `${product.name} — ${variant.name}` : product.name;
+        const next = this.adjust(before, input);
+        if (next === null) {
+          belowZero.push(name);
+          return [];
+        }
+        return [{ product_id: product.id, variant_id: variant?.id || null, name, current: before, new: next }];
       });
     });
+    if (belowZero.length) {
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'PRICE_BELOW_ZERO',
+        message: `This change would take these prices below zero: ${belowZero.slice(0, 10).join(', ')}${belowZero.length > 10 ? ` and ${belowZero.length - 10} more` : ''}`,
+        items: belowZero,
+      });
+    }
     return {
       price_list: list ? { id: list.id, name: list.name } : null,
       items,
@@ -118,11 +142,22 @@ export class PriceChangeService {
     };
   }
 
-  /** Save a previewed change. Items whose price would not move are left out. */
+  /**
+   * Save a previewed change, exactly as previewed: if any price, item or category changed since
+   * the preview, nothing is saved and a new preview is needed. Items whose price would not move
+   * are left out.
+   */
   async commit(tenantId: string, input: PriceChangeInput, userId: string | null, correlationId: string) {
     const preview = await this.preview(tenantId, input);
     const changed = preview.items.filter((i) => i.current !== i.new);
     if (changed.length === 0) throw new BadRequestException('No price would change');
+    if (!samePreview(preview.items, input.expected)) {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'PRICE_PREVIEW_STALE',
+        message: 'Prices changed since the preview. Preview again before saving.',
+      });
+    }
     const at = new Date();
     const listId = preview.price_list?.id || null;
 
@@ -134,7 +169,7 @@ export class PriceChangeService {
           price_group_id: listId,
           effective_from: at,
           affected_rows: changed.length,
-          params: { ...input },
+          params: { ...input, expected: undefined },
           created_by: userId || null,
         }),
       );
@@ -180,7 +215,7 @@ export class PriceChangeService {
       entityType: 'PriceBulkJob',
       entityId: job.id,
       correlationId,
-      details: { priceListId: listId, effectiveFrom: at, items: changed.length, input },
+      details: { priceListId: listId, effectiveFrom: at, items: changed.length, input: { ...input, expected: undefined } },
     });
     if (!listId) await this.applyDueBaseChanges(tenantId);
     return this.describe(job, preview.price_list?.name || null);
@@ -307,4 +342,17 @@ export class PriceChangeService {
 
     return [...dated, ...edited].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
   }
+}
+
+/** Whether the lines a preview showed are still exactly what the change would do. */
+export function samePreview(
+  now: ChangeLine[],
+  seen: PriceChangeInput['expected'],
+): boolean {
+  if (!seen) return false;
+  const line = (l: { product_id: string; variant_id: string | null; current: string; new: string }) =>
+    `${l.product_id}:${l.variant_id || ''}:${MoneyUtil.format(l.current)}:${MoneyUtil.format(l.new)}`;
+  const a = now.map(line).sort();
+  const b = seen.map(line).sort();
+  return a.length === b.length && a.every((x, i) => x === b[i]);
 }
