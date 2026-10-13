@@ -54,13 +54,8 @@ const TARGET_FIELDS: Record<ImportEntityType, { field: string; labelKey: string;
 };
 
 const DEFAULT_CSV_TEMPLATES: Record<ImportEntityType, string> = {
-  PRODUCTS: 'کد کالا,نام کالا,کد دسته بندی,قیمت,مالیات,بارکد,وضعیت
-PROD-201,همبرگر مخصوص,CAT-BURGER,250000,10,,فعال
-PROD-202,سیب زمینی سرخ کرده,CAT-SIDES,90000,,6260000000012,فعال
-PROD-203,پیتزا مخلوط,CAT-PIZZA,-10000,,,فعال',
-  CATEGORIES: 'کد,عنوان دسته
-CAT-BURGER,برگرها
-CAT-SIDES,پیش غذا و پیش خوراک',
+  PRODUCTS: 'کد کالا,نام کالا,کد دسته بندی,قیمت,مالیات,بارکد,وضعیت\nPROD-201,همبرگر مخصوص,CAT-BURGER,250000,10,,فعال\nPROD-202,سیب زمینی سرخ کرده,CAT-SIDES,90000,,6260000000012,فعال\nPROD-203,پیتزا مخلوط,CAT-PIZZA,-10000,,,فعال',
+  CATEGORIES: 'کد,عنوان دسته\nCAT-BURGER,برگرها\nCAT-SIDES,پیش غذا و پیش خوراک',
 };
 
 export function ImportWizardPage() {

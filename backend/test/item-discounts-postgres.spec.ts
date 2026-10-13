@@ -147,4 +147,26 @@ describe('Automatic item discounts (PostgreSQL)', () => {
     expect(order.discount_total).toBe('0.0000');
     expect(order.grand_total).toBe('100000.0000');
   });
+
+  it('covers several items at once, can be paused, and still refuses an overlap on any of them', async () => {
+    const both = await itemDiscounts.create(tenantId, { product_ids: [burger, fries], percent: 10, starts_on: shiftDay(today, 20) } as any);
+    const [listed] = (await itemDiscounts.list(tenantId)).filter((r) => r.id === both.id);
+    expect(listed.product_ids.sort()).toEqual([burger, fries].sort());
+    await itemDiscounts.update(tenantId, both.id, { starts_on: today, ends_on: today } as any);
+    // The burger's dated one runs from tomorrow, so today only this one applies.
+    const quote = await engine.evaluateQuote(tenantId, {
+      orderDraft: { branchId, items: [{ productId: burger, unitPrice: '100000', quantity: '1' }, { productId: fries, unitPrice: '50000', quantity: '1' }] },
+    } as any);
+    expect(quote.items.map((i: any) => i.itemDiscountPercent)).toEqual(['10.00', '10.00']);
+
+    await itemDiscounts.update(tenantId, both.id, { is_active: false } as any);
+    const paused = await engine.evaluateQuote(tenantId, {
+      orderDraft: { branchId, items: [{ productId: fries, unitPrice: '50000', quantity: '1' }] },
+    } as any);
+    expect(paused.items[0].itemDiscountPercent).toBe('0.00');
+
+    await expect(itemDiscounts.create(tenantId, { product_id: fries, percent: 5, starts_on: today, ends_on: today })).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'ITEM_DISCOUNT_OVERLAP' }),
+    });
+  });
 });

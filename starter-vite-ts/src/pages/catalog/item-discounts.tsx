@@ -142,7 +142,7 @@ export function ItemDiscountsPage() {
                 const status = itemDiscountStatus(r);
                 return (
                   <TableRow key={r.id}>
-                    <TableCell sx={{ fontWeight: 600 }}>{r.product_name || '—'}</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>{(r.product_names || []).filter(Boolean).join('، ') || '—'}</TableCell>
                     <TableCell align="center">
                       <Chip size="small" color="error" variant="outlined" label={`${Number(r.percent)}%`} />
                     </TableCell>
@@ -201,7 +201,7 @@ export function ItemDiscountsPage() {
         open={!!deleting}
         onClose={() => setDeleting(null)}
         title={t('pricing.itemDiscounts.delete')}
-        content={t('pricing.itemDiscounts.deleteConfirm', { name: deleting?.product_name || '' })}
+        content={t('pricing.itemDiscounts.deleteConfirm', { name: (deleting?.product_names || []).filter(Boolean).join('، ') })}
         action={
           <Button variant="contained" color="error" onClick={confirmDelete}>
             {t('pricing.itemDiscounts.delete')}

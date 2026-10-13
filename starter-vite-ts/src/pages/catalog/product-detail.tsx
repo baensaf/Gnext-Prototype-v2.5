@@ -173,7 +173,7 @@ export function ProductDetailPage() {
 
       const aList = await catalogApi.getAvailabilities(selectedBranchId || undefined).catch(() => [] as ProductAvailability[]);
       // The item's and its types' own stops here; a Snappfood-only stop does not take it off at the counter.
-      setStops(aList.filter((a) => a.product_id === prod.id && !a.option_item_id && !a.channel));
+      setStops(aList.filter((a) => a.product_id === prod.id && !a.channel));
     } catch (err: any) {
       setError(err.detail || err.message || t('catalog.productDetailPage.errors.loadFailed'));
     } finally {
@@ -207,7 +207,7 @@ export function ProductDetailPage() {
       if (next === 'AVAILABLE') await catalogApi.resumeItem(target);
       else await catalogApi.stopItem({ ...target, until: next });
       const aList = await catalogApi.getAvailabilities(selectedBranchId || undefined);
-      setStops(aList.filter((a) => a.product_id === id && !a.option_item_id && !a.channel));
+      setStops(aList.filter((a) => a.product_id === id && !a.channel));
     } catch (err: any) {
       setError(err.detail || err.message || t('catalog.availabilityPage.errors.suspendFailed'));
     }

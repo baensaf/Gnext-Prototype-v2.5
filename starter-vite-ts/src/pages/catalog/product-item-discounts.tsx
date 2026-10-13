@@ -1,3 +1,4 @@
+import type { Product } from 'src/api/catalogApi';
 import type { ItemDiscount } from 'src/api/discountsApi';
 
 import { useNavigate } from 'react-router';
@@ -11,6 +12,7 @@ import { Box, Card, Chip, Alert, Stack, Button, Typography, IconButton } from '@
 
 import { fDate } from 'src/utils/format-time';
 
+import { catalogApi } from 'src/api/catalogApi';
 import { discountsApi } from 'src/api/discountsApi';
 
 import { ConfirmDialog } from 'src/components/confirm-dialog';
@@ -34,6 +36,8 @@ export function ProductItemDiscounts({ productId, canAuthor }: { productId: stri
   const navigate = useNavigate();
 
   const [rows, setRows] = useState<ItemDiscount[]>([]);
+  // A discount can cover other items too, so the dialog offers the whole menu.
+  const [products, setProducts] = useState<Product[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ItemDiscount | null>(null);
   const [deleting, setDeleting] = useState<ItemDiscount | null>(null);
@@ -42,10 +46,11 @@ export function ProductItemDiscounts({ productId, canAuthor }: { productId: stri
 
   const load = useCallback(async () => {
     try {
-      const all = await discountsApi.getItemDiscounts();
+      const [all, menu] = await Promise.all([discountsApi.getItemDiscounts(), catalogApi.getProducts().catch(() => [] as Product[])]);
+      setProducts(menu);
       setRows(
         all
-          .filter((r) => r.product_id === productId && itemDiscountStatus(r) !== 'ended')
+          .filter((r) => (r.product_ids || []).includes(productId) && itemDiscountStatus(r) !== 'ended')
           .sort((a, b) => a.starts_on.localeCompare(b.starts_on))
       );
     } catch (err: any) {
@@ -152,6 +157,7 @@ export function ProductItemDiscounts({ productId, canAuthor }: { productId: stri
       <ItemDiscountDialog
         open={dialogOpen}
         editing={editing}
+        products={products}
         productId={productId}
         onClose={() => setDialogOpen(false)}
         onSaved={() => {
@@ -164,7 +170,7 @@ export function ProductItemDiscounts({ productId, canAuthor }: { productId: stri
         open={!!deleting}
         onClose={() => setDeleting(null)}
         title={t('pricing.itemDiscounts.delete')}
-        content={t('pricing.itemDiscounts.deleteConfirm', { name: deleting?.product_name || '' })}
+        content={t('pricing.itemDiscounts.deleteConfirm', { name: (deleting?.product_names || []).filter(Boolean).join('، ') })}
         action={
           <Button variant="contained" color="error" onClick={confirmDelete}>
             {t('pricing.itemDiscounts.delete')}

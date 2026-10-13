@@ -1,9 +1,9 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 /**
- * A dated price cut on one product (V1, 2026-10-03), as HAMI branches use them: "cheese
- * mushroom 20% off from the 1st to the 15th". It applies by itself to every POS line of the
- * product at every branch while the branch's business day is within the dates, and the one
+ * A dated price cut on chosen products (V1, 2026-10-03; several products since 2026-10-13), as
+ * HAMI branches use them: "cheese mushroom 20% off from the 1st to the 15th". It applies by
+ * itself to every POS line of those products at every branch while the branch's business day is within the dates, and the one
  * order discount (manual or customer rate) then applies to what is left.
  *
  * Not campaigns: no customer targeting, no conditions, no minimum basket. Category-wide
@@ -14,7 +14,7 @@ import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateCol
  * kiosk), Snappfood (a real price cut on the Snappfood menu), or both.
  */
 @Entity('item_discount')
-@Index(['tenant_id', 'product_id'])
+@Index(['tenant_id'])
 export class ItemDiscount {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -22,8 +22,13 @@ export class ItemDiscount {
   @Column({ type: 'uuid' })
   tenant_id: string;
 
-  @Column({ type: 'uuid' })
-  product_id: string;
+  /** The products it is for. */
+  @Column({ type: 'uuid', array: true, default: () => "'{}'" })
+  product_ids: string[];
+
+  /** Off pauses it without losing it. */
+  @Column({ type: 'boolean', default: true })
+  is_active: boolean;
 
   /** Percent off, e.g. 20.00. */
   @Column({ type: 'numeric', precision: 5, scale: 2 })

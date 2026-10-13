@@ -57,11 +57,13 @@ export interface ManualDiscountLimits {
 /** Where an item discount runs: in store (the till and the kiosk), on Snappfood, or both. */
 export type ItemDiscountChannel = 'IN_STORE' | 'SNAPPFOOD' | 'BOTH';
 
-/** A dated percent off one product, applied by itself at the till, the kiosk and on Snappfood (V1). */
+/** A dated percent off chosen products, applied by itself at the till and the kiosk (V1). */
 export interface ItemDiscount {
   id: string;
-  product_id: string;
-  product_name: string | null;
+  product_ids: string[];
+  product_names: Array<string | null>;
+  /** Off pauses it. */
+  is_active: boolean;
   percent: string;
   /** First and last business day, YYYY-MM-DD; no last day runs until removed. */
   starts_on: string;
@@ -73,7 +75,7 @@ export interface ItemDiscount {
   applies_to: ItemDiscountChannel;
 }
 
-export type ItemDiscountInput = Pick<ItemDiscount, 'product_id' | 'starts_on' | 'ends_on' | 'note' | 'all_groups' | 'price_group_ids' | 'applies_to'> & {
+export type ItemDiscountInput = Pick<ItemDiscount, 'product_ids' | 'is_active' | 'starts_on' | 'ends_on' | 'note' | 'all_groups' | 'price_group_ids' | 'applies_to'> & {
   percent: string;
 };
 

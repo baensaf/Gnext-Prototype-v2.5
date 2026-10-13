@@ -558,13 +558,12 @@ export function PosOrderPage() {
       setError(t('pos.productLoadFailed', { name: p.name }));
       return false;
     }
-    // A variant or add-on taken off sale today is not offered; nor is an add-on this
-    // product leaves out of its group.
+    // A variant taken off sale today is not offered; nor is an add-on this product leaves out
+    // of its group.
     const live = availabilities.filter(
       (a) => a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date())
     );
     const stoppedVariants = new Set(live.filter((a) => a.product_id === p.id && a.variant_id).map((a) => a.variant_id));
-    const stoppedAddons = new Set(live.filter((a) => a.option_item_id).map((a) => a.option_item_id));
     const onSale = (vList || []).filter((v) => !stoppedVariants.has(v.id));
     if ((vList || []).length > 0 && onSale.length === 0) {
       setError(t('pos.itemSuspendedNotice', { name: p.name }));
@@ -573,10 +572,10 @@ export function PosOrderPage() {
     const offered = (groups || []).map((g) => ({
       ...g,
       items: (g.items || []).filter(
-        (i) => !(g.excluded_item_ids || []).includes(i.id) && !stoppedAddons.has(i.id)
+        (i) => !(g.excluded_item_ids || []).includes(i.id)
       ),
     }));
-    // A group that needs more choices than are left on offer (the rest excluded or 86'd)
+    // A group that needs more choices than are left on offer (the rest excluded)
     // can never be filled; the register would refuse the line whatever the cashier picks.
     const unfillable = offered.find(
       (g) => (g.items || []).length < addonMin(g)
@@ -1453,7 +1452,7 @@ export function PosOrderPage() {
     availabilities
       // Only whole-product stops grey the tile; a stop on one variant or on an add-on
       // leaves the rest of the product on sale.
-      .filter((a) => !a.variant_id && !a.option_item_id && !!a.product_id)
+      .filter((a) => !a.variant_id && !!a.product_id)
       .filter((a) => a.is_suspended && (!a.suspended_until || new Date(a.suspended_until) > new Date()))
       .map((a) => a.product_id as string),
   );
