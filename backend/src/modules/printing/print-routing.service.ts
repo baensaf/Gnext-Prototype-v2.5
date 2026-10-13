@@ -214,8 +214,8 @@ export class PrintRoutingService {
   }
 
   /**
-   * Where a whole-order document prints: the till's receipt printer, with the till's copies and
-   * paper. A kiosk is a till here: its guests' receipts come out of the kiosk's own printer. An
+   * Where a whole-order document prints: the till's receipt printer, one copy (copies per printer
+   * are F), on the till's paper. A kiosk is a till here: its guests' receipts come out of the kiosk's own printer. An
    * order from no till (online, an aggregator), or from a till with no printer of its own in
    * service, prints on the branch's receipt printer.
    */
@@ -225,7 +225,7 @@ export class PrintRoutingService {
     terminalId?: string | null,
   ): Promise<{ printers: RoutedPrinter[]; template: TicketTemplate | null }> {
     const till = terminalId ? await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } }) : null;
-    const copies = till?.receipt_copies || 1;
+    const copies = 1;
     const template = till?.receipt_template ?? null;
 
     if (till?.receipt_printer_id) {

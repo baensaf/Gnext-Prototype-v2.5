@@ -184,7 +184,7 @@ export class AgentLocalService {
     }
     if (body?.active !== undefined) out.is_active = body.active !== false;
     if (creating || body?.connection !== undefined) {
-      out.agent_connection = parseDeviceConnection(body?.connection, ['tcp', 'windows']);
+      out.agent_connection = parseDeviceConnection(body?.connection, ['tcp']);
     }
     return out;
   }

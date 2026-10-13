@@ -124,7 +124,7 @@ describe('PrintingModule (Unit & Integration)', () => {
   const notPrintedCategory = (categoryId: string) =>
     routeRepo.rows.push({ tenant_id: T, branch_id: BR, category_id: categoryId, printer_id: null });
   const till = (id: string, extra: any = {}) =>
-    terminalRepo.rows.push({ id, tenant_id: T, branch_id: BR, terminal_type: 'CASHIER', receipt_copies: 1, receipt_printer_id: null, ...extra });
+    terminalRepo.rows.push({ id, tenant_id: T, branch_id: BR, terminal_type: 'CASHIER', receipt_printer_id: null, ...extra });
   const product = (id: string, categoryId: string, name = id) => productRepo.rows.push({ id, tenant_id: T, category_id: categoryId, name });
   const line = (id: string, productId: string, name: string, state = 'ACTIVE') => ({
     id,
@@ -278,17 +278,17 @@ describe('PrintingModule (Unit & Integration)', () => {
       expect(printers.get('p-burger')!.printers.map((p) => p.id)).toEqual(['prn-kitchen']);
     });
 
-    it("prints a receipt on the till's own printer, with the till's copies and paper", async () => {
+    it("prints a receipt on the till's own printer, one copy, on the till's paper", async () => {
       printer('prn-counter-1', { printer_type: 'THERMAL_RECEIPT' });
       printer('prn-counter-2', { printer_type: 'THERMAL_RECEIPT' });
       till('till-1', { receipt_printer_id: 'prn-counter-1' });
-      till('till-2', { receipt_printer_id: 'prn-counter-2', receipt_copies: 2, receipt_template: 'COMPACT' });
+      till('till-2', { receipt_printer_id: 'prn-counter-2', receipt_template: 'COMPACT' });
 
       const one = await routingService.printersForDocument(T, BR, 'till-1');
       const two = await routingService.printersForDocument(T, BR, 'till-2');
 
       expect(one.printers.map((r) => [r.printer.id, r.copies])).toEqual([['prn-counter-1', 1]]);
-      expect(two.printers.map((r) => [r.printer.id, r.copies])).toEqual([['prn-counter-2', 2]]);
+      expect(two.printers.map((r) => [r.printer.id, r.copies])).toEqual([['prn-counter-2', 1]]);
       expect(two.template).toBe('COMPACT');
     });
 
@@ -485,14 +485,14 @@ describe('PrintingModule (Unit & Integration)', () => {
 
     it("prints each till's receipts at its own counter", async () => {
       printer('prn-counter-2', { printer_type: 'THERMAL_RECEIPT' });
-      till('till-2', { receipt_printer_id: 'prn-counter-2', receipt_copies: 2 });
+      till('till-2', { receipt_printer_id: 'prn-counter-2' });
       order('ord-till-2', [line('l-x', 'p-burger', 'Classic Burger')], { terminal_id: 'till-2' });
 
       const [first] = await queueService.enqueueOrderPrintJobs(T, 'ord-1', 'GUEST_BILL');
       const [second] = await queueService.enqueueOrderPrintJobs(T, 'ord-till-2', 'CUSTOMER_RECEIPT');
 
       expect([first.printer_id, first.copies]).toEqual(['prn-counter', 1]);
-      expect([second.printer_id, second.copies]).toEqual(['prn-counter-2', 2]);
+      expect([second.printer_id, second.copies]).toEqual(['prn-counter-2', 1]);
     });
 
     it('prints nothing for a kitchen ticket with no live lines', async () => {

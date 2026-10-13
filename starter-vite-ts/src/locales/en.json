@@ -3023,7 +3023,6 @@
       "cardLinkError": "Could not link the card terminal.",
       "colReceipts": "Receipt printer",
       "receiptBranchPrinter": "Branch's receipt printer",
-      "receiptCopies": "Copies",
       "receiptSaved": "Receipt printing saved for {{name}}",
       "receiptError": "Could not save where the receipts print",
       "editTerminal": "Edit register",

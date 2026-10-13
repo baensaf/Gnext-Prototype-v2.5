@@ -58,7 +58,6 @@ export interface Terminal {
   payment_device_id?: string | null;
   /** Where its receipts, bills and courier slips print; null: the branch's receipt printer. */
   receipt_printer_id?: string | null;
-  receipt_copies?: number;
   receipt_template?: 'COMPACT' | 'DETAILED' | null;
 }
 
