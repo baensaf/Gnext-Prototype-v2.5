@@ -30,6 +30,7 @@ import { fDateTime } from 'src/utils/format-time';
 import { agentsApi } from 'src/api/agentsApi';
 
 import { toast, showErrorToast } from 'src/components/snackbar';
+import { VersionTag } from 'src/components/version-tag';
 
 // ----------------------------------------------------------------------
 
@@ -126,7 +127,8 @@ export function AgentReleasesCard({ onLatestPublished }: Props) {
   return (
     <Card sx={{ mt: 3 }}>
       <CardHeader
-        title={t('operations.agents.releases.title', 'Agent releases')}
+        // Publishing versions and self-update are V2; a V1 agent is installed by hand at the pilot.
+        title={<>{t('operations.agents.releases.title', 'Agent releases')} <VersionTag feature="agents.releases" /></>}
         subheader={t(
           'operations.agents.releases.subtitle',
           'Agents install the newest published build by themselves, after checking its SHA-256.'

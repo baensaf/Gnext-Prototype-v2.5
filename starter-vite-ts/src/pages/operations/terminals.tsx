@@ -152,7 +152,7 @@ export function TerminalsPage() {
 
   const handleReceiptSetting = async (
     terminal: Terminal,
-    patch: Pick<Terminal, 'receipt_printer_id' | 'receipt_copies' | 'receipt_template'>
+    patch: Pick<Terminal, 'receipt_printer_id' | 'receipt_template'>
   ) => {
     try {
       await tenantApi.updateTerminal(terminal.id, patch);
@@ -307,18 +307,6 @@ export function TerminalsPage() {
                                     </MenuItem>
                                   ))}
                               </Select>
-                              <TextField
-                                size="small"
-                                type="number"
-                                label={t('operations.terminals.receiptCopies')}
-                                defaultValue={item.receipt_copies || 1}
-                                onBlur={(e) => {
-                                  const copies = Math.max(1, Number(e.target.value) || 1);
-                                  if (copies !== (item.receipt_copies || 1)) handleReceiptSetting(item, { receipt_copies: copies });
-                                }}
-                                slotProps={{ htmlInput: { min: 1 } }}
-                                sx={{ width: 90 }}
-                              />
                               <Select
                                 size="small"
                                 displayEmpty

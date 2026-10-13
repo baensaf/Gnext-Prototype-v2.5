@@ -31,9 +31,6 @@ export class Terminal {
   @Column({ type: 'uuid', nullable: true })
   receipt_printer_id: string | null;
 
-  @Column({ type: 'int', default: 1 })
-  receipt_copies: number;
-
   /** COMPACT or DETAILED receipts; null takes each document's default. */
   @Column({ type: 'varchar', length: 16, nullable: true })
   receipt_template: 'COMPACT' | 'DETAILED' | null;

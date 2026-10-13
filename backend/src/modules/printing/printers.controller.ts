@@ -26,7 +26,8 @@ export class PrintersController {
 
   /** Printers the agent can reach over the network or through Windows. */
   private printerConnection(input: unknown) {
-    return parseDeviceConnection(input, ['tcp', 'windows']);
+    // V1 prints to network printers only; a printer installed in Windows (USB) is F.
+    return parseDeviceConnection(input, ['tcp']);
   }
 
   /** The branch agent keeps its own copy of the printer list; tell it about the change. */

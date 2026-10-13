@@ -99,6 +99,8 @@ export const FEATURE_LABELS = {
   'customers.family': 'V2',
   // Operations
   'terminals.kiosk': 'V3',
+  // Publishing agent versions and self-update; a V1 agent is installed by hand.
+  'agents.releases': 'V2',
   'printers.simulated': 'F',
   'printQueue.simulate': 'F',
   // Settings. Money is shown in Toman in V1; the Omani rial and the US dollar come in V7.

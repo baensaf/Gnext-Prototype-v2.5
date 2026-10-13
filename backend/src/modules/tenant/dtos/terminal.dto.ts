@@ -1,4 +1,4 @@
-import { IsBoolean, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
 
 /**
  * What a terminal is made of. The route took `any`, so a body with no code at all reached
@@ -58,11 +58,6 @@ export class UpdateTerminalDto {
   @IsOptional()
   @IsUUID()
   receipt_printer_id?: string | null;
-
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  receipt_copies?: number;
 
   /** COMPACT or DETAILED receipts; null takes each document's default. */
   @IsOptional()
