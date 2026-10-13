@@ -198,6 +198,10 @@ export function useNavData(): NavSectionProps['data'] {
               title: t('nav.customerWallet', 'Wallet & Cashback'),
               path: '/app/wallet',
             },
+            {
+              title: t('nav.coupons', 'Coupons'),
+              path: '/app/coupons',
+            },
           ],
         },
       ],

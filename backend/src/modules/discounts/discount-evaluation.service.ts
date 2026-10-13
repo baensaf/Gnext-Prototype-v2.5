@@ -10,14 +10,20 @@ import { MoneyUtil } from '../../common/utils/money.util';
 import { HEAD_OFFICE_ROLES } from '../../common/utils/user-scope.util';
 import { DiscountQuoteRequestDto, QuoteItemDto, ManualDiscountDto } from './dtos/discounts.dto';
 import { ItemDiscountsService } from './item-discounts.service';
+import { CouponsService, CouponRefusal } from './coupons.service';
+import { Coupon } from '../../entities/Coupon.entity';
+import { CouponBatch } from '../../entities/CouponBatch.entity';
 
 export interface ConsideredDiscount {
   /**
    * Who granted it: an automatic item discount (one entry per discounted line, applied
    * first), or the one order discount: the cashier's, or the customer's own rate.
    */
-  source: 'ITEM' | 'MANUAL' | 'CUSTOMER';
+  source: 'ITEM' | 'MANUAL' | 'CUSTOMER' | 'COUPON';
   name: string;
+  /** COUPON: the code's id, and why it was refused when it was. */
+  couponId?: string;
+  couponRefusal?: CouponRefusal;
   itemDiscountId?: string;
   productId?: string;
   percent?: string;
@@ -72,6 +78,8 @@ export class DiscountEvaluationService {
     private readonly productRepo?: Repository<Product>,
     @Optional()
     private readonly itemDiscounts?: ItemDiscountsService,
+    @Optional()
+    private readonly coupons?: CouponsService,
   ) {}
 
   /**
@@ -108,7 +116,7 @@ export class DiscountEvaluationService {
     /** The signed-in account's role, which sets how much it may discount without a pin. */
     callerRole?: string | null,
   ): Promise<DiscountQuoteResult> {
-    const { orderDraft, manualDiscount } = request;
+    const { orderDraft, manualDiscount, couponCode } = request;
     const currencyCode = orderDraft.currencyCode || 'IRR';
     const now = new Date();
 
@@ -227,8 +235,63 @@ export class DiscountEvaluationService {
     const policyMaxPct = limits.ceiling.pct;
     const policyMaxFixed = limits.ceiling.maxFixed;
 
+    // A0. A one-time coupon (V2), till orders only. When it works it is the order's one
+    // discount: the cashier's discount and the friends-and-family rate step aside.
+    if (couponCode && couponCode.trim() && this.coupons && channel === 'POS') {
+      const checked = await this.coupons.check(tenantId, couponCode, {
+        branchId: orderDraft.branchId,
+        subtotal,
+        productIds: requestedItems.map((item) => item.productId),
+      });
+      if (checked.ok === false) {
+        const refused = checked as { ok: false; reason: CouponRefusal; batch?: { reward_type: string } };
+        consideredDiscounts.push({
+          source: 'COUPON',
+          name: `Coupon ${couponCode.trim().toUpperCase()}`,
+          discountType: refused.batch?.reward_type || 'COUPON',
+          status: 'REJECTED',
+          rejectionReason: `Coupon refused: ${refused.reason}`,
+          couponRefusal: refused.reason,
+          amount: '0.0000',
+        });
+      } else {
+        const { coupon, batch } = checked as { ok: true; coupon: Coupon; batch: CouponBatch };
+        let couponAmount = '0.0000';
+        if (batch.reward_type === 'PERCENT') {
+          const eligible = lineItems.map((_, i) => i).filter((i) => isDiscountableLine[i] && MoneyUtil.greaterThan(remainingBases[i], '0'));
+          const base = eligible.reduce((sum, i) => MoneyUtil.add(sum, remainingBases[i]), '0.0000');
+          couponAmount = MoneyUtil.multiply(base, MoneyUtil.divide(batch.percent || '0', '100', 6));
+          if (batch.max_discount && MoneyUtil.greaterThan(couponAmount, batch.max_discount)) couponAmount = MoneyUtil.format(batch.max_discount);
+          const shares = MoneyUtil.allocate(couponAmount, eligible.map((i) => remainingBases[i]));
+          eligible.forEach((lineIndex, k) => {
+            lineItems[lineIndex].discountTotal = MoneyUtil.add(lineItems[lineIndex].discountTotal, shares[k]);
+            remainingBases[lineIndex] = MoneyUtil.subtract(remainingBases[lineIndex], shares[k]);
+          });
+        } else {
+          // One of the free product, at what one unit still costs after its item discount.
+          const i = requestedItems.findIndex((item) => item.productId === batch.reward_product_id);
+          const perUnit = MoneyUtil.divide(remainingBases[i] || '0', lineItems[i].quantity || '1');
+          couponAmount = MoneyUtil.greaterThan(perUnit, '0') ? perUnit : '0.0000';
+          lineItems[i].discountTotal = MoneyUtil.add(lineItems[i].discountTotal, couponAmount);
+          remainingBases[i] = MoneyUtil.subtract(remainingBases[i], couponAmount);
+        }
+        discountTotal = MoneyUtil.add(discountTotal, couponAmount);
+        consideredDiscounts.push({
+          source: 'COUPON',
+          name: `Coupon ${coupon.code}`,
+          couponId: coupon.id,
+          discountType: batch.reward_type,
+          percent: batch.reward_type === 'PERCENT' ? batch.percent || undefined : undefined,
+          productId: batch.reward_type === 'FREE_ITEM' ? batch.reward_product_id || undefined : undefined,
+          status: 'APPLIED',
+          amount: couponAmount,
+        });
+        singleDiscountApplied = true;
+      }
+    }
+
     // A. Workflow 3: Manual Cashier Discount Evaluation (Highest Precedence)
-    if (manualDiscount && MoneyUtil.greaterThan(manualDiscount.value, '0')) {
+    if (!singleDiscountApplied && manualDiscount && MoneyUtil.greaterThan(manualDiscount.value, '0')) {
       const forFamily = manualDiscount.reasonCode === 'FRIENDS_FAMILY';
       const manualSkips = (i: number) => !!(orderDraft.items || [])[i]?.neverDiscount || (forFamily && familyExcludedLine[i]);
       let manualEligibleSubtotal = '0.0000';

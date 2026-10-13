@@ -27,6 +27,7 @@ import { SettingsHubPage } from 'src/pages/settings/hub';
 import { AgentsPage } from 'src/pages/operations/agents';
 import { homePathForRole } from 'src/config/role-access';
 import { ProductsPage } from 'src/pages/catalog/products';
+import { CouponsPage } from 'src/pages/customers/coupons';
 import { DataResetPage } from 'src/pages/tools/data-reset';
 import { RolesMatrixPage } from 'src/pages/settings/roles';
 import { EndShiftPage } from 'src/pages/cashier/end-shift';
@@ -220,6 +221,7 @@ export const routesSection: RouteObject[] = [
       { path: 'customer-club/discounts', element: <Navigate to="/app/customers" replace /> },
       { path: 'customer-club/wallet', element: <Navigate to="/app/wallet" replace /> },
       { path: 'wallet', element: <WalletCashbackPage /> },
+      { path: 'coupons', element: <CouponsPage /> },
       { path: 'customers', element: <CustomersPage /> },
       { path: 'customers/:id', element: <CustomerProfilePage /> },
       // Credit lives on the customer list since 2026-10-12: the Owes filter and the row's dialog.

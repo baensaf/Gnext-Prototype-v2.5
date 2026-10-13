@@ -275,6 +275,8 @@ export const orderApi = {
       approvalRequestIds?: string[];
       manualDiscount?: ManualDiscount;
       skipCustomerDiscount?: boolean;
+      /** A one-time coupon code, taken when the order is sent. */
+      couponCode?: string;
       /** A forgotten order rung up now: the reason, roughly when it was served, the manager's approval. */
       lateEntry?: { reason: string; servedAt?: string; approvalRequestId: string };
     },

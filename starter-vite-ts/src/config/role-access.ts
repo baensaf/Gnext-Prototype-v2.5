@@ -98,6 +98,7 @@ const CHAIN_ONLY_PATHS = [
   // manager, who keeps their own branch's friends-and-family rates on it; its credit column
   // and dialog are head office's.
   '/app/wallet',
+  '/app/coupons',
   // The sandbox drives the chain's integrations — Snappfood, the payment and printer mocks,
   // the offline queue — and its API has been head office's only all along, so a branch
   // copy of the menu was a set of screens whose every call came back refused.

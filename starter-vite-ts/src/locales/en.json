@@ -109,7 +109,8 @@
     "snappfoodPrices": "Snappfood Prices",
     "priceChanges": "Price Changes",
     "itemDiscounts": "Item Discounts",
-    "mediaLocalizationSim": "Media & translations demo"
+    "mediaLocalizationSim": "Media & translations demo",
+    "coupons": "Coupons"
   },
   "common": {
     "languages": "Languages",
@@ -417,7 +418,24 @@
       "save": "Save note"
     },
     "searchPlaceholder": "Search by name or code, Enter adds the first",
-    "noProducts": "No product matches the search or category."
+    "noProducts": "No product matches the search or category.",
+    "coupon": {
+      "label": "Coupon code",
+      "apply": "Apply",
+      "or": "or a discount",
+      "name": "Coupon {{code}}",
+      "remove": "Take the coupon off this order",
+      "refusedChip": "Coupon {{code}}: {{reason}}",
+      "refused": {
+        "UNKNOWN": "no such code",
+        "USED": "already used",
+        "OFF": "switched off",
+        "NOT_YET": "not valid yet",
+        "EXPIRED": "expired",
+        "BELOW_MINIMUM": "order below the minimum",
+        "ITEM_MISSING": "add the free item to the order"
+      }
+    }
   },
   "kiosk": {
     "title": "SELF-SERVICE KIOSK",
@@ -3797,6 +3815,48 @@
       "REPORT_ALREADY_OPEN": "This order is already with the platform’s support.",
       "ORDER_NOT_IN_KITCHEN": "The kitchen no longer has this order.",
       "ORDER_AWAITING_ACCEPTANCE": "Answer this order first."
+    }
+  },
+  "coupons": {
+    "title": "Coupons",
+    "subtitle": "Batches of one-time codes for a campaign. Each code works once at the till.",
+    "newBatch": "New batch",
+    "batch": "Batch",
+    "reward": "Gives",
+    "minimum": "Minimum order",
+    "days": "Valid",
+    "used": "Used",
+    "on": "On",
+    "empty": "No coupon batches yet.",
+    "percentOff": "{{pct}}% off the order",
+    "upTo": "up to {{amount}}",
+    "freeItem": "Free {{item}}",
+    "anyDay": "Any day",
+    "batchName": "Batch name",
+    "batchNamePlaceholder": "e.g. Club SMS, Nowruz",
+    "rewardPercent": "Percent off",
+    "rewardFreeItem": "Free item",
+    "percent": "Percent off",
+    "maxDiscount": "Most it takes off ({{currency}})",
+    "optional": "Optional",
+    "freeProduct": "Free product",
+    "freeProductHelp": "One of it is free; it must be on the order.",
+    "minSubtotal": "Minimum order ({{currency}})",
+    "validFrom": "First day",
+    "validTo": "Last day",
+    "count": "How many codes",
+    "countHelp": "1 to 5,000. Each code works once.",
+    "make": "Make {{count}} codes",
+    "copyUnused": "Copy {{count}} unused codes",
+    "copied": "{{count}} codes copied",
+    "downloadCsv": "Download CSV",
+    "code": "Code",
+    "usedOn": "Used on",
+    "notUsed": "Not used",
+    "errors": {
+      "loadFailed": "The coupon batches could not be loaded",
+      "saveFailed": "The coupon batch could not be saved",
+      "copyFailed": "The codes could not be copied"
     }
   }
 }

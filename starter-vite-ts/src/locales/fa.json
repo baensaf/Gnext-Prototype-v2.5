@@ -109,7 +109,8 @@
     "snappfoodPrices": "قیمت‌های اسنپ‌فود",
     "priceChanges": "تغییر قیمت‌ها",
     "itemDiscounts": "تخفیف آیتم‌ها",
-    "mediaLocalizationSim": "نمایش رسانه و ترجمه‌ها"
+    "mediaLocalizationSim": "نمایش رسانه و ترجمه‌ها",
+    "coupons": "کوپن‌ها"
   },
   "common": {
     "languages": "انتخاب زبان",
@@ -417,7 +418,24 @@
       "save": "ذخیره یادداشت"
     },
     "searchPlaceholder": "جست‌وجوی نام یا کد کالا؛ Enter اولی را اضافه می‌کند",
-    "noProducts": "کالایی با این جست‌وجو یا دسته پیدا نشد."
+    "noProducts": "کالایی با این جست‌وجو یا دسته پیدا نشد.",
+    "coupon": {
+      "label": "کد کوپن",
+      "apply": "اعمال",
+      "or": "یا تخفیف",
+      "name": "کوپن {{code}}",
+      "remove": "برداشتن کوپن از این سفارش",
+      "refusedChip": "کوپن {{code}}: {{reason}}",
+      "refused": {
+        "UNKNOWN": "کد نامعتبر",
+        "USED": "قبلاً استفاده شده",
+        "OFF": "غیرفعال",
+        "NOT_YET": "هنوز معتبر نیست",
+        "EXPIRED": "منقضی شده",
+        "BELOW_MINIMUM": "مبلغ سفارش کمتر از حداقل",
+        "ITEM_MISSING": "کالای رایگان را به سفارش اضافه کنید"
+      }
+    }
   },
   "kiosk": {
     "title": "کیوسک خودسفارش‌دهی",
@@ -3797,6 +3815,48 @@
       "REPORT_ALREADY_OPEN": "این سفارش هم‌اکنون نزد پشتیبانی پلتفرم است.",
       "ORDER_NOT_IN_KITCHEN": "این سفارش دیگر در آشپزخانه نیست.",
       "ORDER_AWAITING_ACCEPTANCE": "اول به این سفارش پاسخ دهید."
+    }
+  },
+  "coupons": {
+    "title": "کوپن‌ها",
+    "subtitle": "دسته‌های کد یک‌بارمصرف برای هر کمپین. هر کد یک بار در صندوق کار می‌کند.",
+    "newBatch": "دستهٔ جدید",
+    "batch": "دسته",
+    "reward": "تخفیف",
+    "minimum": "حداقل سفارش",
+    "days": "اعتبار",
+    "used": "استفاده‌شده",
+    "on": "فعال",
+    "empty": "هنوز دستهٔ کوپنی ساخته نشده است.",
+    "percentOff": "{{pct}}٪ تخفیف سفارش",
+    "upTo": "تا سقف {{amount}}",
+    "freeItem": "{{item}} رایگان",
+    "anyDay": "همیشه",
+    "batchName": "نام دسته",
+    "batchNamePlaceholder": "مثلاً پیامک باشگاه، نوروز",
+    "rewardPercent": "درصد تخفیف",
+    "rewardFreeItem": "کالای رایگان",
+    "percent": "درصد تخفیف",
+    "maxDiscount": "سقف تخفیف ({{currency}})",
+    "optional": "اختیاری",
+    "freeProduct": "کالای رایگان",
+    "freeProductHelp": "یک عدد از آن رایگان است و باید در سفارش باشد.",
+    "minSubtotal": "حداقل مبلغ سفارش ({{currency}})",
+    "validFrom": "از تاریخ",
+    "validTo": "تا تاریخ",
+    "count": "تعداد کد",
+    "countHelp": "۱ تا ۵٬۰۰۰. هر کد یک بار کار می‌کند.",
+    "make": "ساخت {{count}} کد",
+    "copyUnused": "کپی {{count}} کد استفاده‌نشده",
+    "copied": "{{count}} کد کپی شد",
+    "downloadCsv": "دریافت CSV",
+    "code": "کد",
+    "usedOn": "استفاده در",
+    "notUsed": "استفاده نشده",
+    "errors": {
+      "loadFailed": "دسته‌های کوپن بارگذاری نشد",
+      "saveFailed": "دستهٔ کوپن ذخیره نشد",
+      "copyFailed": "کدها کپی نشد"
     }
   }
 }

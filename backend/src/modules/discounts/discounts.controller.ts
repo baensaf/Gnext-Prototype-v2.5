@@ -4,6 +4,7 @@ import { DiscountsService } from './discounts.service';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { DiscountQuoteRequestDto } from './dtos/discounts.dto';
 import { ItemDiscountsService, ItemDiscountInput } from './item-discounts.service';
+import { CouponsService, CouponBatchInput } from './coupons.service';
 
 /**
  * How an order is discounted. First the automatic item discounts (a dated percent off a
@@ -16,7 +17,34 @@ export class DiscountsController {
   constructor(
     private readonly discountsService: DiscountsService,
     private readonly itemDiscounts: ItemDiscountsService,
+    private readonly coupons: CouponsService,
   ) {}
+
+  // One-time coupons (V2): head office makes batches of codes for a campaign; each code
+  // works once at the till.
+  @HeadOfficeOnly()
+  @Get('coupon-batches')
+  async listCouponBatches(@Req() req: Request) {
+    return await this.coupons.listBatches((req as any).tenantId);
+  }
+
+  @HeadOfficeOnly()
+  @Post('coupon-batches')
+  async createCouponBatch(@Body() body: CouponBatchInput, @Req() req: Request) {
+    return await this.coupons.createBatch((req as any).tenantId, body, (req as any).userId, (req as any).correlationId);
+  }
+
+  @HeadOfficeOnly()
+  @Get('coupon-batches/:id/codes')
+  async listCouponCodes(@Param('id') id: string, @Req() req: Request) {
+    return await this.coupons.listCodes((req as any).tenantId, id);
+  }
+
+  @HeadOfficeOnly()
+  @Patch('coupon-batches/:id')
+  async setCouponBatchActive(@Param('id') id: string, @Body() body: { is_active: boolean }, @Req() req: Request) {
+    return await this.coupons.setActive((req as any).tenantId, id, body.is_active, (req as any).userId, (req as any).correlationId);
+  }
 
   // Automatic item discounts: head office sets them up; branches can see them.
   @Get('item-discounts')

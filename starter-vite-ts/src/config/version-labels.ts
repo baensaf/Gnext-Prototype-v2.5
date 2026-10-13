@@ -59,6 +59,8 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/customers/*': 'V3',
   // The wallet and its cashback rule: HamiClub's replacement, so a branch can leave HAMI.
   '/app/wallet': 'V2',
+  // One-time coupons: batches of codes for a campaign, each used once at the till.
+  '/app/coupons': 'V2',
 };
 
 /** Features that ship later than the page they sit on. */
@@ -67,6 +69,7 @@ export const FEATURE_LABELS = {
   'pos.customerCredit': 'V2',
   'pos.wallet': 'V2',
   'pos.familyDiscount': 'V2',
+  'pos.coupon': 'V2',
   // Delivery platforms (Snappfood) come with the incoming orders, in V2.
   // The pay panel saying a delivery order's remainder goes with the courier
   'pos.pay.courierCollects': 'V2',
