@@ -639,6 +639,12 @@
       "allPrinters": "Every printer"
     },
     "drawer": {
+      "printTrouble": {
+        "UNCERTAIN": "A chit may not have printed. Check the printer, then confirm or reprint it.",
+        "FAILED": "Something did not print. Retry or reprint it from the print queue.",
+        "WAITING": "Not printed yet: waiting for the branch agent or the printer.",
+        "open": "Print queue"
+      },
       "voided": "Voided",
       "placedOn": "Placed on {{date}}",
       "justNow": "Just now",
@@ -2864,6 +2870,9 @@
     "invalidPin": "Wrong manager PIN. {{count}} tries left."
   },
   "printQueue": {
+    "confirmPrinted": "It printed",
+    "dismiss": "Dismiss, with a reason",
+    "dismissReason": "Why is this job set aside?",
     "title": "Print Queue & Spooler",
     "columnJobId": "Job ID",
     "columnType": "Document Type",
@@ -2898,9 +2907,13 @@
     },
     "statuses": {
       "QUEUED": "Queued",
-      "PROCESSING": "Printing",
+      "PROCESSING": "Not printed yet",
       "SUCCESS": "Printed",
-      "FAILED": "Failed"
+      "FAILED": "Failed",
+      "UNCERTAIN": "Check printer",
+      "EXPIRED": "Expired",
+      "REPLACED": "Replaced",
+      "DISMISSED": "Dismissed"
     },
     "original": "Original",
     "retryJob": "Retry on the same printer",
@@ -3083,6 +3096,7 @@
         "printerName": "Windows printer name",
         "printerNameHelp": "Exactly as it appears in Windows under Printers & scanners.",
         "agentHelp": "Jobs for this printer go to the branch agent. While the agent is offline they wait in the print queue.",
+        "waitingForAgent": "Waiting for the branch agent",
         "agentChip": "Agent",
         "notSupported": "The branch agent cannot print through this connection yet. Connect the printer to the network and choose Network printer (TCP)."
       },
@@ -3244,6 +3258,8 @@
         "NOWHERE": "Nowhere: the branch has no kitchen printer"
       },
       "preview": "Preview chits",
+      "previewOutOfService": "out of service: this chit would fail",
+      "previewNoPrinter": "no printer: this chit would fail",
       "previewTitle": "Preview kitchen chits",
       "previewHint": "Pick items as if ringing up an order to see which chits come out where. Nothing is printed or queued.",
       "previewItems": "Items",

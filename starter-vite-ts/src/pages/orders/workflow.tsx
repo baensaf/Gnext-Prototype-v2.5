@@ -790,6 +790,39 @@ export function OrdersWorkflowPage() {
     }
   }, []);
 
+  // What did not print for the open order: "check printer" first, then failed or expired, then
+  // still waiting. Each document and printer counts once, by its newest job.
+  const [printTrouble, setPrintTrouble] = useState<'UNCERTAIN' | 'FAILED' | 'WAITING' | null>(null);
+  useEffect(() => {
+    if (!drawerOrderId) {
+      setPrintTrouble(null);
+      return;
+    }
+    let live = true;
+    printingApi
+      .getPrintJobs({ entityId: drawerOrderId, limit: 100 })
+      .then((res) => {
+        const newest = new Map<string, string>();
+        for (const job of res.items) {
+          const key = `${job.document_type}:${job.printer_id || ''}`;
+          if (!newest.has(key)) newest.set(key, job.status);
+        }
+        const states = [...newest.values()];
+        const trouble = states.includes('UNCERTAIN')
+          ? 'UNCERTAIN'
+          : states.some((s) => s === 'FAILED' || s === 'EXPIRED')
+            ? 'FAILED'
+            : states.some((s) => s === 'QUEUED' || s === 'PROCESSING')
+              ? 'WAITING'
+              : null;
+        if (live) setPrintTrouble(trouble);
+      })
+      .catch(() => live && setPrintTrouble(null));
+    return () => {
+      live = false;
+    };
+  }, [drawerOrderId]);
+
   useEffect(() => {
     if (reprintDialogOpen && reprintDocumentType === 'KITCHEN_TICKET' && selectedOrder) {
       loadReprintPrinters(selectedOrder.id);
@@ -1689,6 +1722,19 @@ export function OrdersWorkflowPage() {
                 <Typography variant="caption" color="warning.main" sx={{ display: 'block', fontWeight: 600 }}>
                   {t('orders.snappfood.issue', { issue: selectedDrawerOrder.aggregator_issue })}
                 </Typography>
+              )}
+              {printTrouble && (
+                <Alert
+                  severity={printTrouble === 'WAITING' ? 'info' : printTrouble === 'UNCERTAIN' ? 'warning' : 'error'}
+                  sx={{ mt: 1.5, py: 0 }}
+                  action={
+                    <Button size="small" color="inherit" onClick={() => navigate('/app/operations/print-queue')}>
+                      {t('orders.drawer.printTrouble.open')}
+                    </Button>
+                  }
+                >
+                  {t(`orders.drawer.printTrouble.${printTrouble}`)}
+                </Alert>
               )}
 
               {/* Tabs */}

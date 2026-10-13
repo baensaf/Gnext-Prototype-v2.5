@@ -37,13 +37,13 @@ const isKitchenPrinter = (p: Printer) => String(p.printer_type || '').toUpperCas
 
 /**
  * The branch printer a document prints on when nothing more specific is set up. A kitchen chit
- * goes to the printer the branch marked as its default kitchen printer, else its first kitchen
- * printer; with neither it gets none, so it fails and raises an alert rather than come out at the
- * counter, where nobody cooking would see it. Anything else prints on a receipt printer, else on
- * any printer that is not the kitchen's, else on any at all.
+ * goes only to the printer the branch chose as its default kitchen printer; with none chosen it
+ * gets none, so it fails where the till shows it rather than come out at the counter or on a
+ * printer nobody picked. Anything else prints on a receipt printer, else on any printer that is
+ * not the kitchen's, else on any at all.
  */
 export function branchFallback(branchPrinters: Printer[], kitchen: boolean): Printer | undefined {
-  if (kitchen) return branchPrinters.find((p) => p.kitchen_default) ?? branchPrinters.find(isKitchenPrinter);
+  if (kitchen) return branchPrinters.find((p) => p.kitchen_default);
   return (
     branchPrinters.find((p) => String(p.printer_type || '').toUpperCase().includes('RECEIPT')) ??
     branchPrinters.find((p) => !isKitchenPrinter(p)) ??
@@ -83,17 +83,25 @@ export class PrintRoutingService {
     });
   }
 
-  /** The branch's default kitchen printer, or none. */
+  /**
+   * Every printer of the branch, in service or not. Routing keeps a printer taken out of service,
+   * so its chits fail where they can be seen instead of quietly going elsewhere.
+   */
+  async allBranchPrinters(tenantId: string, branchId: string): Promise<Printer[]> {
+    return this.printerRepo.find({ where: { tenant_id: tenantId, branch_id: branchId }, order: { code: 'ASC', id: 'ASC' } });
+  }
+
+  /** The branch's chosen default kitchen printer, in service or not, or none. */
   async kitchenDefault(tenantId: string, branchId: string): Promise<Printer | undefined> {
-    return branchFallback(await this.branchPrinters(tenantId, branchId), true);
+    return branchFallback(await this.allBranchPrinters(tenantId, branchId), true);
   }
 
   /**
    * Where each product's kitchen lines print at the branch, keyed by product id, with the
    * printers in the branch's printer order. A product's own routes beat its category's; a route
-   * with no printer means no kitchen chit; a route whose printers are all out of service, or no
-   * route at all, falls to the default kitchen printer, and with none of those the product has
-   * nowhere to print.
+   * with no printer means no kitchen chit; no route at all falls to the chosen default kitchen
+   * printer, and with none the product has nowhere to print. A printer out of service stays on
+   * the list: its chit fails visibly while the others print.
    */
   async routeProducts(tenantId: string, branchId: string, productIds: string[]): Promise<Map<string, ProductRouting>> {
     const ids = [...new Set(productIds.filter(Boolean))];
@@ -103,7 +111,7 @@ export class PrintRoutingService {
     const [products, routes, printers] = await Promise.all([
       this.productRepo.find({ where: { id: In(ids), tenant_id: tenantId } }),
       this.routeRepo.find({ where: { tenant_id: tenantId, branch_id: branchId } }),
-      this.branchPrinters(tenantId, branchId),
+      this.allBranchPrinters(tenantId, branchId),
     ]);
     const categoryOf = new Map(products.map((p) => [p.id, p.category_id]));
     const fallback = branchFallback(printers, true);

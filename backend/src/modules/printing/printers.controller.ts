@@ -60,9 +60,7 @@ export class PrintersController {
   @Get('printers')
   async getPrinters(@Query('branchId') branchId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
-    const where: any = { tenant_id: tenantId };
-    if (branchId) where.branch_id = branchId;
-    return await this.printerRepo.find({ where, order: { name: 'ASC' } });
+    return await this.agentConfig.printersWithAgentState(tenantId, branchId || undefined);
   }
 
   @Roles(...MANAGER_AND_ABOVE)
@@ -160,6 +158,20 @@ export class PrintersController {
   async retryJob(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     return await this.queueService.retryJob(tenantId, id, body || {});
+  }
+
+  // The cashier saw the paper of a "check printer" or expired job.
+  @BranchOwned(PrintJob)
+  @Post('print-jobs/:id/confirm')
+  async confirmJob(@Param('id') id: string, @Req() req: Request) {
+    return await this.queueService.confirmPrinted((req as any).tenantId, id, (req as any).userId);
+  }
+
+  // An expired (or failed, or unsure) job set aside on purpose, with the reason.
+  @BranchOwned(PrintJob)
+  @Post('print-jobs/:id/dismiss')
+  async dismissJob(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
+    return await this.queueService.dismissJob((req as any).tenantId, id, body?.reason, (req as any).userId);
   }
 
   // `printerId` sends this copy to a named device instead of the one that printed the

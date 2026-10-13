@@ -70,6 +70,13 @@ export class OrderItem {
   @Column({ type: 'numeric', precision: 5, scale: 4, nullable: true })
   tax_rate: string | null;
 
+  /**
+   * The kitchen printers this line was sent to, so a void reaches the same kitchens even after
+   * the routing changes. Null until the line is sent (and on lines from before 2026-10-13).
+   */
+  @Column({ type: 'uuid', array: true, nullable: true })
+  kitchen_printer_ids: string[] | null;
+
   /** What the item discount took off this line (part of the order's discount_total). */
   @Column({ type: 'numeric', precision: 19, scale: 4, default: '0.0000' })
   item_discount_total: string = '0.0000';

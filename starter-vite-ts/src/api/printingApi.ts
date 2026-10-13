@@ -20,6 +20,8 @@ export interface PrinterDevice {
   /** Prints every order whole on one more chit, for the pass. */
   prints_whole_order?: boolean;
   agent_connection?: PrinterConnection | null;
+  /** Whether the branch agent has taken this printer's current settings; null when it does not drive it. */
+  agent_ready?: boolean | null;
 }
 
 /** What one printer prints: whole categories, and single products. A null printer is the "not printed" list. */
@@ -41,6 +43,8 @@ export interface ProductRouting {
 export interface KitchenChitPreview {
   printer_id: string | null;
   printer_name: string | null;
+  /** False for a printer out of service (its chit would fail) or no printer at all. */
+  in_service: boolean;
   label: string;
   whole_order: boolean;
   html: string;
@@ -55,7 +59,8 @@ export interface PrintJob {
   printer_id?: string;
   /** The printer a kitchen chit is for, e.g. "Grill (1/3)" when the order was split. */
   label?: string;
-  status: 'QUEUED' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'CANCELLED';
+  /** PROCESSING: not printed yet; UNCERTAIN: check printer; EXPIRED: a kitchen chit unsent at the cutoff. */
+  status: 'QUEUED' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'UNCERTAIN' | 'EXPIRED' | 'REPLACED' | 'DISMISSED' | 'CANCELLED';
   copies: number;
   rendered_html: string;
   is_reprint: boolean;
@@ -148,6 +153,16 @@ export const printingApi = {
   },
   retryPrintJob: async (id: string, data?: { scenarioId?: string }): Promise<any> => {
     const res = await httpClient.post(`/api/v1/print-jobs/${id}/retry`, data || {});
+    return res.data;
+  },
+  /** The cashier saw the paper of a "check printer" or expired job. */
+  confirmPrintJob: async (id: string): Promise<any> => {
+    const res = await httpClient.post(`/api/v1/print-jobs/${id}/confirm`, {});
+    return res.data;
+  },
+  /** Set an expired (or failed, or unsure) job aside, with the reason. */
+  dismissPrintJob: async (id: string, reason: string): Promise<any> => {
+    const res = await httpClient.post(`/api/v1/print-jobs/${id}/dismiss`, { reason });
     return res.data;
   },
   /** `printerId` redirects the copy to another device — the usual one has died. */

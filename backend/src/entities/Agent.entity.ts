@@ -63,6 +63,13 @@ export class Agent {
   @Column({ type: 'timestamptz', nullable: true })
   last_seen_at?: Date | null;
 
+  /**
+   * The newest hardware list (config_version) the agent has taken: sent in `welcome`, or acked
+   * as `config.updated`. A printer changed after it is "waiting for the branch agent".
+   */
+  @Column({ type: 'bigint', nullable: true })
+  config_version_applied?: string | null;
+
   @Column({ type: 'timestamptz', nullable: true })
   revoked_at?: Date | null;
 

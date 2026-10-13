@@ -622,8 +622,10 @@ function PreviewDialog({ open, onClose, branchId, productOptions, productName, g
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'flex-start' }}>
                   {result.chits.map((chit, index) => (
                     <Box key={`${chit.printer_id}-${index}`}>
-                      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                      <Typography variant="subtitle2" sx={{ mb: 0.5 }} color={chit.in_service ? undefined : 'error'}>
                         {chit.label}
+                        {!chit.in_service &&
+                          ` — ${chit.printer_id ? t('operations.printRouting.previewOutOfService') : t('operations.printRouting.previewNoPrinter')}`}
                       </Typography>
                       <Box
                         component="iframe"

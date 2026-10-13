@@ -358,6 +358,10 @@ export function PrintersPage() {
                             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                               <Chip label={t('operations.printers.connection.agentChip', 'Agent')} color="info" size="small" />
                               <code dir="ltr">{describeConnection(pr.agent_connection)}</code>
+                              {/* Changed settings reach the printer once the branch agent has taken them. */}
+                              {pr.agent_ready === false && (
+                                <Chip label={t('operations.printers.connection.waitingForAgent')} color="warning" size="small" variant="outlined" />
+                              )}
                             </Stack>
                           ) : (
                             <code>{pr.simulated_address || '192.168.1.100:9100'}</code>

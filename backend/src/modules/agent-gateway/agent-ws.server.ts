@@ -90,7 +90,12 @@ export class AgentWsServer implements OnApplicationBootstrap, OnApplicationShutd
       {
         sessions: this.sessions,
         handlers: this.handlers,
-        loadConfig: (a) => this.config.forBranch(a.tenant_id, a.branch_id),
+        // The hardware list goes out in `welcome`: from then on the agent has it.
+        loadConfig: async (a) => {
+          const config = await this.config.forBranch(a.tenant_id, a.branch_id);
+          await this.config.markApplied(a.tenant_id, a.branch_id, config.config_version);
+          return config;
+        },
         branchName: async (a) =>
           (await this.branchRepo.findOne({ where: { id: a.branch_id, tenant_id: a.tenant_id }, withDeleted: true }))?.name ?? null,
         recordHello: (a, info) => this.recordHello(a, info),
