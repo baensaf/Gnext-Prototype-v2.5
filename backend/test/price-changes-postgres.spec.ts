@@ -70,6 +70,9 @@ describe('Price changes (PostgreSQL)', () => {
     } as any);
     return (await orders.getOrderById(tenantId, draft.id)).items[0].unit_price;
   };
+  // Saving takes the lines the user saw in the preview.
+  const commit = async (input: any) =>
+    changes.commit(tenantId, { ...input, expected: (await changes.preview(tenantId, input)).items }, null, 'test');
   const baseOf = async (productId: string) => (await dataSource.getRepository(Product).findOneByOrFail({ id: productId })).base_price;
 
   it('previews a change on one category, rounded up, without saving anything', async () => {
@@ -82,7 +85,7 @@ describe('Price changes (PostgreSQL)', () => {
   });
 
   it('raises prices from now, and copies them into the products', async () => {
-    const job = await changes.commit(tenantId, { category_id: drinks, adjustment: 'PERCENT', value: '10', round_to: 1000 }, null, 'test');
+    const job = await commit({ category_id: drinks, adjustment: 'PERCENT', value: '10', round_to: 1000 });
     expect(job).toMatchObject({ status: 'APPLIED', items: 2 });
     expect(await price(tea)).toBe('55000.0000');
     expect(await baseOf(coffee)).toBe('80000.0000');
@@ -91,7 +94,7 @@ describe('Price changes (PostgreSQL)', () => {
   });
 
   it('applies a second change on top of the first, ending the price it replaces', async () => {
-    const job = await changes.commit(tenantId, { category_id: drinks, adjustment: 'AMOUNT', value: '5000' }, null, 'test');
+    const job = await commit({ category_id: drinks, adjustment: 'AMOUNT', value: '5000', round_to: 1000 });
     expect(job).toMatchObject({ status: 'APPLIED', items: 2 });
     expect(await price(tea)).toBe('60000.0000');
     expect(await baseOf(tea)).toBe('60000.0000');
@@ -105,6 +108,26 @@ describe('Price changes (PostgreSQL)', () => {
     await changes.applyDueBaseChanges(tenantId);
     expect(await price(tea)).toBe('58000.0000');
     expect(await baseOf(tea)).toBe('58000.0000');
+  });
+
+  it('refuses a change that takes any price below zero', async () => {
+    await expect(changes.preview(tenantId, { category_id: drinks, adjustment: 'AMOUNT', value: '-70000' })).rejects.toThrow('below zero: TEA');
+  });
+
+  it('saves nothing when prices moved since the preview', async () => {
+    const input = { category_id: drinks, adjustment: 'PERCENT' as const, value: '5' };
+    const seen = (await changes.preview(tenantId, input)).items;
+    await catalog.updateProduct(tenantId, coffee, { base_price: '81000' } as any, 'test');
+    await expect(changes.commit(tenantId, { ...input, expected: seen }, null, 'test')).rejects.toThrow('Preview again');
+    await expect(changes.commit(tenantId, input, null, 'test')).rejects.toThrow('Preview again');
+  });
+
+  it("changes a sized product's own price with its sizes, rounded to 1,000 Toman by default", async () => {
+    const preview = await changes.preview(tenantId, { category_id: mains, adjustment: 'PERCENT', value: '1' });
+    expect(preview.items.map((i) => [i.name, i.new])).toEqual([
+      ['PIZZA', '310000.0000'],
+      ['PIZZA — Large', '410000.0000'],
+    ]);
   });
 
   it("keeps the product's price history", async () => {

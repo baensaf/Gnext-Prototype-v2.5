@@ -389,9 +389,12 @@ export class KioskService {
       for (const line of lines) {
         const lineTotalStr = MoneyUtil.add(line.baseTotal, line.modifierTotal, 4);
         const found = discountsToday.get(line.product.id);
-        const lineDiscountStr = found ? MoneyUtil.multiply(lineTotalStr, MoneyUtil.divide(found.percent, '100', 6), 4) : '0.0000';
-        // VAT at the product's own rate on what the line sells for after its item discount, as on the register.
-        const lineTaxStr = MoneyUtil.multiply(MoneyUtil.subtract(lineTotalStr, lineDiscountStr, 4), line.product.tax_rate || '0.0000', 4);
+        // The line's net after its item discount is a whole Toman, as on the register.
+        const lineDiscountStr = found
+          ? MoneyUtil.subtract(lineTotalStr, MoneyUtil.roundToman(MoneyUtil.subtract(lineTotalStr, MoneyUtil.multiply(lineTotalStr, MoneyUtil.divide(found.percent, '100', 6), 4))))
+          : '0.0000';
+        // VAT at the product's own rate on what the line sells for after its item discount, rounded to a whole Toman.
+        const lineTaxStr = MoneyUtil.roundToman(MoneyUtil.multiply(MoneyUtil.subtract(lineTotalStr, lineDiscountStr, 4), line.product.tax_rate || '0.0000', 4));
         subtotalStr = MoneyUtil.add(subtotalStr, lineTotalStr, 4);
         taxAmountStr = MoneyUtil.add(taxAmountStr, lineTaxStr, 4);
         itemDiscountStr = MoneyUtil.add(itemDiscountStr, lineDiscountStr, 4);

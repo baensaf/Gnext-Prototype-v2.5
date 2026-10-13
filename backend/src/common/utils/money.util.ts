@@ -38,6 +38,11 @@ export class MoneyUtil {
     return new Decimal(val || 0).toFixed(decimals);
   }
 
+  /** A Rial amount rounded to a whole Toman (10 Rial), halves up. */
+  static roundToman(val: MoneyInput): string {
+    return new Decimal(val || 0).div(10).toDecimalPlaces(0, Decimal.ROUND_HALF_UP).mul(10).toFixed(4);
+  }
+
   /**
    * Formats a monetary value with thousand separators without passing through native floating-point numbers.
    */

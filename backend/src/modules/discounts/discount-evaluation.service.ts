@@ -454,19 +454,25 @@ export class DiscountEvaluationService {
       }
     }
 
-    // Calculate line grand totals and tax after discounts. Product tax_rate is
-    // stored as a decimal fraction (for example 0.0900 for 9%). Explicit quote
-    // tax rates remain available for integrations that already snapshot them.
+    // Line totals and tax after discounts. Product tax_rate is stored as a fraction (0.1000 for
+    // 10%). Each line's net and its tax are rounded to a whole Toman, halves up, and the order adds
+    // up its rounded lines, so the screen, the paper and the database never show part of a Toman.
+    // The rounding is folded into the line's discount so net = subtotal - discount still holds.
     let grandTotal = '0.0000';
     let taxTotal = '0.0000';
     for (let i = 0; i < lineItems.length; i++) {
       const line = lineItems[i];
-      line.grandTotal = MoneyUtil.subtract(line.subtotal, line.discountTotal);
-      if (MoneyUtil.lessThan(line.grandTotal, '0')) {
-        line.grandTotal = '0.0000';
+      let net = MoneyUtil.subtract(line.subtotal, line.discountTotal);
+      if (MoneyUtil.lessThan(net, '0')) net = '0.0000';
+      const rounded = MoneyUtil.roundToman(net);
+      if (!MoneyUtil.equals(rounded, net) && MoneyUtil.greaterThan(line.discountTotal, '0')) {
+        const adjusted = MoneyUtil.subtract(line.subtotal, rounded);
+        discountTotal = MoneyUtil.add(discountTotal, MoneyUtil.subtract(adjusted, line.discountTotal));
+        line.discountTotal = adjusted;
       }
+      line.grandTotal = rounded;
       const taxRate = requestedItems[i]?.taxRate || productTaxRates.get(line.productId) || '0.0000';
-      taxTotal = MoneyUtil.add(taxTotal, MoneyUtil.multiply(line.grandTotal, taxRate));
+      taxTotal = MoneyUtil.add(taxTotal, MoneyUtil.roundToman(MoneyUtil.multiply(line.grandTotal, taxRate)));
       grandTotal = MoneyUtil.add(grandTotal, line.grandTotal);
     }
     grandTotal = MoneyUtil.add(grandTotal, deliveryFee);

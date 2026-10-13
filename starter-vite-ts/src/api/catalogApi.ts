@@ -138,6 +138,8 @@ export interface PriceChangeInput {
   adjustment: 'PERCENT' | 'AMOUNT';
   value: string;
   round_to?: number | null;
+  /** When saving: the preview's lines; the server saves only if they still hold. */
+  expected?: Array<{ product_id: string; variant_id: string | null; current: string; new: string }> | null;
 }
 
 export interface PriceChangePreview {

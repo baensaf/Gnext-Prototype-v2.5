@@ -2709,7 +2709,8 @@ export class OrderService {
       const rate = taxRateById.get(item.product_id) || '0.0000';
       // Taxed on what the line sells for after its own item discount.
       const taxable = MoneyUtil.subtract(item.line_total, item.item_discount_total || '0.0000');
-      taxTotal = MoneyUtil.add(taxTotal, MoneyUtil.multiply(taxable, rate));
+      // Each line's tax is rounded to a whole Toman, as in DiscountEvaluationService.
+      taxTotal = MoneyUtil.add(taxTotal, MoneyUtil.roundToman(MoneyUtil.multiply(taxable, rate)));
     }
     order.tax_total = taxTotal;
     order.tax_amount = taxTotal;
