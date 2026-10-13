@@ -187,7 +187,7 @@ export function ImportWizardPage() {
         heading={t('tools.importWizard.title', 'Data Import & Bulk Migration Wizard')}
         links={[
           { name: t('nav.home', 'Home'), href: '/app/dashboard' },
-          { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
+          { name: t('nav.products', 'Products Catalog'), href: '/app/catalog/products' },
           { name: t('tools.importWizard.title', 'Data Import Wizard') },
         ]}
       />

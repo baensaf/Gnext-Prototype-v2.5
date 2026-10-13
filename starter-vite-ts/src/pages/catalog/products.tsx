@@ -12,6 +12,7 @@ import FastfoodIcon from '@mui/icons-material/Fastfood';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ImportExportIcon from '@mui/icons-material/ImportExport';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import {
   Box,
@@ -159,14 +160,24 @@ export function ProductsPage() {
           </Typography>
         </Box>
         {canAuthor ? (
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => navigate('/app/catalog/products/new')}
-            sx={{ fontWeight: 'bold' }}
-          >
-            {t('catalog.productsPage.newProduct')}
-          </Button>
+          // Bulk loading lives with the products it loads, not in the sidebar.
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              startIcon={<ImportExportIcon />}
+              onClick={() => navigate('/app/catalog/import-export')}
+            >
+              {t('nav.importExport', 'Import & Export')}
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => navigate('/app/catalog/products/new')}
+              sx={{ fontWeight: 'bold' }}
+            >
+              {t('catalog.productsPage.newProduct')}
+            </Button>
+          </Stack>
         ) : (
           <Button
             variant="contained"
