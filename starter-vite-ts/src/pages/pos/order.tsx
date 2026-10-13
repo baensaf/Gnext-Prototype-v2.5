@@ -1,7 +1,7 @@
 import type { Theme } from '@mui/material/styles';
 import type { HeldCart } from './held-carts';
 import type { LateEntryInput } from './late-entry';
-import type { OrderHeader } from 'src/api/orderApi';
+import type { LineQuote, OrderHeader } from 'src/api/orderApi';
 import type { DeliveryZone } from 'src/api/deliveryApi';
 import type { Customer, CustomerAddress } from 'src/api/customerApi';
 import type { ManualDiscount, ManualDiscountLimits } from 'src/api/discountsApi';
@@ -111,7 +111,7 @@ import { useRegisterShift } from 'src/components/shift/use-register-shift';
 import { PosShiftBar, PosShiftGate, PosShiftAccountLink } from 'src/components/shift/pos-shift';
 
 import { PosStopDialog } from './pos-stop-dialog';
-import { placeOne, changeLine } from './cart-lines';
+import { placeOne, pricedKey, changeLine } from './cart-lines';
 import { useFillViewport } from './use-fill-viewport';
 import { PosCustomerPicker } from './pos-customer-picker';
 import { ClosedBranchBanner } from './closed-branch-banner';
@@ -131,6 +131,8 @@ export interface CartItem {
   hasChoices?: boolean;
   /** What the kitchen must know about this line only ("no onion"); prints under it on the chit. */
   notes?: string;
+  /** The prices the server fixed when the item was added; the order keeps them when sent. */
+  quote?: LineQuote;
 }
 
 /** Whether a change to a stacked line ("Burger ×3") is for just one of them or all. */
@@ -195,15 +197,22 @@ export function PosOrderPage() {
       branchPrices.get(`${product.id}:${variant?.id || ''}`) ?? (variant ? variant.base_price : product.base_price || '0'),
     [branchPrices]
   );
-  /** A cart line's price for its quantity: the item at this branch's price plus its add-ons. */
-  const lineTotal = useCallback(
+  /**
+   * One of a cart line: the prices fixed when it was added (its quote), else this branch's price
+   * now. A head-office price change never moves a line already in the cart.
+   */
+  const lineUnitPrice = useCallback(
     (line: CartItem) =>
-      MoneyUtil.multiply(
-        line.selectedOptions.reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), priceOf(line.product, line.selectedVariant)),
-        line.quantity.toString(),
-        2
+      line.selectedOptions.reduce(
+        (sum, o) => MoneyUtil.add(sum, line.quote?.options[o.id] ?? o.price_delta ?? '0', 2),
+        line.quote ? line.quote.unit_price : priceOf(line.product, line.selectedVariant)
       ),
     [priceOf]
+  );
+  /** A cart line's price for its quantity. */
+  const lineTotal = useCallback(
+    (line: CartItem) => MoneyUtil.multiply(lineUnitPrice(line), line.quantity.toString(), 2),
+    [lineUnitPrice]
   );
   // Changing a stacked line ("Burger ×3"): just one of them, or all of it.
   const [editScope, setEditScope] = useState<'ONE' | 'ALL'>('ONE');
@@ -279,22 +288,8 @@ export function PosOrderPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeDraftOrderId, setActiveDraftOrderId] = useState<string | null>(null);
 
-  // Cart lines follow this branch's prices as they refresh: a list price changed mid-order
-  // shows on the lines already in the cart, as the server prices them when the order is saved.
-  useEffect(() => {
-    setCart((prev) => {
-      let changed = false;
-      const next = prev.map((ci) => {
-        const optionsSum = ci.selectedOptions.reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), '0');
-        const unitPrice = MoneyUtil.add(priceOf(ci.product, ci.selectedVariant), optionsSum, 2);
-        const lineSubtotal = MoneyUtil.multiply(unitPrice, ci.quantity.toString(), 2);
-        if (MoneyUtil.equals(lineSubtotal, ci.lineSubtotal)) return ci;
-        changed = true;
-        return { ...ci, lineSubtotal };
-      });
-      return changed ? next : prev;
-    });
-  }, [priceOf]);
+  // A line keeps the prices it was added at (its quote), so a price changed by head office in
+  // the meantime does not move it; the server charges the same when the order is sent.
 
   // Carts on hold at this register, in its browser, for the shift running now (held-carts.ts).
   const [heldOrdersDrawerOpen, setHeldOrdersDrawerOpen] = useState(false);
@@ -604,7 +599,7 @@ export function PosOrderPage() {
     if (line || asks) {
       setOptionDialogOpen(true);
     } else {
-      addToCart(p, defaultVariant, [], onSale.length > 1 || ordered.length > 0);
+      await addToCart(p, defaultVariant, [], onSale.length > 1 || ordered.length > 0);
       setSelectedProduct(null);
       return true;
     }
@@ -646,13 +641,30 @@ export function PosOrderPage() {
 
   const dialogNoteTemplates = noteLineIdx === null ? noteTemplates : itemNoteTemplates;
 
-  const addToCart = (product: Product, variant: ProductVariant | undefined, options: OptionItem[], hasChoices = false) => {
-    if (placedOrder) setPlacedOrder(null);
+  /**
+   * The server's prices for one line as it is added (or changed: `previous` keeps what it already
+   * had). Without an answer the line goes in unquoted and is priced when the order is sent.
+   */
+  const quoteLine = async (product: Product, variant: ProductVariant | undefined, options: OptionItem[], previous?: LineQuote) => {
+    if (!selectedBranchId) return undefined;
+    try {
+      const [quote] = await orderApi.priceQuotes(selectedBranchId, [
+        { product_id: product.id, variant_id: variant?.id, option_item_ids: options.map((o) => o.id), previous: previous?.token },
+      ]);
+      return quote;
+    } catch {
+      return undefined;
+    }
+  };
 
-    // The same item with the same size and add-ons (in any order) stacks onto its line; a line
-    // with a note is one item asked for differently, so another of it gets its own line.
+  const addToCart = async (product: Product, variant: ProductVariant | undefined, options: OptionItem[], hasChoices = false) => {
+    if (placedOrder) setPlacedOrder(null);
+    const quote = await quoteLine(product, variant, options);
+
+    // The same item with the same size, add-ons (in any order) and prices stacks onto its line; a
+    // line with a note is one item asked for differently, so another of it gets its own line.
     setCart((prev) =>
-      placeOne(prev, { product, selectedVariant: variant, quantity: 1, selectedOptions: options, lineSubtotal: '0', hasChoices }, lineTotal)
+      placeOne(prev, { product, selectedVariant: variant, quantity: 1, selectedOptions: options, lineSubtotal: '0', hasChoices, quote }, lineTotal)
     );
   };
 
@@ -682,23 +694,26 @@ export function PosOrderPage() {
     setEditingLine(null);
   };
 
-  const handleConfirmAddWithOptions = () => {
+  const handleConfirmAddWithOptions = async () => {
     if (!selectedProduct) return;
 
+    const product = selectedProduct;
     const chosenVariant = productVariants.find((v) => v.id === selectedVariantId);
     const chosenOptions = chosenOptionsNow();
     const hasChoices = productVariants.length > 1 || optionGroups.length > 0;
+    const line = editingLine;
+    closeOptionDialog();
 
-    if (editingLine !== null) {
+    if (line !== null) {
       // All of the line keeps its place and quantity; just one of a stacked line moves to its own.
-      const line = editingLine;
+      // What the line already had keeps its price; only a new size or add-on is priced now.
+      const quote = await quoteLine(product, chosenVariant, chosenOptions, cart[line]?.quote);
       setCart((prev) =>
-        changeLine(prev, line, { selectedVariant: chosenVariant, selectedOptions: chosenOptions, hasChoices }, editScope, lineTotal)
+        changeLine(prev, line, { selectedVariant: chosenVariant, selectedOptions: chosenOptions, hasChoices, quote }, editScope, lineTotal)
       );
     } else {
-      addToCart(selectedProduct, chosenVariant, chosenOptions, hasChoices);
+      await addToCart(product, chosenVariant, chosenOptions, hasChoices);
     }
-    closeOptionDialog();
   };
 
   /** Tick or untick an add-on: a pick-one group swaps its choice rather than adding a second. */
@@ -711,8 +726,26 @@ export function PosOrderPage() {
     });
   };
 
-  const updateQuantity = (index: number, delta: number) => {
+  const updateQuantity = async (index: number, delta: number) => {
     if (placedOrder) setPlacedOrder(null);
+    const line = cart[index];
+    if (!line) return;
+
+    if (delta > 0) {
+      // One more of it is priced now: at the line's price it joins the line, at a new price it
+      // goes on a line of its own just below.
+      const quote = await quoteLine(line.product, line.selectedVariant, line.selectedOptions);
+      setCart((prev) => {
+        const i = prev.indexOf(line);
+        if (i < 0) return prev;
+        if (pricedKey({ quote }) === pricedKey(line)) {
+          return prev.map((l, k) => (k === i ? { ...l, quantity: l.quantity + 1, lineSubtotal: lineTotal({ ...l, quantity: l.quantity + 1 }) } : l));
+        }
+        const one: CartItem = { ...line, notes: undefined, quantity: 1, quote };
+        return [...prev.slice(0, i + 1), { ...one, lineSubtotal: lineTotal(one) }, ...prev.slice(i + 1)];
+      });
+      return;
+    }
 
     setCart((prev) => {
       const copy = [...prev];
@@ -720,19 +753,8 @@ export function PosOrderPage() {
       if (newQty <= 0) {
         return copy.filter((_, i) => i !== index);
       }
-
-      const optionsSum = copy[index].selectedOptions.reduce(
-        (sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2),
-        '0',
-      );
-      const basePrice = priceOf(copy[index].product, copy[index].selectedVariant);
-      const unitPrice = MoneyUtil.add(basePrice, optionsSum, 2);
-
-      copy[index] = {
-        ...copy[index],
-        quantity: newQty,
-        lineSubtotal: MoneyUtil.multiply(unitPrice, newQty.toString(), 2),
-      };
+      const smaller = { ...copy[index], quantity: newQty };
+      copy[index] = { ...smaller, lineSubtotal: lineTotal(smaller) };
       return copy;
     });
   };
@@ -843,8 +865,8 @@ export function PosOrderPage() {
     handleClearCart();
   };
 
-  // Resume: the held cart comes back into the cart, priced at today's prices. A cart already
-  // being rung up goes on hold in its place, so nothing typed is lost.
+  // Resume: the held cart comes back into the cart at the prices its lines were added at. A cart
+  // already being rung up goes on hold in its place, so nothing typed is lost.
   const handleResumeOrder = (held: HeldCart) => {
     const current = snapshotCart();
     saveHeldCarts([...heldCarts.filter((c) => c.id !== held.id), ...(current ? [current] : [])]);
@@ -865,9 +887,8 @@ export function PosOrderPage() {
     setCart(
       held.lines.map((line) => {
         const product = products.find((p) => p.id === line.product.id) || line.product;
-        const optionsSum = line.selectedOptions.reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), '0');
-        const unitPrice = MoneyUtil.add(priceOf(product, line.selectedVariant), optionsSum, 2);
-        return { ...line, product, lineSubtotal: MoneyUtil.multiply(unitPrice, line.quantity.toString(), 2) };
+        const back = { ...line, product };
+        return { ...back, lineSubtotal: lineTotal(back) };
       })
     );
     setHeldOrdersDrawerOpen(false);
@@ -928,10 +949,12 @@ export function PosOrderPage() {
             productId: ci.product.id,
             variantId: ci.selectedVariant?.id || undefined,
             // Add-ons are part of what the line sells for, so they are taxed with it.
-            unitPrice: ci.selectedOptions
-              .reduce((sum, o) => MoneyUtil.add(sum, o.price_delta || '0', 2), priceOf(ci.product, ci.selectedVariant).toString())
-              .toString(),
+            unitPrice: lineUnitPrice(ci).toString(),
             quantity: ci.quantity.toString(),
+            // A quoted line keeps its tax rate and item discount from when it was added.
+            ...(ci.quote
+              ? { taxRate: ci.quote.tax_rate, itemDiscountPercent: ci.quote.item_discount_percent, itemDiscountId: ci.quote.item_discount_id }
+              : {}),
           })),
         },
       };
@@ -1151,6 +1174,7 @@ export function PosOrderPage() {
           quantity: ci.quantity,
           options: ci.selectedOptions.map((o) => ({ option_item_id: o.id })),
           notes: ci.notes || undefined,
+          price_quote: ci.quote?.token,
         })),
       };
 
@@ -1278,6 +1302,7 @@ export function PosOrderPage() {
           quantity: ci.quantity,
           options: ci.selectedOptions.map((o) => ({ option_item_id: o.id })),
           notes: ci.notes || undefined,
+          price_quote: ci.quote?.token,
         })),
       };
 

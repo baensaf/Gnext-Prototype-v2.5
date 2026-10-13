@@ -195,7 +195,32 @@ export interface IncomingOrderPolicy {
   defaultPrepMinutes: number;
 }
 
+/**
+ * A cart line's prices as the server fixed them when the item was added: the item or size, each
+ * add-on, the tax rate and the item discount. The order keeps them when it is sent.
+ */
+export interface LineQuote {
+  product_id: string;
+  variant_id: string | null;
+  options: Record<string, string>;
+  unit_price: string;
+  tax_rate: string;
+  item_discount_percent: string;
+  item_discount_id: string | null;
+  quoted_at: string;
+  token: string;
+}
+
 export const orderApi = {
+  /** Fix the prices of cart lines as they are added; `previous` keeps what an edited line had. */
+  priceQuotes: async (
+    branchId: string,
+    lines: Array<{ product_id: string; variant_id?: string; option_item_ids?: string[]; previous?: string }>
+  ): Promise<LineQuote[]> => {
+    const res = await httpClient.post('/api/v1/orders/price-quotes', { branch_id: branchId, lines });
+    return res.data;
+  },
+
   getOrders: async (branchId?: string | Record<string, any>, status?: string): Promise<OrderHeader[]> => {
     const params = typeof branchId === 'object' ? branchId : { branchId, status };
     const res = await httpClient.get('/api/v1/orders', { params });

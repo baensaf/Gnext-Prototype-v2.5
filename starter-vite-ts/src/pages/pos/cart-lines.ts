@@ -13,9 +13,18 @@ export const choicesKey = (line: Pick<CartItem, 'selectedVariant' | 'selectedOpt
     .sort()
     .join(',')}`;
 
-/** Two lines a tap may join: the same item, size and add-ons, and neither carries a note. */
+/** What a line was priced at when added: lines at different prices never stack. */
+export const pricedKey = (line: Pick<CartItem, 'quote'>) =>
+  line.quote
+    ? `${line.quote.unit_price}|${Object.keys(line.quote.options)
+        .sort()
+        .map((id) => line.quote!.options[id])
+        .join(',')}|${line.quote.tax_rate}|${line.quote.item_discount_percent}`
+    : '';
+
+/** Two lines a tap may join: the same item, size, add-ons and prices, and neither carries a note. */
 export const stacksWith = (a: CartItem, b: CartItem) =>
-  !a.notes && !b.notes && a.product.id === b.product.id && choicesKey(a) === choicesKey(b);
+  !a.notes && !b.notes && a.product.id === b.product.id && choicesKey(a) === choicesKey(b) && pricedKey(a) === pricedKey(b);
 
 /** A line's price for its quantity, from one item's price. */
 type Priced = (line: CartItem) => string;
@@ -47,7 +56,7 @@ export function placeOne(cart: CartItem[], one: CartItem, total: Priced, after?:
 export function changeLine(
   cart: CartItem[],
   index: number,
-  change: Partial<Pick<CartItem, 'selectedVariant' | 'selectedOptions' | 'notes' | 'hasChoices'>>,
+  change: Partial<Pick<CartItem, 'selectedVariant' | 'selectedOptions' | 'notes' | 'hasChoices' | 'quote'>>,
   scope: 'ONE' | 'ALL',
   total: Priced
 ): CartItem[] {
