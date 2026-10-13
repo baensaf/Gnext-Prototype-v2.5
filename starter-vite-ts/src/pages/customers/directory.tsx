@@ -349,6 +349,11 @@ export function CustomersPage() {
           {
             field: 'family_discounts',
             headerName: t('customers.family.column'),
+            renderHeader: () => (
+              <>
+                {t('customers.family.column')} <VersionTag feature="customers.family" sx={{ ml: 1 }} />
+              </>
+            ),
             // Head office sees the branch beside each rate.
             width: canChangeScope ? 260 : 150,
             // Centres the chips and the dash in the row, as the text columns are.
@@ -376,6 +381,11 @@ export function CustomersPage() {
           {
             field: 'wallet_balance',
             headerName: t('customers.directory.walletColumn'),
+            renderHeader: () => (
+              <>
+                {t('customers.directory.walletColumn')} <VersionTag feature="customers.wallet" sx={{ ml: 1 }} />
+              </>
+            ),
             width: 160,
             display: 'flex',
             renderCell: (params) => {
@@ -502,7 +512,7 @@ export function CustomersPage() {
       {/* Friends and family: one person's percent off at one branch, filled in on the till. */}
       <Dialog open={!!familyFor} onClose={() => setFamilyFor(null)} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ fontWeight: 'bold' }}>
-          {t('customers.family.title')} — {fullName(familyFor)}
+          {t('customers.family.title')} — {fullName(familyFor)} <VersionTag feature="customers.family" sx={{ ml: 1 }} />
         </DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>

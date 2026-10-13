@@ -45,7 +45,6 @@ const COLORS: Record<PhaseLabel, LabelColor> = {
   V1: 'success',
   V2: 'info',
   V3: 'warning',
-  V4: 'secondary',
   F: 'error',
 };
 
@@ -56,7 +55,7 @@ type VersionTagProps = {
   sx?: SxProps<Theme>;
 };
 
-/** A small V1–V4 / F chip that says which Phase 1 version ships the thing beside it. */
+/** A small V1–V3 / F chip that says which Phase 1 version ships the thing beside it. */
 export function VersionTag({ feature, label, sx }: VersionTagProps) {
   const { t } = useTranslation();
   const show = useVersionLabels((s) => s.show);
