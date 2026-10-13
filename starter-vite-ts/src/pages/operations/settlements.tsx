@@ -353,7 +353,6 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
               <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
                 {t('settlements.title')}
               </Typography>
-              <Chip label="V5" color="info" size="small" sx={{ fontWeight: 'bold' }} />
             </Stack>
             <Typography variant="body2" color="text.secondary">
               {t('settlements.subtitle')}

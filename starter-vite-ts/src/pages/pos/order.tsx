@@ -101,6 +101,7 @@ import { discountsApi } from 'src/api/discountsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 import { useIncomingOrders } from 'src/contexts/incoming-orders-context';
 
+import { VersionTag } from 'src/components/version-tag';
 import { CheckoutModal } from 'src/components/CheckoutModal';
 import { NewOrderPopup } from 'src/components/online-orders';
 import { toast, showErrorToast } from 'src/components/snackbar';
@@ -2223,6 +2224,7 @@ export function PosOrderPage() {
                       sx={{ flexShrink: 0, fontWeight: 600, textDecoration: familySkipped ? 'line-through' : 'none' }}
                     />
                   )}
+                  {familyPercent && !appliedManualDiscount && <VersionTag feature="pos.familyDiscount" />}
                   {MoneyUtil.greaterThan(appliedDiscountAmount, '0') ? (
                     <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold', flexShrink: 0 }}>
                       -{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(appliedDiscountAmount) })}

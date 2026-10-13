@@ -516,7 +516,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
   const amountField = (
     name: FieldName,
-    label: string,
+    label: React.ReactNode,
     opts: { disabled?: boolean; hint?: React.ReactNode } = {}
   ) => (
     <Stack direction="row" sx={{ alignItems: 'center', gap: 2 }}>
@@ -608,13 +608,13 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
             {/* The same four rows for every order, in the same place. */}
             <Stack spacing={1.5} sx={{ pt: 1 }}>
               {amountField('cash', t('pos.pay.cash'))}
-              {amountField('wallet', t('pos.pay.wallet'), {
+              {amountField('wallet', <>{t('pos.pay.wallet')} <VersionTag feature="pos.wallet" /></>, {
                 disabled: !canUseWallet,
                 hint: order.customer_id
                   ? t('pos.pay.walletHolds', { amount: MoneyUtil.formatCurrency(walletHeld) })
                   : t('pos.pay.noCustomer'),
               })}
-              {amountField('credit', t('pos.pay.credit'), {
+              {amountField('credit', <>{t('pos.pay.credit')} <VersionTag feature="pos.customerCredit" /></>, {
                 disabled: !canUseCredit,
                 hint: order.customer_id
                   ? creditAvailable === UNLIMITED_CREDIT
