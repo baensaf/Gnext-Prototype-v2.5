@@ -232,6 +232,11 @@ export class OrderSubmitDto {
   @IsBoolean()
   skipCustomerDiscount?: boolean;
 
+  /** A one-time coupon code; it is taken when the order is sent. */
+  @IsOptional()
+  @IsString()
+  couponCode?: string;
+
   @IsOptional()
   @IsInt()
   version?: number;

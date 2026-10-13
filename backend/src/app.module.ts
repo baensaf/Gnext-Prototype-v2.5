@@ -86,6 +86,8 @@ import { ApprovalDecision } from './entities/ApprovalDecision.entity';
 import { PinAttemptLog } from './entities/PinAttemptLog.entity';
 import { Customer } from './entities/Customer.entity';
 import { CustomerDiscount } from './entities/CustomerDiscount.entity';
+import { Coupon } from './entities/Coupon.entity';
+import { CouponBatch } from './entities/CouponBatch.entity';
 import { ItemDiscount } from './entities/ItemDiscount.entity';
 import { CustomerPhone } from './entities/CustomerPhone.entity';
 import { CustomerAddress } from './entities/CustomerAddress.entity';
@@ -144,7 +146,7 @@ import { IntegrationLog } from './entities/IntegrationLog.entity';
           PriceEntry, PriceGroupBranch, PriceBulkJob,
           ProductAvailability,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
-          CustomerDiscount, ItemDiscount,
+          CustomerDiscount, ItemDiscount, Coupon, CouponBatch,
           Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CreditEntry,
           CustomFieldDefinition, CustomerCustomValue,
           OrderHeader, OrderItem, OrderItemOption, OrderAdjustment, OrderNote, OrderLink, OrderStateEvent, OrderSequence,

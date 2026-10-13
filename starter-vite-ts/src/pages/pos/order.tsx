@@ -353,6 +353,11 @@ export function PosOrderPage() {
   // whether the cashier took it off this order. A new customer starts over.
   const [familyPercent, setFamilyPercent] = useState<string | null>(null);
   const [familySkipped, setFamilySkipped] = useState(false);
+  // A one-time coupon code on the order (V2), and why the last quote refused it, if it did:
+  // a free item not on the order yet, say. It works or the order is sent without it.
+  const [couponCode, setCouponCode] = useState<string | null>(null);
+  const [couponRefusal, setCouponRefusal] = useState<string | null>(null);
+  const [couponInput, setCouponInput] = useState('');
   const [approvalRequired, setApprovalRequired] = useState(false);
   const [approvalReason, setApprovalReason] = useState<string | null>(null);
 
@@ -745,6 +750,8 @@ export function PosOrderPage() {
     setAppliedDiscountName(null);
     setApprovalRequired(false);
     setApprovalReason(null);
+    setCouponCode(null);
+    setCouponRefusal(null);
     setOrderNotes('');
     setLateOn(false);
     setLateInput(null);
@@ -930,6 +937,8 @@ export function PosOrderPage() {
         },
       };
 
+      if (couponCode) payload.couponCode = couponCode;
+
       if (appliedManualDiscount && MoneyUtil.greaterThan(appliedManualDiscount.value, '0')) {
         payload.manualDiscount = {
           calculation_type: appliedManualDiscount.calculation_type,
@@ -954,13 +963,17 @@ export function PosOrderPage() {
       const applied = quoteRes.consideredDiscounts?.find((d) => d.status === 'APPLIED' && d.source !== 'ITEM');
 
       if (applied?.source === 'CUSTOMER' && applied.percent) setFamilyPercent(applied.percent);
+      const coupon = quoteRes.consideredDiscounts?.find((d) => d.source === 'COUPON');
+      setCouponRefusal(coupon && coupon.status !== 'APPLIED' ? coupon.couponRefusal || 'UNKNOWN' : null);
 
       if (applied) {
         // The cashier's own discount shows as its rate; its name is the same on every order.
         setAppliedDiscountName(
           applied.source === 'CUSTOMER'
             ? t('pos.discount.family', { pct: Number(applied.percent || 0) })
-            : applied.source !== 'MANUAL'
+            : applied.source === 'COUPON'
+              ? t('pos.coupon.name', { code: couponCode })
+              : applied.source !== 'MANUAL'
               ? applied.name
               : appliedManualDiscount?.calculation_type === 'PERCENTAGE'
                 ? `${Number(appliedManualDiscount.value)}%`
@@ -973,7 +986,18 @@ export function PosOrderPage() {
     } catch {
       // A quote that fails leaves the figures as they were; submitting prices the order again.
     }
-  }, [cart, selectedCustomerId, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, priceOf, familySkipped, t]);
+  }, [cart, selectedCustomerId, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, priceOf, familySkipped, couponCode, t]);
+
+  /** Puts a typed code on the order; it replaces the cashier's own discount. */
+  const applyCoupon = () => {
+    const code = couponInput.replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0)).replace(/[\s-]/g, '').toUpperCase();
+    if (!code) return;
+    setCouponCode(code);
+    setCouponRefusal(null);
+    setAppliedManualDiscount(null);
+    setCouponInput('');
+    setManualDiscountModalOpen(false);
+  };
 
   useEffect(() => {
     evaluateQuote();
@@ -1068,10 +1092,14 @@ export function PosOrderPage() {
   // Sending only the approval id makes the server price the order differently from what
   // the cashier saw and the manager approved.
   const buildSubmitPayload = useCallback(() => {
-    // Taken off on the till, the friends-and-family rate stays off when the order is sent.
-    const skip = familySkipped ? { skipCustomerDiscount: true } : {};
+    // Taken off on the till, the friends-and-family rate stays off when the order is sent. A
+    // coupon goes with the order only when the quote took it.
+    const skip = {
+      ...(familySkipped ? { skipCustomerDiscount: true } : {}),
+      ...(couponCode && !couponRefusal ? { couponCode } : {}),
+    };
     if (!appliedManualDiscount || !MoneyUtil.greaterThan(appliedManualDiscount.value, '0')) {
-      return familySkipped ? skip : undefined;
+      return Object.keys(skip).length ? skip : undefined;
     }
     const approvalRequestId = appliedManualDiscount.approvalRequestId || manualApprovalRequestId;
     return {
@@ -1079,7 +1107,7 @@ export function PosOrderPage() {
       manualDiscount: { ...appliedManualDiscount, approvalRequestId },
       ...(approvalRequestId ? { approvalRequestIds: [approvalRequestId] } : {}),
     };
-  }, [appliedManualDiscount, manualApprovalRequestId, familySkipped]);
+  }, [appliedManualDiscount, manualApprovalRequestId, familySkipped, couponCode, couponRefusal]);
 
   // 1-Click Direct Terminal POS Checkout (90% Iranian Standard)
   const [terminalPayLoading, setTerminalPayLoading] = useState(false);
@@ -2212,7 +2240,25 @@ export function PosOrderPage() {
                   </Tooltip>
                   {/* The customer's friends-and-family rate fills itself in; one tap takes it off
                       this order, and back on. A cashier's own discount replaces it. */}
-                  {familyPercent && !appliedManualDiscount && (
+                  {couponCode && (
+                    <Chip
+                      size="small"
+                      color={couponRefusal ? 'warning' : 'secondary'}
+                      label={
+                        couponRefusal
+                          ? t('pos.coupon.refusedChip', { code: couponCode, reason: t(`pos.coupon.refused.${couponRefusal}`) })
+                          : t('pos.coupon.name', { code: couponCode })
+                      }
+                      onDelete={() => {
+                        setCouponCode(null);
+                        setCouponRefusal(null);
+                      }}
+                      title={t('pos.coupon.remove')}
+                      sx={{ flexShrink: 1, minWidth: 0, fontWeight: 600 }}
+                    />
+                  )}
+                  {couponCode && <VersionTag feature="pos.coupon" />}
+                  {familyPercent && !appliedManualDiscount && !couponCode && (
                     <Chip
                       size="small"
                       color="secondary"
@@ -2224,7 +2270,7 @@ export function PosOrderPage() {
                       sx={{ flexShrink: 0, fontWeight: 600, textDecoration: familySkipped ? 'line-through' : 'none' }}
                     />
                   )}
-                  {familyPercent && !appliedManualDiscount && <VersionTag feature="pos.familyDiscount" />}
+                  {familyPercent && !appliedManualDiscount && !couponCode && <VersionTag feature="pos.familyDiscount" />}
                   {MoneyUtil.greaterThan(appliedDiscountAmount, '0') ? (
                     <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold', flexShrink: 0 }}>
                       -{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(appliedDiscountAmount) })}
@@ -2331,6 +2377,28 @@ export function PosOrderPage() {
             </Alert>
           )}
           <Stack spacing={2}>
+            {/* A one-time coupon code (V2): it is the order's discount instead of a typed one. */}
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+              <TextField
+                size="small"
+                fullWidth
+                label={t('pos.coupon.label')}
+                value={couponInput}
+                onChange={(e) => setCouponInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    applyCoupon();
+                  }
+                }}
+                slotProps={{ htmlInput: { dir: 'ltr', style: { letterSpacing: 2, fontWeight: 600 } } }}
+              />
+              <Button variant="outlined" onClick={applyCoupon} disabled={!couponInput.trim()} sx={{ flexShrink: 0 }}>
+                {t('pos.coupon.apply')}
+              </Button>
+              <VersionTag feature="pos.coupon" />
+            </Stack>
+            <Divider>{t('pos.coupon.or')}</Divider>
             {/* Calculation Type Toggle */}
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
               <ToggleButtonGroup

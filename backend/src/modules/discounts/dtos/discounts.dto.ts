@@ -89,6 +89,11 @@ export class DiscountQuoteRequestDto {
   @ValidateNested()
   @Type(() => ManualDiscountDto)
   manualDiscount?: ManualDiscountDto;
+
+  /** A one-time coupon code typed at the till; it is the order's one discount when it works. */
+  @IsOptional()
+  @IsString()
+  couponCode?: string;
 }
 
 export class CreateCustomerDiscountDto {

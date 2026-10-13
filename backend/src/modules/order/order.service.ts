@@ -26,6 +26,7 @@ import { OptionItem } from '../../entities/OptionItem.entity';
 import { OptionGroup } from '../../entities/OptionGroup.entity';
 import { ProductOptionGroup } from '../../entities/ProductOptionGroup.entity';
 import { DiscountEvaluationService } from '../discounts/discount-evaluation.service';
+import { CouponsService } from '../discounts/coupons.service';
 import { ItemDiscountsService } from '../discounts/item-discounts.service';
 import { OrderSequenceService } from './order-sequence.service';
 import { AuditWriter } from '../audit/audit-writer.service';
@@ -171,6 +172,7 @@ export class OrderService {
     @Optional() private readonly creditService?: CreditService,
     @Optional() @Inject(forwardRef(() => SimulationService)) private readonly simulationService?: SimulationService,
     @Optional() private readonly itemDiscounts?: ItemDiscountsService,
+    @Optional() private readonly coupons?: CouponsService,
   ) {}
 
   /**
@@ -778,11 +780,28 @@ export class OrderService {
           }),
         },
         manualDiscount: submittedManualDiscount,
+        couponCode: dto.couponCode,
       }, callerRole);
+
+      // A coupon typed at the till works or the order is not sent, like a manual discount;
+      // when it works the code is taken now, under a lock, so it cannot be used twice.
+      const couponApplied = quoteRes.consideredDiscounts.find((d) => d.source === 'COUPON');
+      if (dto.couponCode && dto.couponCode.trim()) {
+        if (couponApplied?.status !== 'APPLIED' || !this.coupons) {
+          throw new BadRequestException({
+            statusCode: 400,
+            code: 'COUPON_REFUSED',
+            reason: couponApplied?.couponRefusal,
+            message: couponApplied?.rejectionReason || 'The coupon was not applied',
+          });
+        }
+        await this.coupons.redeem(em, tenantId, dto.couponCode, order.id, order.branch_id || null);
+      }
 
       // A discount the cashier typed is given or the order is not sent. Charging full price
       // was safe, but the customer was told one total and billed another without a word.
-      if (dto.manualDiscount && MoneyUtil.greaterThan(dto.manualDiscount.value || '0', '0')) {
+      // A coupon on the order takes the place of the cashier's discount.
+      if (couponApplied?.status !== 'APPLIED' && dto.manualDiscount && MoneyUtil.greaterThan(dto.manualDiscount.value || '0', '0')) {
         const manual = quoteRes.consideredDiscounts.find((d) => d.source === 'MANUAL');
         if (manual?.status !== 'APPLIED') {
           throw new BadRequestException({
@@ -801,8 +820,8 @@ export class OrderService {
           order_id: order.id,
           type: 'DISCOUNT',
           source_type: disc.source,
-          source_id: disc.itemDiscountId || null,
-          code: (disc.source === 'MANUAL' ? 'MANUAL_DISCOUNT' : disc.source === 'ITEM' ? 'ITEM_DISCOUNT' : null),
+          source_id: disc.itemDiscountId || disc.couponId || null,
+          code: (disc.source === 'MANUAL' ? 'MANUAL_DISCOUNT' : disc.source === 'ITEM' ? 'ITEM_DISCOUNT' : disc.source === 'COUPON' ? 'COUPON' : null),
           name: disc.name,
           amount: disc.amount,
           funding_source: 'MERCHANT',
@@ -816,6 +835,7 @@ export class OrderService {
               : {}),
             ...(disc.source === 'CUSTOMER' ? { percent: disc.percent, reasonCode: 'FRIENDS_FAMILY' } : {}),
             ...(disc.source === 'ITEM' ? { productId: disc.productId, percent: disc.percent } : {}),
+            ...(disc.source === 'COUPON' ? { couponCode: dto.couponCode, percent: disc.percent, productId: disc.productId } : {}),
           },
         });
         await em.save(OrderAdjustment, adj);
@@ -2361,6 +2381,9 @@ export class OrderService {
       await this.reasonText(tenantId, dto.reason, dto.reasonCodeId),
       userId,
     );
+
+    // A coupon used on the order works again.
+    await this.coupons?.releaseForOrder(tenantId, id);
 
     return cancelled;
   }

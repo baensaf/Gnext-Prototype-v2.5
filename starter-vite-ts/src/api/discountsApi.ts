@@ -9,7 +9,9 @@ export interface ManualDiscount {
 
 export interface ConsideredDiscount {
   /** Who granted it: an automatic item discount, the cashier, or the customer's friends-and-family rate. */
-  source: 'ITEM' | 'MANUAL' | 'CUSTOMER';
+  source: 'ITEM' | 'MANUAL' | 'CUSTOMER' | 'COUPON';
+  /** COUPON refused: why (UNKNOWN, USED, OFF, NOT_YET, EXPIRED, BELOW_MINIMUM, ITEM_MISSING). */
+  couponRefusal?: string;
   productId?: string;
   percent?: string;
   name: string;
