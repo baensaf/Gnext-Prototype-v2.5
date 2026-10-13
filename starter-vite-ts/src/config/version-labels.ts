@@ -91,6 +91,8 @@ export const FEATURE_LABELS = {
   'catalog.stopBranches': 'V3',
   // Price changes: V1 changes base prices now.
   'pricing.listPrices': 'V3',
+  // Item discounts per price group or on Snappfood; a V1 discount is in store, at every branch.
+  'pricing.itemDiscountScope': 'V2',
   // Customers: credit, the wallet and friends-and-family rates on the customer list
   'customers.credit': 'V2',
   'customers.wallet': 'V2',

@@ -64,7 +64,7 @@ export function PosStopDialog({ product, branchId, availabilities, onClose, onDo
 
   if (!product) return null;
 
-  const target = (a: ProductAvailability) => a.product_id === product.id && (a.variant_id || WHOLE) === variantId && !a.option_item_id;
+  const target = (a: ProductAvailability) => a.product_id === product.id && (a.variant_id || WHOLE) === variantId;
   const branchStop = availabilities.find((a) => target(a) && a.branch_id === branchId && isLive(a));
   const chainStop = availabilities.find((a) => target(a) && !a.branch_id && isLive(a));
   const current = chainStop || branchStop;

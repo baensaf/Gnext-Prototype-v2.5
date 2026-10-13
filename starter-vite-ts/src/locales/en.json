@@ -1896,11 +1896,14 @@
     },
     "itemDiscounts": {
       "title": "Item discounts",
-      "subtitle": "A percent off an item between two dates, for all price groups or chosen ones: at the till and kiosk, on Snappfood, or both. The order's own discount comes after it.",
+      "subtitle": "A percent off chosen items between two dates, taken off at the till by itself. The order's own discount comes after it.",
       "add": "New item discount",
       "edit": "Edit item discount",
       "delete": "Delete item discount",
       "deleteConfirm": "Delete the discount on {{name}}? Orders already sent keep it.",
+      "items": "Items",
+      "running": "Running",
+      "paused": "Paused",
       "item": "Item",
       "percent": "Discount",
       "from": "From",
@@ -1912,6 +1915,7 @@
       "empty": "No item discounts yet.",
       "status": {
         "active": "Running",
+        "paused": "Paused",
         "scheduled": "Starts later",
         "ended": "Ended"
       },

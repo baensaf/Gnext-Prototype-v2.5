@@ -1,5 +1,5 @@
 import Decimal from 'decimal.js';
-import { EntityManager, In, IsNull, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
+import { ArrayOverlap, EntityManager, IsNull, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
 import { ItemDiscount } from '../../entities/ItemDiscount.entity';
 import { PriceGroup } from '../../entities/PriceGroup.entity';
 import { PriceGroupBranch } from '../../entities/PriceGroupBranch.entity';
@@ -62,17 +62,21 @@ export async function activeItemDiscounts(
   const ids = productIds ? [...new Set(productIds.filter((id) => /^[0-9a-f-]{36}$/i.test(id || '')))] : null;
   if (ids && !ids.length) return out;
   const today = (await loadBusinessClock(em, tenantId, branchId || null)).today();
-  const product = ids ? { product_id: In(ids) } : {};
+  const product = ids ? { product_ids: ArrayOverlap(ids) } : {};
   const rows = await em.find(ItemDiscount, {
     where: [
-      { tenant_id: tenantId, ...product, starts_on: LessThanOrEqual(today), ends_on: IsNull() },
-      { tenant_id: tenantId, ...product, starts_on: LessThanOrEqual(today), ends_on: MoreThanOrEqual(today) },
+      { tenant_id: tenantId, is_active: true, ...product, starts_on: LessThanOrEqual(today), ends_on: IsNull() },
+      { tenant_id: tenantId, is_active: true, ...product, starts_on: LessThanOrEqual(today), ends_on: MoreThanOrEqual(today) },
     ],
   });
   if (!rows.length) return out;
   const groupId = await priceGroupOfBranch(em, tenantId, branchId);
+  const wanted = ids ? new Set(ids) : null;
   for (const r of rows) {
-    if (coversChannel(r, channel) && coversGroup(r, groupId)) out.set(r.product_id, { id: r.id, percent: MoneyUtil.format(r.percent, 2) });
+    if (!coversChannel(r, channel) || !coversGroup(r, groupId)) continue;
+    for (const productId of r.product_ids || []) {
+      if (!wanted || wanted.has(productId)) out.set(productId, { id: r.id, percent: MoneyUtil.format(r.percent, 2) });
+    }
   }
   return out;
 }

@@ -17,11 +17,14 @@ import {
   DialogContent,
   DialogActions,
   InputAdornment,
+  FormControlLabel,
+  Switch,
 } from '@mui/material';
 
 import { catalogApi } from 'src/api/catalogApi';
 import { discountsApi } from 'src/api/discountsApi';
 
+import { VersionTag } from 'src/components/version-tag';
 import { CalendarDateField } from 'src/components/calendar-date-field';
 
 export const localToday = () => {
@@ -31,11 +34,13 @@ export const localToday = () => {
 
 export type ItemDiscountStatus = 'active' | 'scheduled' | 'ended';
 
-export const itemDiscountStatus = (r: ItemDiscount, today = localToday()): ItemDiscountStatus =>
-  r.starts_on > today ? 'scheduled' : r.ends_on && r.ends_on < today ? 'ended' : 'active';
+export type ItemDiscountStatusOrPaused = ItemDiscountStatus | 'paused';
 
-export const itemDiscountStatusColor = (s: ItemDiscountStatus) =>
-  s === 'active' ? 'success' : s === 'scheduled' ? 'info' : 'default';
+export const itemDiscountStatus = (r: ItemDiscount, today = localToday()): ItemDiscountStatusOrPaused =>
+  r.ends_on && r.ends_on < today ? 'ended' : !r.is_active ? 'paused' : r.starts_on > today ? 'scheduled' : 'active';
+
+export const itemDiscountStatusColor = (s: ItemDiscountStatusOrPaused) =>
+  s === 'active' ? 'success' : s === 'scheduled' ? 'info' : s === 'paused' ? 'warning' : 'default';
 
 /** The price groups, for naming a discount's scope. Empty until loaded, or when the chain has none. */
 export function usePriceGroups() {
@@ -77,7 +82,8 @@ export const itemDiscountErrorText = (err: any, t: TFunction) => {
 };
 
 type Draft = {
-  product_id: string;
+  product_ids: string[];
+  is_active: boolean;
   percent: string;
   starts_on: string;
   ends_on: string;
@@ -91,9 +97,9 @@ type Props = {
   open: boolean;
   /** The discount being edited; none to add one. */
   editing?: ItemDiscount | null;
-  /** Items to pick from. Leave out with `productId` to add for that one item. */
+  /** Items to pick from. */
   products?: Product[];
-  /** Fixes the item, as on the product page, and hides the picker. */
+  /** Starts a new discount with this item picked, as on the product page. */
   productId?: string;
   onClose: () => void;
   onSaved: () => void;
@@ -113,7 +119,8 @@ export function ItemDiscountDialog({ open, editing, products = [], productId, on
     setDraft(
       editing
         ? {
-            product_id: editing.product_id,
+            product_ids: editing.product_ids,
+            is_active: editing.is_active,
             percent: String(Number(editing.percent)),
             starts_on: editing.starts_on,
             ends_on: editing.ends_on || '',
@@ -123,7 +130,8 @@ export function ItemDiscountDialog({ open, editing, products = [], productId, on
             applies_to: editing.applies_to,
           }
         : {
-            product_id: productId || '',
+            product_ids: productId ? [productId] : [],
+            is_active: true,
             percent: '',
             starts_on: localToday(),
             ends_on: '',
@@ -143,7 +151,8 @@ export function ItemDiscountDialog({ open, editing, products = [], productId, on
     e.stopPropagation();
     if (!draft) return;
     const body = {
-      product_id: draft.product_id,
+      product_ids: draft.product_ids,
+      is_active: draft.is_active,
       percent: draft.percent,
       starts_on: draft.starts_on,
       ends_on: draft.ends_on || null,
@@ -179,16 +188,15 @@ export function ItemDiscountDialog({ open, editing, products = [], productId, on
               </Alert>
             )}
             <Stack spacing={2} sx={{ mt: 1 }}>
-              {!productId && (
-                <Autocomplete
-                  options={products}
-                  value={productById.get(draft.product_id) || null}
-                  getOptionLabel={(p) => p.name}
-                  isOptionEqualToValue={(a, b) => a.id === b.id}
-                  onChange={(_e, p) => setDraft({ ...draft, product_id: p?.id || '' })}
-                  renderInput={(params) => <TextField {...params} label={t('pricing.itemDiscounts.item')} required size="small" />}
-                />
-              )}
+              <Autocomplete
+                multiple
+                options={products}
+                value={draft.product_ids.map((id) => productById.get(id)).filter((p): p is Product => !!p)}
+                getOptionLabel={(p) => p.name}
+                isOptionEqualToValue={(a, b) => a.id === b.id}
+                onChange={(_e, picked) => setDraft({ ...draft, product_ids: picked.map((p) => p.id) })}
+                renderInput={(params) => <TextField {...params} label={t('pricing.itemDiscounts.items')} size="small" />}
+              />
               <TextField
                 label={t('pricing.itemDiscounts.percent')}
                 type="number"
@@ -215,9 +223,14 @@ export function ItemDiscountDialog({ open, editing, products = [], productId, on
                 onChange={(e) => setDraft({ ...draft, ends_on: e.target.value })}
                 helperText={t('pricing.itemDiscounts.toHelp')}
               />
+              <FormControlLabel
+                control={<Switch checked={draft.is_active} onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })} />}
+                label={draft.is_active ? t('pricing.itemDiscounts.running') : t('pricing.itemDiscounts.paused')}
+              />
+              {/* Price groups and Snappfood come in V2; V1 discounts are in store, for every branch. */}
               <TextField
                 select
-                label={t('pricing.itemDiscounts.scope.where')}
+                label={<>{t('pricing.itemDiscounts.scope.where')} <VersionTag feature="pricing.itemDiscountScope" /></>}
                 size="small"
                 value={draft.applies_to}
                 onChange={(e) => setDraft({ ...draft, applies_to: e.target.value as ItemDiscountChannel })}
@@ -228,7 +241,7 @@ export function ItemDiscountDialog({ open, editing, products = [], productId, on
               </TextField>
               <TextField
                 select
-                label={t('pricing.itemDiscounts.scope.groups')}
+                label={<>{t('pricing.itemDiscounts.scope.groups')} <VersionTag feature="pricing.itemDiscountScope" /></>}
                 size="small"
                 value={draft.all_groups ? 'ALL' : 'PICK'}
                 onChange={(e) => setDraft({ ...draft, all_groups: e.target.value === 'ALL' })}
@@ -261,7 +274,7 @@ export function ItemDiscountDialog({ open, editing, products = [], productId, on
             <Button onClick={onClose} disabled={saving}>
               {t('common.cancel')}
             </Button>
-            <Button type="submit" variant="contained" disabled={saving || !draft.product_id || !draft.percent || !draft.starts_on || (!draft.all_groups && draft.price_group_ids.length === 0)}>
+            <Button type="submit" variant="contained" disabled={saving || draft.product_ids.length === 0 || !draft.percent || !draft.starts_on || (!draft.all_groups && draft.price_group_ids.length === 0)}>
               {t('common.save')}
             </Button>
           </DialogActions>

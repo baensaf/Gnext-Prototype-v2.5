@@ -1,6 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, In, Repository } from 'typeorm';
+import { ArrayOverlap, EntityManager, In, Repository } from 'typeorm';
 import { ItemDiscount } from '../../entities/ItemDiscount.entity';
 import { Product } from '../../entities/Product.entity';
 import { PriceGroup } from '../../entities/PriceGroup.entity';
@@ -8,7 +8,11 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { ActiveItemDiscount, DISCOUNT_APPLIES_TO, activeItemDiscounts, sharesScope } from '../../common/utils/item-discount.util';
 
 export interface ItemDiscountInput {
-  product_id: string;
+  /** The products it is for. `product_id` alone is read as one product. */
+  product_ids?: string[];
+  product_id?: string;
+  /** Off pauses it. */
+  is_active?: boolean;
   percent: string | number;
   starts_on: string;
   ends_on?: string | null;
@@ -25,8 +29,8 @@ export type { ActiveItemDiscount };
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * Automatic item discounts (V1, 2026-10-03): a dated percent off one product, applied to every
- * line of it at the till and the kiosk, and on the Snappfood menu. Head office sets them up
+ * Automatic item discounts (V1, 2026-10-03): a dated percent off chosen products, applied to
+ * every line of them at the till and the kiosk, and on the Snappfood menu. Head office sets them up
  * for all price groups or chosen ones, in store, on Snappfood or both (2026-10-12); the quote
  * engine asks `activeFor` which apply on the branch's business day. A product has at most one
  * discount for any group and channel on any day, so overlapping ones are refused rather than
@@ -41,14 +45,13 @@ export class ItemDiscountsService {
     private readonly auditWriter: AuditWriter,
   ) {}
 
-  /** Every item discount with its product's name, newest start first. */
+  /** Every item discount with its products' names, newest start first. */
   async list(tenantId: string) {
     const rows = await this.repo.find({ where: { tenant_id: tenantId }, order: { starts_on: 'DESC', created_at: 'DESC' } });
-    const products = rows.length
-      ? await this.productRepo.find({ where: { tenant_id: tenantId, id: In([...new Set(rows.map((r) => r.product_id))]) }, withDeleted: true })
-      : [];
+    const ids = [...new Set(rows.flatMap((r) => r.product_ids || []))];
+    const products = ids.length ? await this.productRepo.find({ where: { tenant_id: tenantId, id: In(ids) }, withDeleted: true }) : [];
     const nameOf = new Map(products.map((p) => [p.id, p.name]));
-    return rows.map((r) => ({ ...r, product_name: nameOf.get(r.product_id) || null }));
+    return rows.map((r) => ({ ...r, product_names: (r.product_ids || []).map((id) => nameOf.get(id) || null) }));
   }
 
   async create(tenantId: string, input: ItemDiscountInput, actorId?: string, correlationId?: string) {
@@ -64,7 +67,8 @@ export class ItemDiscountsService {
     if (!row) throw new NotFoundException('Item discount not found');
     const before = { ...row };
     const data = await this.validate(tenantId, {
-      product_id: input.product_id ?? row.product_id,
+      product_ids: input.product_ids ?? (input.product_id ? [input.product_id] : row.product_ids),
+      is_active: input.is_active ?? row.is_active,
       percent: input.percent ?? row.percent,
       starts_on: input.starts_on ?? row.starts_on,
       ends_on: input.ends_on !== undefined ? input.ends_on : row.ends_on,
@@ -105,8 +109,9 @@ export class ItemDiscountsService {
 
   private async validate(tenantId: string, input: ItemDiscountInput) {
     const refuse = (code: string, message: string) => new BadRequestException({ statusCode: 400, code, message });
-    const product = input.product_id ? await this.productRepo.findOne({ where: { id: input.product_id, tenant_id: tenantId } }) : null;
-    if (!product) throw refuse('ITEM_DISCOUNT_PRODUCT', 'Pick the item the discount is for');
+    const wanted = [...new Set((input.product_ids?.length ? input.product_ids : input.product_id ? [input.product_id] : []).map(String))];
+    const products = wanted.length ? await this.productRepo.find({ where: { tenant_id: tenantId, id: In(wanted) } }) : [];
+    if (!wanted.length || products.length !== wanted.length) throw refuse('ITEM_DISCOUNT_PRODUCT', 'Pick the items the discount is for');
     const percent = Number(input.percent);
     if (!Number.isFinite(percent) || percent <= 0 || percent > 100) throw refuse('ITEM_DISCOUNT_PERCENT', 'A discount is more than 0% and at most 100%');
     const startsOn = String(input.starts_on || '').slice(0, 10);
@@ -124,7 +129,8 @@ export class ItemDiscountsService {
       if (!groupIds.length || found !== groupIds.length) throw refuse('ITEM_DISCOUNT_GROUPS', 'Pick the price groups the discount is for');
     }
     return {
-      product_id: product.id,
+      product_ids: wanted,
+      is_active: input.is_active ?? true,
       percent: percent.toFixed(2),
       starts_on: startsOn,
       ends_on: endsOn,
@@ -135,21 +141,26 @@ export class ItemDiscountsService {
     };
   }
 
-  /** A product has at most one discount for any group and channel on any day. */
+  /**
+   * A product has at most one discount for any group and channel on any day. A paused discount
+   * is checked too, so switching it back on can never make two apply.
+   */
   private async refuseOverlap(
     tenantId: string,
-    next: Pick<ItemDiscount, 'product_id' | 'starts_on' | 'ends_on' | 'all_groups' | 'price_group_ids' | 'applies_to'>,
+    next: Pick<ItemDiscount, 'product_ids' | 'starts_on' | 'ends_on' | 'all_groups' | 'price_group_ids' | 'applies_to'>,
     exceptId: string | null,
   ) {
-    const others = (await this.repo.find({ where: { tenant_id: tenantId, product_id: next.product_id } })).filter((r) => r.id !== exceptId);
+    const others = (await this.repo.find({ where: { tenant_id: tenantId, product_ids: ArrayOverlap(next.product_ids) } })).filter((r) => r.id !== exceptId);
     const clash = others.find(
       (r) => (r.ends_on === null || r.ends_on >= next.starts_on) && (next.ends_on === null || r.starts_on <= next.ends_on) && sharesScope(r, next),
     );
     if (clash) {
+      const shared = (clash.product_ids || []).filter((id) => next.product_ids.includes(id));
+      const names = shared.length ? (await this.productRepo.find({ where: { tenant_id: tenantId, id: In(shared) } })).map((p) => p.name) : [];
       throw new ConflictException({
         statusCode: 409,
         code: 'ITEM_DISCOUNT_OVERLAP',
-        message: `This item already has a ${Number(clash.percent)}% discount from ${clash.starts_on}${clash.ends_on ? ` to ${clash.ends_on}` : ''} for the same price groups and channel`,
+        message: `${names.join(', ') || 'An item'} already ${names.length > 1 ? 'have' : 'has'} a ${Number(clash.percent)}% discount from ${clash.starts_on}${clash.ends_on ? ` to ${clash.ends_on}` : ''} for the same price groups and channel`,
         discountId: clash.id,
       });
     }

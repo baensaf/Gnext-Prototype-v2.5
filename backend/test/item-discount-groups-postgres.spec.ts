@@ -104,7 +104,7 @@ describe('Item discounts by price group and channel (PostgreSQL)', () => {
   });
 
   it('gives existing rows all groups and in store by their column defaults', async () => {
-    await dataSource.query(`INSERT INTO item_discount (tenant_id, product_id, percent, starts_on) VALUES ($1, $2, 10, $3)`, [tenantId, burger, today]);
+    await dataSource.query(`INSERT INTO item_discount (tenant_id, product_ids, percent, starts_on) VALUES ($1, ARRAY[$2]::uuid[], 10, $3)`, [tenantId, burger, today]);
     const [row] = await discounts.list(tenantId);
     expect(row).toMatchObject({ all_groups: true, price_group_ids: [], applies_to: 'IN_STORE' });
     expect(await quoteLine(loose)).toMatchObject({ itemDiscountPercent: '10.00' });
