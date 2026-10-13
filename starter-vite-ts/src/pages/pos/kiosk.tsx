@@ -287,12 +287,18 @@ export function KioskPage() {
   const calculateSubtotal = () =>
     cart.reduce((acc, item) => MoneyUtil.add(acc, item.line_total, 2), '0');
   // What each line's item discount takes off, as the order is charged.
-  const lineDiscount = (item: CartItem) => MoneyUtil.multiply(item.line_total, MoneyUtil.divide(item.discount_percent || '0', '100', 6), 2);
+  // Each line's net and tax are whole Tomans, as the server charges them.
+  const lineDiscount = (item: CartItem) =>
+    MoneyUtil.subtract(
+      item.line_total,
+      MoneyUtil.roundToman(MoneyUtil.subtract(item.line_total, MoneyUtil.multiply(item.line_total, MoneyUtil.divide(item.discount_percent || '0', '100', 6), 4), 4)),
+      2
+    );
   const calculateDiscount = () => cart.reduce((acc, item) => MoneyUtil.add(acc, lineDiscount(item), 2), '0');
   // VAT at each product's own rate on what the line sells for, as the order is charged.
   const calculateTax = () =>
     cart.reduce(
-      (acc, item) => MoneyUtil.add(acc, MoneyUtil.multiply(MoneyUtil.subtract(item.line_total, lineDiscount(item), 2), item.tax_rate || '0', 2), 2),
+      (acc, item) => MoneyUtil.add(acc, MoneyUtil.roundToman(MoneyUtil.multiply(MoneyUtil.subtract(item.line_total, lineDiscount(item), 4), item.tax_rate || '0', 4)), 2),
       '0'
     );
   const calculateTotal = () => MoneyUtil.add(MoneyUtil.subtract(calculateSubtotal(), calculateDiscount(), 2), calculateTax(), 2);
