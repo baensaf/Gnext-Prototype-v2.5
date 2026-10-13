@@ -59,6 +59,7 @@ import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 import { wholeRials, percentToTaxRate, taxRateToPercent } from 'src/utils/tax-rate';
 
 import { catalogApi } from 'src/api/catalogApi';
+import { settingsApi } from 'src/api/settingsApi';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { useBranchContext } from 'src/contexts/branch-context';
 
@@ -70,8 +71,8 @@ import { AddonGroupSheet } from './addon-group-sheet';
 import { ProductPriceHistory } from './product-price-history';
 import { ProductItemDiscounts } from './product-item-discounts';
 
-// The whole catalog is rated at the standard 9% VAT, so a new product starts there too.
-const DEFAULT_TAX_PERCENT = '9';
+// Used only if the chain's default (Settings → General) cannot be read.
+const DEFAULT_TAX_PERCENT = '10';
 
 export function ProductDetailPage() {
   const currencyLabel = useCurrencyLabel();
@@ -129,8 +130,14 @@ export function ProductDetailPage() {
     if (!id) {
       // A new product only needs the categories to pick from; the rest waits for the first Save.
       try {
-        setCategories(await catalogApi.getCategories());
-        setTaxRate(DEFAULT_TAX_PERCENT);
+        const [cats, scoped] = await Promise.all([
+          catalogApi.getCategories(),
+          settingsApi.getScopedSettings().catch(() => null),
+        ]);
+        setCategories(cats);
+        // A new product starts at the chain's default tax rate (Settings → General).
+        const chainDefault = scoped?.groups?.CATALOG?.value?.default_tax_rate;
+        setTaxRate(chainDefault !== undefined && chainDefault !== null ? String(Number(chainDefault)) : DEFAULT_TAX_PERCENT);
         setError(null);
       } catch (err: any) {
         setError(err.detail || err.message || t('catalog.productDetailPage.errors.loadFailed'));
@@ -157,7 +164,7 @@ export function ProductDetailPage() {
       setName(prod.name);
       setCategoryId(prod.category_id);
       setBasePrice(wholeRials(prod.base_price));
-      setTaxRate(taxRateToPercent(prod.tax_rate ?? '0.0900'));
+      setTaxRate(taxRateToPercent(prod.tax_rate ?? '0.1000'));
       setBarcode(prod.barcode || '');
       setDescription(prod.description || '');
       setPhotoIds([prod.image_asset_id, ...(prod.gallery_asset_ids || [])].filter(Boolean) as string[]);

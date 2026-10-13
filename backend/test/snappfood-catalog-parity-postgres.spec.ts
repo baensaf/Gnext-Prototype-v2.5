@@ -82,16 +82,11 @@ describe('Snappfood-style menu controls (PostgreSQL)', () => {
     await expect(order([{ product_id: sandwich, variant_id: cold, quantity: 1 }])).resolves.toBeDefined();
   });
 
-  it('refuses an add-on the product leaves out, or one taken off sale', async () => {
+  it('refuses an add-on the product leaves out', async () => {
     const withSauce = (itemId: string) => [{ product_id: sandwich, variant_id: hot, quantity: 1, options: [{ option_item_id: itemId }] }];
 
     await catalog.setExcludedOptionItems(tenantId, sandwich, groupId, [chili], 'test');
     await expect(order(withSauce(chili))).rejects.toThrow('not offered');
-    await expect(order(withSauce(ketchup))).resolves.toBeDefined();
-
-    await catalog.suspendProduct(tenantId, undefined, branchId, 'test', { optionItemId: ketchup });
-    await expect(order(withSauce(ketchup))).rejects.toThrow('not available');
-    await catalog.resumeProduct(tenantId, undefined, branchId, 'test', { optionItemId: ketchup });
     await expect(order(withSauce(ketchup))).resolves.toBeDefined();
   });
 

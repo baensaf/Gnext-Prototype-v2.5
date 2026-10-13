@@ -72,7 +72,7 @@ describe('KioskService (Unit)', () => {
     auditWriter = { write: jest.fn() };    printQueueService = { enqueueOrderPrintJobs: jest.fn().mockResolvedValue([]) };
     variantRepo = { find: jest.fn().mockResolvedValue([]) };
     catalogService = {
-      getUnavailableNow: jest.fn().mockResolvedValue({ products: new Set(), variants: new Set(), optionItems: new Set() }),
+      getUnavailableNow: jest.fn().mockResolvedValue({ products: new Set(), variants: new Set() }),
       assertBasketSellable: jest.fn().mockResolvedValue(undefined),
       isCategoryOff: jest.fn().mockResolvedValue(false),
     };
@@ -406,7 +406,7 @@ describe('KioskService selling rules', () => {
     const productRepo = { find: jest.fn().mockResolvedValue([overrides.product]), findOne: jest.fn().mockResolvedValue(overrides.product) };
     const variantRepo = { find: jest.fn().mockResolvedValue(overrides.variants || []) };
     const catalogService = {
-      getUnavailableNow: jest.fn().mockResolvedValue(overrides.unavailable || { products: new Set(), variants: new Set(), optionItems: new Set() }),
+      getUnavailableNow: jest.fn().mockResolvedValue(overrides.unavailable || { products: new Set(), variants: new Set() }),
       assertBasketSellable: overrides.basket || jest.fn().mockResolvedValue(undefined),
       isCategoryOff: jest.fn().mockResolvedValue(false),
     };
@@ -467,7 +467,7 @@ describe('KioskService selling rules', () => {
   });
 
   it('shows an 86d item on the menu as unavailable', async () => {
-    const { service } = await build({ product: burger, unavailable: { products: new Set(['p-1']), variants: new Set(), optionItems: new Set() } });
+    const { service } = await build({ product: burger, unavailable: { products: new Set(['p-1']), variants: new Set() } });
     const menu = await service.getBootstrapContext('t-1', 'br-1');
     expect(menu.products[0]).toEqual(expect.objectContaining({ id: 'p-1', is_available: false }));
   });

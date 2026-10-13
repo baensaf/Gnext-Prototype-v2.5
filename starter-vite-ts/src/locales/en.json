@@ -1747,8 +1747,6 @@
       "change": "Change",
       "searchPlaceholder": "Product name",
       "allCategories": "All",
-      "addonsTitle": "Add-ons",
-      "addonsSubtitle": "An add-on taken off here is off on every product that offers it.",
       "changeTitle": "Change availability — {{name}}",
       "modeAvailable": "Available",
       "modeManual": "Unavailable until further notice",
@@ -2405,6 +2403,10 @@
       "resetSuccess": "Override removed. This branch follows head office again."
     },
     "generalPage": {
+      "menuDefaults": "Menu defaults",
+      "defaultTax": "Default tax rate (%)",
+      "defaultTaxHelp": "A new product starts with this rate. Changing it does not change existing products.",
+      "taxSaved": "Default tax rate saved. New products start with it.",
       "title": "Business profile",
       "tenantProfile": "Tenant Organization Profile",
       "tenantCode": "Tenant Code",
@@ -3287,10 +3289,12 @@
       "importCompleted": "Import completed successfully! {{imported}} records inserted.",
       "fields": {
         "code": "Code",
-        "name_fa": "Persian Name",
-        "name_en": "English Name",
+        "name_fa": "Name",
         "category_code": "Category Code",
-        "is_active": "Active Status"
+        "base_price": "Price (Toman)",
+        "tax_rate": "Tax rate (%)",
+        "barcode": "Barcode",
+        "is_active": "On the menu"
       }
     }
   },
