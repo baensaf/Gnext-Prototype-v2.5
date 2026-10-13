@@ -37,6 +37,7 @@ import { SimulationService } from '../simulation/simulation.service';
 import { CatalogService } from '../catalog/catalog.service';
 import { PriceListService } from '../catalog/price-lists.service';
 import { checkOptionChoices } from '../catalog/option-choices.util';
+import { PriceQuote, readPriceQuote, signPriceQuote } from '../../common/utils/price-quote';
 import { CreditService } from '../customer/credit.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { ReasonCode } from '../../entities/ReasonCode.entity';
@@ -193,6 +194,58 @@ export class OrderService {
       line.item_discount_id = found ? found.id : null;
       await em.save(OrderItem, line);
     }
+  }
+
+  /**
+   * The price of each line as the cashier adds it to the cart: the branch's in-store price of the
+   * item or size, each add-on's price, the tax rate and today's item discount, signed so the order
+   * can keep them when it is sent. An edited line passes its old quote: what it already had (the
+   * same size, the same add-ons) keeps its old price; only what changed is priced now.
+   */
+  async priceQuotes(
+    tenantId: string,
+    branchId: string,
+    lines: Array<{ product_id: string; variant_id?: string; option_item_ids?: string[]; previous?: string }>,
+  ) {
+    const now = new Date();
+    const discounts = this.itemDiscounts
+      ? await this.itemDiscounts.activeFor(tenantId, branchId, lines.map((l) => l.product_id))
+      : new Map<string, { id: string; percent: string }>();
+    const quotes = [];
+    for (const line of lines) {
+      const product = await this.productRepo.findOne({ where: { id: line.product_id, tenant_id: tenantId } });
+      if (!product) throw new NotFoundException(`Product ${line.product_id} not found`);
+      const variant = line.variant_id
+        ? await this.variantRepo.findOne({ where: { id: line.variant_id, tenant_id: tenantId, product_id: product.id } })
+        : null;
+      if (line.variant_id && !variant) throw new BadRequestException(`Variant ${line.variant_id} is not a size of ${product.name}`);
+      const optionIds = [...new Set(line.option_item_ids || [])];
+      const items = optionIds.length ? await this.optionItemRepo.find({ where: { tenant_id: tenantId, id: In(optionIds) } }) : [];
+      if (items.length !== optionIds.length) throw new BadRequestException(`An add-on on ${product.name} is no longer offered`);
+
+      const before = readPriceQuote(line.previous, now);
+      const same = before && before.tenant_id === tenantId && before.branch_id === branchId && before.product_id === product.id ? before : null;
+      const found = discounts.get(product.id);
+      const options: Record<string, string> = {};
+      for (const item of items) options[item.id] = same?.options[item.id] ?? MoneyUtil.format(item.price_delta || '0');
+      const quote: PriceQuote = {
+        tenant_id: tenantId,
+        branch_id: branchId,
+        product_id: product.id,
+        variant_id: variant?.id || null,
+        options,
+        unit_price:
+          same && same.variant_id === (variant?.id || null)
+            ? same.unit_price
+            : await this.priceLists.resolveInStorePrice(tenantId, branchId, product, variant),
+        tax_rate: same ? same.tax_rate : MoneyUtil.format(product.tax_rate || '0', 4),
+        item_discount_percent: same ? same.item_discount_percent : found ? found.percent : '0.00',
+        item_discount_id: same ? same.item_discount_id : found ? found.id : null,
+        quoted_at: same ? same.quoted_at : now.toISOString(),
+      };
+      quotes.push({ ...quote, token: signPriceQuote(quote) });
+    }
+    return quotes;
   }
 
   /**
@@ -668,6 +721,7 @@ export class OrderService {
         variantId: i.variant_id || undefined,
         unitPrice: effectiveUnitPrice,
         quantity: i.quantity,
+        ...(i.tax_rate !== null && i.tax_rate !== undefined ? { taxRate: i.tax_rate } : {}),
         // A line already priced keeps its item discount; one not yet priced gets today's.
         ...(i.item_discount_percent !== null && i.item_discount_percent !== undefined
           ? { itemDiscountPercent: i.item_discount_percent, itemDiscountId: i.item_discount_id ?? null }
@@ -774,6 +828,7 @@ export class OrderService {
               variantId: i.variant_id || undefined,
               unitPrice: effectiveUnitPrice,
               quantity: i.quantity,
+              ...(i.tax_rate !== null && i.tax_rate !== undefined ? { taxRate: i.tax_rate } : {}),
               itemDiscountPercent: i.item_discount_percent ?? null,
               itemDiscountId: i.item_discount_id ?? null,
             };
@@ -2544,9 +2599,22 @@ export class OrderService {
       }
 
       // The price is the branch's in-store price (its price list's, else base), never one the
-      // caller sent: any register token could otherwise set its own price. Orders that keep
-      // the price a channel charged (Snappfood) are written by the simulator, not here.
-      const uPrice = await this.priceLists.resolveInStorePrice(tenantId, order.branch_id, product, variant);
+      // caller sent: any register token could otherwise set its own price. A till line carries
+      // the server's signed quote from when the item was added, and keeps those prices, its tax
+      // rate and its item discount. Orders that keep the price a channel charged (Snappfood) are
+      // written by the simulator, not here.
+      const optionIdsAsked = [...new Set<string>((itemDto.options || []).map((o: any) => o.option_item_id))].sort();
+      const quoted = readPriceQuote(itemDto.price_quote);
+      const quote =
+        quoted &&
+        quoted.tenant_id === tenantId &&
+        quoted.branch_id === order.branch_id &&
+        quoted.product_id === product.id &&
+        quoted.variant_id === (variant?.id || null) &&
+        JSON.stringify(Object.keys(quoted.options).sort()) === JSON.stringify(optionIdsAsked)
+          ? quoted
+          : null;
+      const uPrice = quote ? MoneyUtil.format(quote.unit_price) : await this.priceLists.resolveInStorePrice(tenantId, order.branch_id, product, variant);
       const sub = MoneyUtil.multiply(uPrice, qty);
 
       let modifierUnitDelta = '0.0000';
@@ -2571,7 +2639,11 @@ export class OrderService {
       await this.catalogService.assertLineSellable(em, tenantId, order, product, variant?.id || null, qty, chosen.map((c) => c.optItem));
 
       for (const { optItem, optDto } of chosen) {
-        const delta = optItem.price_delta ? MoneyUtil.format(optItem.price_delta) : '0.0000';
+        const delta = quote
+          ? MoneyUtil.format(quote.options[optItem.id])
+          : optItem.price_delta
+            ? MoneyUtil.format(optItem.price_delta)
+            : '0.0000';
         modifierUnitDelta = MoneyUtil.add(modifierUnitDelta, delta);
         const itemOpt = em.create(OrderItemOption, {
           tenant_id: tenantId,
@@ -2605,6 +2677,9 @@ export class OrderService {
         total_amount: totalLine,
         notes: itemDto.notes || null,
         state: 'ACTIVE',
+        tax_rate: quote ? MoneyUtil.format(quote.tax_rate, 4) : MoneyUtil.format(product.tax_rate || '0', 4),
+        // A quoted line keeps the item discount it was added with; others are priced on send.
+        ...(quote ? { item_discount_percent: quote.item_discount_percent, item_discount_id: quote.item_discount_id } : {}),
       });
       const savedItem = await em.save(OrderItem, orderItem);
 
@@ -2706,7 +2781,7 @@ export class OrderService {
 
     let taxTotal = '0.0000';
     for (const item of items) {
-      const rate = taxRateById.get(item.product_id) || '0.0000';
+      const rate = item.tax_rate ?? (taxRateById.get(item.product_id) || '0.0000');
       // Taxed on what the line sells for after its own item discount.
       const taxable = MoneyUtil.subtract(item.line_total, item.item_discount_total || '0.0000');
       // Each line's tax is rounded to a whole Toman, as in DiscountEvaluationService.

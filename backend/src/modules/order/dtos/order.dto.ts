@@ -61,6 +61,43 @@ export class OrderItemCreateDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  /**
+   * The signed price quote the till got when the item was added (POST /orders/price-quotes).
+   * The line keeps its prices, tax rate and item discount; without a valid one it is priced now.
+   */
+  @IsOptional()
+  @IsString()
+  price_quote?: string;
+}
+
+export class PriceQuoteLineDto {
+  @IsUUID()
+  product_id: string;
+
+  @IsOptional()
+  @IsUUID()
+  variant_id?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('all', { each: true })
+  option_item_ids?: string[];
+
+  /** The line's quote before an edit: add-ons it already had, and its size if unchanged, keep their prices. */
+  @IsOptional()
+  @IsString()
+  previous?: string;
+}
+
+export class PriceQuoteRequestDto {
+  @IsUUID()
+  branch_id: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PriceQuoteLineDto)
+  lines: PriceQuoteLineDto[];
 }
 
 export class OrderCreateDto {
