@@ -261,8 +261,9 @@
       "closeWaiting": "The card charge is still waiting on the terminal. If you close now, the order is marked “Check terminal” in Orders until the charge is answered.",
       "closeAnyway": "Close anyway",
       "stay": "Stay here",
-      "slipLabel": "Card already charged: slip reference",
-      "slipHelp": "Late entry: the card is recorded from its slip and is not sent to the terminal.",
+      "offTerminal": "Already charged on another card reader",
+      "slipLabel": "Slip reference",
+      "slipHelp": "The card is recorded from its slip and is not sent to this till's terminal.",
       "slipRequired": "Enter the slip reference to record the card.",
       "errors": {
         "activeIntent": "A payment on this order is still waiting. Answer it first.",
@@ -278,27 +279,6 @@
         "declined": "The card was declined.",
         "cancelled": "The card payment was cancelled on the terminal.",
         "slipRequired": "Enter the slip reference to record the card."
-      }
-    },
-    "lateEntry": {
-      "switch": "Late entry",
-      "hint": "Already served and paid; rung up now",
-      "dialogTitle": "Late entry",
-      "dialogHelp": "This order is rung up now, in this shift and today's business day. It does not go to the kitchen. A manager's PIN is needed.",
-      "reason": "Reason",
-      "reasonPlaceholder": "Why was it not rung up at the time?",
-      "reasonRequired": "Write the reason.",
-      "servedAt": "About what time was it served? (optional)",
-      "servedFuture": "The time served cannot be later than now.",
-      "continue": "Continue to manager's PIN",
-      "approvalDetails": "Late entry: {{reason}}",
-      "directPayBlocked": "A late entry is paid in the pay window: the card was already charged.",
-      "errors": {
-        "approvalRequired": "A late entry needs a manager's PIN.",
-        "posOnly": "Only an order taken at the till can be a late entry.",
-        "reasonRequired": "Write the reason.",
-        "servedFuture": "The time served cannot be later than now.",
-        "usedElsewhere": "This manager approval was already used for another order. Enter the manager's PIN again."
       }
     },
     "directTerminalPay": "Direct Terminal Pay (PC-POS)",
@@ -480,15 +460,6 @@
       "noCustomer": "No customer",
       "notRecorded": "Not recorded",
       "noCourier": "Not assigned"
-    },
-    "lateEntry": {
-      "chip": "Late entry",
-      "column": "Late entry",
-      "yes": "Late entry",
-      "no": "On time",
-      "reason": "Reason",
-      "servedAt": "Served around",
-      "approvedBy": "Approved by"
     },
     "title": "Orders",
     "searchPlaceholder": "Order or call no., customer, phone, item…",

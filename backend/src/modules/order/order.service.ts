@@ -72,8 +72,6 @@ import { DeliveryZone } from '../../entities/DeliveryZone.entity';
 import { Delivery } from '../../entities/Delivery.entity';
 import { DeliveryEvent } from '../../entities/DeliveryEvent.entity';
 import { Refund } from '../../entities/Refund.entity';
-import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
-import { ApprovalDecision } from '../../entities/ApprovalDecision.entity';
 import { ApprovalService } from '../approval/approval.service';
 import { RefundService } from '../refund/refund.service';
 import {
@@ -83,7 +81,6 @@ import {
   resolveOrderEditDecision,
 } from './order-edit-policy';
 import {
-  LateEntryDto,
   OrderCreateDto,
   OrderUpdateDto,
   OrderQuoteRequestDto,
@@ -463,7 +460,6 @@ export class OrderService {
           ...(order.stateEvents || []).map((e) => e.occurred_by),
           ...auditActors.map((a: any) => a.id),
           order.created_by,
-          order.late_entry_approved_by,
         ]
           .filter((id): id is string => !!id && UUID_PATTERN.test(id)),
       ),
@@ -771,8 +767,6 @@ export class OrderService {
         ? await this.validateDeliveryContext(tenantId, order, em, true)
         : null;
 
-      if (dto.lateEntry) await this.stampLateEntry(em, tenantId, order, dto.lateEntry);
-
       // Check stale quote if version provided
       if (dto.quoteVersion && dto.quoteVersion !== order.quote_version) {
         const freshQuote = await this.evaluateOrderQuote(tenantId, order);
@@ -1010,33 +1004,13 @@ export class OrderService {
         afterData: order,
       });
 
-      if (order.is_late_entry) {
-        await this.auditWriter.write({
-          tenantId,
-          actorType: userId ? 'ADMIN' : 'SYSTEM',
-          actorId: userId,
-          action: 'ORDER_LATE_ENTRY',
-          entityType: 'Order',
-          entityId: order.id,
-          correlationId,
-          details: {
-            reason: order.late_entry_reason,
-            servedAt: order.late_served_at,
-            approvedBy: order.late_entry_approved_by,
-            approvalRequestId: dto.lateEntry?.approvalRequestId,
-          },
-        });
-      }
-
       return await em.findOne(OrderHeader, {
         where: { id: order.id },
         relations: ['items', 'items.options', 'adjustments', 'stateEvents'],
       });
     });
 
-    // A late entry was served long ago: no chit for a kitchen with nothing to cook, and the
-    // customer's receipt prints only when the cashier asks for it.
-    if (this.printQueueService && !res?.is_late_entry) {
+    if (this.printQueueService) {
       try {
         await this.printQueueService.enqueueOrderPrintJobs(tenantId, id, 'KITCHEN_TICKET', false, undefined, userId);
         await this.printCustomerPaperwork(tenantId, id, userId);
@@ -1049,62 +1023,6 @@ export class OrderService {
   }
 
   /**
-   * Marks a draft being sent as a late entry: a forgotten order that was served and paid for,
-   * rung up now. It needs a reason and a manager's PIN (an approved `LATE_ENTRY` request,
-   * which this order then uses up), and it is stamped like any order sent at this moment.
-   */
-  private async stampLateEntry(em: EntityManager, tenantId: string, order: OrderHeader, late: LateEntryDto) {
-    if (order.channel !== 'POS') {
-      throw new BadRequestException({ code: 'LATE_ENTRY_POS_ONLY', title: 'Late Entry', detail: 'Only an order taken at the till can be a late entry.' });
-    }
-    const reason = (late.reason || '').trim();
-    if (!reason) {
-      throw new BadRequestException({ code: 'LATE_ENTRY_REASON_REQUIRED', title: 'Late Entry', detail: 'A late entry needs a reason.' });
-    }
-    let servedAt: Date | null = null;
-    if (late.servedAt) {
-      servedAt = new Date(late.servedAt);
-      // Five minutes of slack for clocks that disagree; later than that has not happened yet.
-      if (Number.isNaN(servedAt.getTime()) || servedAt.getTime() > Date.now() + 5 * 60 * 1000) {
-        throw new BadRequestException({ code: 'LATE_SERVED_IN_FUTURE', title: 'Late Entry', detail: 'The time it was served cannot be in the future.' });
-      }
-    }
-    if (!late.approvalRequestId) {
-      throw new ForbiddenException({
-        statusCode: 403,
-        code: 'APPROVAL_REQUIRED',
-        message: 'A late entry needs a manager PIN',
-      });
-    }
-    await this.approvalService.validateApprovedRequest(tenantId, late.approvalRequestId, 'LATE_ENTRY');
-    // The request was raised before the order existed, so it is tied to this order now: the
-    // lock keeps two orders sent at once from sharing one PIN.
-    const request = await em.findOne(ApprovalRequest, {
-      where: { id: late.approvalRequestId, tenant_id: tenantId },
-      lock: { mode: 'pessimistic_write' },
-    });
-    if (!request || (request.entity_id && request.entity_id !== order.id)) {
-      throw new ForbiddenException({
-        code: 'APPROVAL_FOR_OTHER_ENTITY',
-        message: 'This manager approval was already used for another order',
-      });
-    }
-    if (!request.entity_id) {
-      request.entity_id = order.id;
-      await em.save(ApprovalRequest, request);
-    }
-    const decision = await em.findOne(ApprovalDecision, {
-      where: { tenant_id: tenantId, request_id: request.id, decision: 'APPROVED' },
-      order: { step_number: 'DESC' },
-    });
-
-    order.is_late_entry = true;
-    order.late_entry_reason = reason;
-    order.late_served_at = servedAt;
-    order.late_entry_approved_by = decision?.approver_user_id ?? null;
-  }
-
-  /**
    * The paper that goes with an order once the kitchen has it: a courier slip for a delivery,
    * and the customer's receipt once it is paid for. A receipt printed at the till before the
    * money was taken said "unpaid" on a paid order, so an order paid later gets it from
@@ -1114,8 +1032,6 @@ export class OrderService {
     if (!this.printQueueService) return;
     const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
     if (!order || ['DRAFT', 'PENDING_ACCEPTANCE', 'CANCELLED', 'REJECTED'].includes(order.state)) return;
-    // A late entry gets its receipt on request, not by itself.
-    if (order.is_late_entry) return;
 
     // A Snappfood order the store delivers itself needs the slip too: it is typed AGGREGATOR,
     // and only its expedition says whose rider is coming.

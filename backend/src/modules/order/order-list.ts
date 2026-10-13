@@ -309,14 +309,6 @@ const GRID_FIELDS: Record<string, Record<string, OperatorSql>> = {
   },
   grand_total: numberOperators('o.grand_total'),
   outstanding_total: numberOperators('o.outstanding_total'),
-  // Rung up late (a forgotten order entered with a manager's PIN): `yes` or `no`.
-  is_late_entry: {
-    is: (value) => {
-      if (value === undefined || value === null || value === '') return null;
-      if (value !== 'yes' && value !== 'no') refuse(`Not a value for is_late_entry: ${String(value)}`);
-      return { sql: value === 'yes' ? 'o.is_late_entry = true' : 'o.is_late_entry = false', params: {} };
-    },
-  },
   // Sent while the branch was outside its opening hours: `yes` or `no`.
   after_hours: {
     is: (value) => {

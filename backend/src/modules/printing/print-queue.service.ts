@@ -112,8 +112,6 @@ export class PrintQueueService {
 
     try {
       const order = await this.loadOrder(tenantId, orderId);
-      // A late entry was served before it was rung up: the kitchen has nothing to cook.
-      if (documentType === 'KITCHEN_TICKET' && order.is_late_entry) return [];
       // Voided and replaced lines stay on the order for history, but a reprint that
       // showed them would send the kitchen back to cooking food that was struck off.
       const activeLines = (order.items || []).filter(isActiveLine);
@@ -215,7 +213,6 @@ export class PrintQueueService {
   async enqueueKitchenChangeTicket(tenantId: string, orderId: string, change: KitchenChange, userId?: string): Promise<PrintJob[]> {
     try {
       const order = await this.loadOrder(tenantId, orderId);
-      if (order.is_late_entry) return [];
       const items = order.items || [];
 
       const lines: PrinterBatch['lines'] =

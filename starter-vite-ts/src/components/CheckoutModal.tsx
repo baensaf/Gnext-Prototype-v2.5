@@ -14,6 +14,7 @@ import {
   Dialog,
   Button,
   Divider,
+  Checkbox,
   TextField,
   ButtonBase,
   Typography,
@@ -21,6 +22,7 @@ import {
   DialogContent,
   DialogActions,
   CircularProgress,
+  FormControlLabel,
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
@@ -117,7 +119,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const [creditAvailable, setCreditAvailable] = useState('0');
   // The cashback in the customer's wallet, in rials; the fields start with this, never with debt.
   const [walletHeld, setWalletHeld] = useState('0');
-  // A late entry was charged long ago: its card is recorded from the slip's reference, never sent to the terminal.
+  // The card was already charged on another reader: it is recorded from the slip's reference,
+  // never sent to this till's terminal.
+  const [offTerminal, setOffTerminal] = useState(false);
   const [slipRef, setSlipRef] = useState('');
   // The four boxes, for moving the cursor to the one a label filled.
   const cashInput = useRef<HTMLInputElement>(null);
@@ -143,7 +147,6 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const isFullyPaid = order ? MoneyUtil.isZero(order.due_amount) : false;
   const canUseCredit = !!creditMethod && MoneyUtil.greaterThan(creditAvailable, '0');
   const canUseWallet = !!walletMethod && MoneyUtil.greaterThan(walletHeld, '0');
-  const lateEntry = !!order?.is_late_entry;
   const busy = loading || !!paying;
   // A charge on the terminal that nobody has answered: it comes first, and nothing else is paid.
   const waitingCharges = payments.filter(isWaitingCharge);
@@ -202,6 +205,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   // The change shown is the last cash payment's on this order; the next order starts without it.
   useEffect(() => {
     setChangeDue(null);
+    setOffTerminal(false);
     setSlipRef('');
     setFields(EMPTY);
     changeGiven.current = false;
@@ -386,7 +390,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     }
 
     // The slip's reference is what the charge is found by later.
-    if (lateEntry && MoneyUtil.greaterThan(parts.card, '0') && !slipRef.trim()) {
+    if (offTerminal && MoneyUtil.greaterThan(parts.card, '0') && !slipRef.trim()) {
       setError(t('pos.pay.slipRequired'));
       return;
     }
@@ -404,7 +408,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         const failedCard = payments.find((p) => p.status === 'FAILED' && CARD_KINDS.includes(p.method_kind));
         current = await pay(cardMethod, minOf(parts.card, wholeRials(current.due_amount)), current, {
           replaces: failedCard?.id,
-          slip: lateEntry ? slipRef.trim() : undefined,
+          slip: offTerminal ? slipRef.trim() : undefined,
         });
       }
       await settle(current);
@@ -416,14 +420,14 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   /** Retry on a failed card row: the same charge again, in its place. */
   const retryCard = async (amount: string, replaces: string) => {
     if (!order || busy) return;
-    if (lateEntry && !slipRef.trim()) {
+    if (offTerminal && !slipRef.trim()) {
       setError(t('pos.pay.slipRequired'));
       return;
     }
     setError(null);
     setPaying('card');
     try {
-      await settle(await pay(cardMethod, amount, order, { replaces, slip: lateEntry ? slipRef.trim() : undefined }));
+      await settle(await pay(cardMethod, amount, order, { replaces, slip: offTerminal ? slipRef.trim() : undefined }));
     } finally {
       setPaying(null);
     }
@@ -623,11 +627,31 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                   : t('pos.pay.noCustomer'),
               })}
               {amountField('card', t('pos.pay.card'))}
-              {/* A late entry's card was charged before it was rung up: only the slip's reference is recorded. */}
-              {lateEntry && !isFullyPaid && (
+              {/* A card already charged on another reader (a standalone terminal, or before the order was
+                  rung up): only the slip's reference is recorded, and this till's terminal is not asked. */}
+              {!isFullyPaid && (
+                <FormControlLabel
+                  sx={{ mx: 0, mt: -0.5 }}
+                  disabled={locked}
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={offTerminal}
+                      onChange={(e) => setOffTerminal(e.target.checked)}
+                    />
+                  }
+                  label={
+                    <Typography variant="body2" color="text.secondary">
+                      {t('pos.pay.offTerminal')}
+                    </Typography>
+                  }
+                />
+              )}
+              {offTerminal && !isFullyPaid && (
                 <TextField
                   size="small"
                   fullWidth
+                  autoFocus
                   disabled={locked}
                   label={t('pos.pay.slipLabel')}
                   helperText={t('pos.pay.slipHelp')}
