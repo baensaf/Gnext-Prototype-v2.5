@@ -1,7 +1,6 @@
 import type {
   Product,
   Category,
-  OptionGroup,
   ProductVariant,
   ProductAvailability,
 } from 'src/api/catalogApi';
@@ -56,8 +55,7 @@ import { BulkStopDialog } from './bulk-stop-dialog';
 /** One thing that can be taken off sale: a product, one of its variants, or an add-on. */
 type StopTarget =
   | { kind: 'product'; product: Product }
-  | { kind: 'variant'; product: Product; variant: ProductVariant }
-  | { kind: 'addon'; group: OptionGroup; itemId: string; name: string };
+  | { kind: 'variant'; product: Product; variant: ProductVariant };
 
 /** Snappfood's three stock states: available, off until the next shift, off until further notice. */
 type StopMode = 'AVAILABLE' | 'NEXT_SHIFT' | 'MANUAL';
@@ -81,7 +79,6 @@ export function AvailabilityPage() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [optionGroups, setOptionGroups] = useState<OptionGroup[]>([]);
   const [availabilities, setAvailabilities] = useState<ProductAvailability[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -104,16 +101,14 @@ export function AvailabilityPage() {
 
   const loadData = useCallback(async () => {
     try {
-      const [pList, aList, cList, gList] = await Promise.all([
+      const [pList, aList, cList] = await Promise.all([
         catalogApi.getProducts(),
         catalogApi.getAvailabilities(branchParam),
         catalogApi.getCategories().catch(() => [] as Category[]),
-        catalogApi.getOptionGroups().catch(() => [] as OptionGroup[]),
       ]);
       setProducts(pList);
       setCategories(cList);
       setAvailabilities(aList);
-      setOptionGroups(gList);
       setError(null);
     } catch (err: any) {
       setError(err.detail || t('catalog.availabilityPage.errors.loadFailed'));
@@ -128,8 +123,7 @@ export function AvailabilityPage() {
   const stopFor = (tg: StopTarget, ch: '' | 'SNAPPFOOD' = '') =>
     availabilities.find((a) => {
       if (!isLive(a) || (a.channel || '') !== ch) return false;
-      if (tg.kind === 'addon') return a.option_item_id === tg.itemId;
-      if (a.option_item_id || a.product_id !== tg.product.id) return false;
+      if (a.product_id !== tg.product.id) return false;
       return tg.kind === 'variant' ? a.variant_id === tg.variant.id : !a.variant_id;
     });
 
@@ -153,7 +147,6 @@ export function AvailabilityPage() {
   };
 
   const targetKey = (tg: StopTarget) => {
-    if (tg.kind === 'addon') return { optionItemId: tg.itemId };
     if (tg.kind === 'variant') return { productId: tg.product.id, variantId: tg.variant.id };
     return { productId: tg.product.id };
   };
@@ -223,7 +216,6 @@ export function AvailabilityPage() {
   );
 
   const targetName = (tg: StopTarget) => {
-    if (tg.kind === 'addon') return tg.name;
     if (tg.kind === 'variant') return `${tg.product.name} — ${tg.variant.name}`;
     return tg.product.name;
   };
@@ -376,46 +368,6 @@ export function AvailabilityPage() {
         </Table>
       </TableContainer>
 
-      {optionGroups.some((g) => (g.items || []).length > 0) && (
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-            {t('catalog.availabilityPage.addonsTitle', 'Add-ons')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t(
-              'catalog.availabilityPage.addonsSubtitle',
-              'An add-on taken off here is off on every product that offers it.'
-            )}
-          </Typography>
-          <TableContainer component={Paper} variant="outlined">
-            <Table size="small">
-              <TableBody>
-                {optionGroups.map((g) =>
-                  (g.items || []).map((item, index) => {
-                    const tg: StopTarget = { kind: 'addon', group: g, itemId: item.id, name: item.name };
-                    const stop = stopFor(tg);
-                    return (
-                      <TableRow key={item.id}>
-                        <TableCell sx={{ width: '30%' }}>
-                          {index === 0 && (
-                            <Typography variant="subtitle2" color="text.secondary">
-                              {g.name}
-                            </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>{item.name}</TableCell>
-                        <TableCell>{statusChip(stop)}</TableCell>
-                        <TableCell align="right">{changeButton(tg)}</TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
-      )}
-
       <Dialog open={!!target} onClose={() => setTarget(null)} maxWidth="sm" fullWidth>
         <DialogTitle>
           {t('catalog.availabilityPage.changeTitle', {
@@ -432,8 +384,7 @@ export function AvailabilityPage() {
               })}
             </Alert>
 
-            {/* Add-ons are stopped everywhere only; the Snappfood sheet lists dishes. */}
-            {target && target.kind !== 'addon' && (
+            {target && (
               <ToggleButtonGroup
                 exclusive
                 size="small"

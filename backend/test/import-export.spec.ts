@@ -36,7 +36,11 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
     customerRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     productRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     categoryRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
-    dataSource = { transaction: jest.fn((cb) => cb({ findOne: jest.fn(), create: jest.fn(), save: jest.fn(), query: jest.fn() })) };
+    dataSource = {
+      transaction: jest.fn((cb) => cb({ findOne: jest.fn(), create: jest.fn(), save: jest.fn(), query: jest.fn() })),
+      // The chain's categories, for checking the category code of each product row.
+      getRepository: jest.fn(() => ({ find: jest.fn().mockResolvedValue([{ code: 'CAT-A' }]) })),
+    };
     auditWriter = { write: jest.fn().mockResolvedValue(true) };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -147,7 +151,7 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
         { header: 'نام کالا', mappedField: 'name_fa', confidence: 100 },
         { header: 'قیمت', mappedField: 'base_price', confidence: 100 },
         { header: 'کد کالا', mappedField: 'code', confidence: 100 },
-        { header: 'English Title', mappedField: 'name_en', confidence: 100 },
+        { header: 'English Title', mappedField: null, confidence: 0 },
         { header: 'Unknown Column', mappedField: null, confidence: 0 },
       ]);
     });
@@ -160,16 +164,33 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
       jobRepo.findOne.mockResolvedValue(job);
 
       const rows = [
-        { row_number: 1, raw_data: { Name: 'Burger', Price: '250000' } },
-        { row_number: 2, raw_data: { Name: '', Price: '-5' } },
+        { row_number: 1, raw_data: { Name: 'Burger', Price: '250000', Cat: 'CAT-A' } },
+        { row_number: 2, raw_data: { Name: '', Price: '-5', Cat: 'CAT-A' } },
       ];
       rowRepo.find.mockResolvedValue(rows);
 
-      const validatedJob = await service.validateJob('job-1', { Name: 'name_fa', Price: 'base_price' });
+      const validatedJob = await service.validateJob('job-1', { Name: 'name_fa', Price: 'base_price', Cat: 'category_code' });
 
       expect(validatedJob.valid_rows).toBe(1);
       expect(validatedJob.error_rows).toBe(1);
       expect(validatedJob.error_summary).toHaveLength(2); // Name required & negative price
+    });
+
+    it('needs a known category code, and refuses two rows for the same product', async () => {
+      jobRepo.findOne.mockResolvedValue({ id: 'job-1', entity_type: 'PRODUCTS', status: 'STAGED' });
+      rowRepo.find.mockResolvedValue([
+        { row_number: 1, raw_data: { Name: 'Burger', Price: '1', Cat: 'CAT-A', Code: 'B1' } },
+        { row_number: 2, raw_data: { Name: 'Big Burger', Price: '1', Cat: 'CAT-A', Code: 'b1' } },
+        { row_number: 3, raw_data: { Name: 'Fries', Price: '1', Cat: 'CAT-X', Code: '' } },
+        { row_number: 4, raw_data: { Name: 'Tea', Price: '1', Cat: '', Code: '' } },
+      ]);
+      const job = await service.validateJob('job-1', { Name: 'name_fa', Price: 'base_price', Cat: 'category_code', Code: 'code' });
+      expect(job.valid_rows).toBe(1);
+      expect(job.error_summary.map((e: any) => e.message)).toEqual([
+        'Same product as row 1',
+        'No category has the code CAT-X',
+        'Category Code is required',
+      ]);
     });
   });
 
@@ -180,6 +201,7 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
         find: jest.fn().mockResolvedValue(existing),
         create: jest.fn((_e: any, dto: any) => ({ ...dto })),
         save: jest.fn((a: any, b?: any) => Promise.resolve(b ?? a)),
+        getRepository: jest.fn(() => ({ maximum: jest.fn().mockResolvedValue(3) })),
       };
       dataSource.transaction.mockImplementation((cb: any) => cb(manager));
       jobRepo.findOne.mockResolvedValue({ id: 'job-p', tenant_id: 't-1', entity_type: 'PRODUCTS' });
@@ -190,22 +212,31 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
 
     it('passes validation with no code column', async () => {
       jobRepo.findOne.mockResolvedValue({ id: 'job-p', entity_type: 'PRODUCTS', status: 'STAGED' });
-      rowRepo.find.mockResolvedValue([{ row_number: 1, raw_data: { Name: 'Latte', Price: '90000' } }]);
-      const job = await service.validateJob('job-p', { Name: 'name_fa', Price: 'base_price' });
+      rowRepo.find.mockResolvedValue([{ row_number: 1, raw_data: { Name: 'Latte', Price: '90000', Cat: 'CAT-A' } }]);
+      const job = await service.validateJob('job-p', { Name: 'name_fa', Price: 'base_price', Cat: 'category_code' });
       expect(job.valid_rows).toBe(1);
     });
 
     it('updates the product of the same name instead of adding a second one', async () => {
       const latte = { id: 'p-latte', name: 'Latte', category_id: 'cat-default', base_price: '80000.0000', code: null };
-      const { result, manager } = await runRows([{ name_fa: ' latte ', base_price: '90000' }], [latte]);
+      const { result, manager } = await runRows([{ name_fa: ' latte ', base_price: '90000', category_code: 'cat-a' }], [latte]);
       expect(result.importedCount).toBe(1);
       expect(manager.create).not.toHaveBeenCalledWith(Product, expect.anything());
-      expect(latte.base_price).toBe('90000.0000');
+      // Typed in Toman, kept in Rial.
+      expect(latte.base_price).toBe('900000.0000');
     });
 
-    it('creates a new product, with no code, when no name matches', async () => {
-      const { manager } = await runRows([{ name_fa: 'Mocha', base_price: '95000' }], []);
-      expect(manager.create).toHaveBeenCalledWith(Product, expect.objectContaining({ name: 'Mocha', code: null }));
+    it('creates a new product, with no code, when no name matches, at the chain default tax', async () => {
+      const { manager } = await runRows([{ name_fa: 'Mocha', base_price: '95000', category_code: 'CAT-A', barcode: '626' }], []);
+      expect(manager.create).toHaveBeenCalledWith(
+        Product,
+        expect.objectContaining({ name: 'Mocha', code: null, base_price: '950000.0000', tax_rate: '0.1000', barcode: '626' }),
+      );
+    });
+
+    it('takes the tax rate from the file as a percent', async () => {
+      const { manager } = await runRows([{ name_fa: 'Soda', base_price: '30000', category_code: 'CAT-A', tax_rate: '9' }], []);
+      expect(manager.create).toHaveBeenCalledWith(Product, expect.objectContaining({ tax_rate: '0.0900' }));
     });
 
     it('refuses a row whose name is two products, rather than guessing', async () => {
@@ -213,8 +244,9 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
         { id: 'p-1', name: 'Tea', category_id: 'cat-a' },
         { id: 'p-2', name: 'Tea', category_id: 'cat-b' },
       ];
-      const { result } = await runRows([{ name_fa: 'Tea', base_price: '40000' }], twins);
-      expect(result).toEqual({ importedCount: 0, failedCount: 1 });
+      await expect(runRows([{ name_fa: 'Tea', base_price: '40000', category_code: 'CAT-A' }], twins)).rejects.toThrow(
+        'Row 1: 2 products in this category are named "Tea"; give this row a product code. Nothing from this file was imported.',
+      );
     });
   });
 

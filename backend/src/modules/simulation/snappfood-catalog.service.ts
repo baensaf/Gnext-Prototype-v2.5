@@ -469,12 +469,11 @@ export class SnappfoodCatalogService {
       const exists = row.entity_type === 'PRODUCT' ? allProducts.some((p) => p.id === row.entity_id) : variants.some((v) => v.id === row.entity_id);
       if (gone && exists) toggles.push({ id: row.external_id, active: false, disable: false });
     }
-    // Add-ons stopped at the branch. The annex has no topping toggle; Snappfood treats toppings as
-    // products (their ids may not overlap), so they go through the same call. To confirm with Snappfood.
-    const addonStops = (await this.catalog.getUnavailableNow(tenantId, branchId)).optionItems;
+    // Add-ons are never stopped in Gnext, so every topping is sent as on sale. The annex has no
+    // topping toggle; Snappfood treats toppings as products, so they go through the same call.
     const toppingToggles = items
       .filter((i) => usedGroups.some((g) => g.id === i.option_group_id))
-      .map((i) => (addonStops.has(i.id) ? { id: idOf('OPTION_ITEM', i.id), active: true, disable: true, disableUntil: FAR_FUTURE } : { id: idOf('OPTION_ITEM', i.id), active: true, disable: false }));
+      .map((i) => ({ id: idOf('OPTION_ITEM', i.id), active: true, disable: false }));
 
     const menuToggles = categories
       .filter((c) => !c.is_active && ids.get(`CATEGORY:${c.id}`)?.synced_at[branchId])
@@ -622,7 +621,6 @@ export class SnappfoodCatalogService {
     const ours = await this.sellables(tenantId);
     if (!ours.length) return null;
     const sheet = await this.catalog.getChannelPriceSheet(tenantId, SNAPPFOOD, branchId);
-    const off = branchId ? await this.catalog.getUnavailableNow(tenantId, branchId) : null;
     const onSale = ours.filter((s) => {
       const row = sheet.items.find((i) => i.product_id === s.product.id && (i.variant_id || null) === (s.variant?.id || null));
       return row && !row.off && MoneyUtil.greaterThan(row.price, '0');
@@ -638,7 +636,7 @@ export class SnappfoodCatalogService {
       const price = toman(row.price);
       const offered = links
         .filter((l) => l.product_id === s.product.id)
-        .flatMap((l) => items.filter((i) => i.option_group_id === l.option_group_id && !(l.excluded_item_ids || []).includes(i.id) && !off?.optionItems.has(i.id)));
+        .flatMap((l) => items.filter((i) => i.option_group_id === l.option_group_id && !(l.excluded_item_ids || []).includes(i.id)));
       // A required group must be filled, as Snappfood's app makes the guest do; otherwise a topping now and then.
       const required = groups.filter((g) => g.min_selection > 0 && links.some((l) => l.product_id === s.product.id && l.option_group_id === g.id));
       const chosen = [

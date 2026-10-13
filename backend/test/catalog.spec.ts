@@ -226,13 +226,10 @@ describe('CatalogService (Unit)', () => {
         await expect(service.assertLineSellable(manager, 't-1', order, { id: 'p-1', name: 'Soda', max_per_order: 10 } as any, null, '2', [])).rejects.toThrow('At most 10');
       });
 
-      it('refuses an add-on this product leaves out, or one that is off sale', async () => {
+      it('refuses an add-on this product leaves out', async () => {
         const chili = { id: 'opt-chili', name: 'Chili shot' } as any;
         const leftOut: any = em({ links: [{ excluded_item_ids: ['opt-chili'] }] });
         await expect(service.assertLineSellable(leftOut, 't-1', order, { id: 'p-1', name: 'Sandwich' } as any, null, '1', [chili])).rejects.toThrow('not offered');
-
-        availRepo.find.mockResolvedValue([{ option_item_id: 'opt-chili', is_suspended: true, suspended_until: null, reason: 'Out' }]);
-        await expect(service.assertLineSellable(em() as any, 't-1', order, { id: 'p-1', name: 'Sandwich' } as any, null, '1', [chili])).rejects.toThrow('not available');
       });
     });
   });
@@ -346,7 +343,7 @@ describe('CatalogService (Unit)', () => {
   });
 
   it("will not let a branch lift head office's chain-wide stop", async () => {
-    const chainWide = { product_id: 'p-1', variant_id: null, option_item_id: null, branch_id: null, is_suspended: true, suspended_until: null };
+    const chainWide = { product_id: 'p-1', variant_id: null, branch_id: null, is_suspended: true, suspended_until: null };
     availRepo.findOne.mockImplementation(({ where }: any) => Promise.resolve(where.branch_id === 'b-1' ? null : chainWide));
     await expect(service.resumeProduct('t-1', 'p-1', 'b-1')).rejects.toMatchObject({ response: expect.objectContaining({ code: 'CHAIN_WIDE_STOP' }) });
   });

@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 
 import { tenantApi } from 'src/api/tenantApi';
+import { settingsApi } from 'src/api/settingsApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
@@ -34,6 +35,8 @@ export function GeneralSettingsPage() {
   const [tenantName, setTenantName] = useState(tenant?.name || 'Gnext Prototype');
   const [defaultLocale, setDefaultLocale] = useState(tenant?.defaultLocale || 'fa');
   const [timeZone, setTimeZone] = useState(tenant?.timeZone || 'Asia/Tehran');
+  // The tax rate a new product starts with, in percent. Existing products keep their own.
+  const [defaultTax, setDefaultTax] = useState('10');
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -46,6 +49,9 @@ export function GeneralSettingsPage() {
         if (profile.default_locale || profile.defaultLocale) setDefaultLocale(profile.default_locale || profile.defaultLocale);
         if (profile.time_zone || profile.timeZone) setTimeZone(profile.time_zone || profile.timeZone);
       }
+      const scoped = await settingsApi.getScopedSettings();
+      const rate = scoped.groups?.CATALOG?.value?.default_tax_rate;
+      if (rate !== undefined && rate !== null) setDefaultTax(String(Number(rate)));
     } catch (err: any) {
       setError(err?.response?.data?.message || err.detail || t('settings.generalPage.loadError', 'Failed to load settings'));
     }
@@ -67,6 +73,17 @@ export function GeneralSettingsPage() {
         await fetchMe().catch(() => {});
       }
       setSuccess(t('settings.generalPage.saveSuccess', 'Tenant settings updated successfully'));
+      setError(null);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err.detail || t('settings.generalPage.updateError', 'Failed to update settings'));
+    }
+  };
+
+  const handleSaveTax = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await settingsApi.updateSetting('CATALOG', { default_tax_rate: defaultTax || '0' });
+      setSuccess(t('settings.generalPage.taxSaved', 'Default tax rate saved. New products start with it.'));
       setError(null);
     } catch (err: any) {
       setError(err?.response?.data?.message || err.detail || t('settings.generalPage.updateError', 'Failed to update settings'));
@@ -166,6 +183,35 @@ export function GeneralSettingsPage() {
           </Card>
         </Grid>
 
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+            <CardContent>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
+                {t('settings.generalPage.menuDefaults', 'Menu defaults')}
+              </Typography>
+              <form onSubmit={handleSaveTax}>
+                <Stack spacing={2.5}>
+                  <TextField
+                    type="number"
+                    label={t('settings.generalPage.defaultTax', 'Default tax rate (%)')}
+                    helperText={t(
+                      'settings.generalPage.defaultTaxHelp',
+                      'A new product starts with this rate. Changing it does not change existing products.'
+                    )}
+                    value={defaultTax}
+                    onChange={(e) => setDefaultTax(e.target.value)}
+                    disabled={!isHeadOffice}
+                    slotProps={{ htmlInput: { min: 0, max: 100, step: 'any', dir: 'ltr' } }}
+                    fullWidth
+                  />
+                  <Button type="submit" variant="contained" startIcon={<SaveIcon />} disabled={!isHeadOffice} sx={{ fontWeight: 'bold' }}>
+                    {t('common.save', 'Save')}
+                  </Button>
+                </Stack>
+              </form>
+            </CardContent>
+          </Card>
+        </Grid>
       </Grid>
     </Box>
   );

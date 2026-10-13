@@ -9,6 +9,7 @@ import { Category } from '../../entities/Category.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { seedDemoTradingDay } from '../../seeds/demo-trading-day';
+import { defaultTaxRate } from '../../common/utils/default-tax';
 
 export interface AutoMapResult {
   header: string;
@@ -19,18 +20,16 @@ export interface AutoMapResult {
 const FIELD_DICTIONARIES: Record<ImportEntityType, Record<string, string[]>> = {
   PRODUCTS: {
     code: ['code', 'product code', 'sku', 'کد کالا', 'شناسه محصول', 'کد'],
-    name_fa: ['name_fa', 'name (fa)', 'persian name', 'title', 'name', 'نام فارسی', 'نام کالا', 'عنوان'],
-    name_en: ['name_en', 'name (en)', 'english name', 'english title', 'title en', 'نام انگلیسی'],
+    name_fa: ['name_fa', 'name (fa)', 'persian name', 'title', 'name', 'نام فارسی', 'نام کالا', 'نام', 'عنوان'],
     category_code: ['category_code', 'category', 'group', 'category code', 'کد دسته بندی', 'دسته بندی'],
-    base_price: ['base_price', 'price', 'cost', 'base price', 'قیمت پایه', 'قیمت'],
-    is_active: ['is_active', 'status', 'active', 'وضعیت', 'فعال'],
+    base_price: ['base_price', 'price', 'cost', 'base price', 'price (toman)', 'قیمت پایه', 'قیمت'],
+    tax_rate: ['tax_rate', 'tax', 'tax rate', 'vat', 'مالیات', 'نرخ مالیات'],
+    barcode: ['barcode', 'bar code', 'بارکد'],
+    is_active: ['is_active', 'status', 'active', 'on the menu', 'وضعیت', 'فعال'],
   },
   CATEGORIES: {
     code: ['code', 'category code', 'کد دسته بندی', 'کد'],
-    name_fa: ['name_fa', 'title', 'name', 'نام فارسی', 'نام دسته بندی', 'عنوان'],
-    name_en: ['name_en', 'title en', 'english name', 'نام انگلیسی'],
-    sort_order: ['sort_order', 'order', 'sort', 'ترتیب'],
-    is_active: ['is_active', 'status', 'active', 'وضعیت', 'فعال'],
+    name_fa: ['name_fa', 'title', 'name', 'نام فارسی', 'نام دسته بندی', 'عنوان دسته', 'عنوان'],
   },
 };
 
@@ -344,6 +343,11 @@ export class ImportExportService {
     const errorSummary: Array<{ row: number; column: string; message: string }> = [];
 
     const updatedRows: ImportRow[] = [];
+    // Two rows that would land on the same record are both refused, so row order never decides.
+    const seen = new Map<string, number>();
+    const knownCategories = new Set(
+      (await this.dataSource.getRepository(Category).find({ where: { tenant_id: job.tenant_id } })).map((c) => c.code.toUpperCase()),
+    );
 
     for (const r of rows) {
       const errors: string[] = [];
@@ -369,6 +373,19 @@ export class ImportExportService {
       if (job.entity_type === 'PRODUCTS') {
         if (parsedData.code && String(parsedData.code).trim().length > 32) errors.push('Product Code is at most 32 characters');
         if (!parsedData.name_fa && !parsedData.name) errors.push('Product Name is required');
+        const categoryCode = String(parsedData.category_code || '').trim().toUpperCase();
+        if (!categoryCode) errors.push('Category Code is required');
+        else if (!knownCategories.has(categoryCode)) errors.push(`No category has the code ${categoryCode}`);
+        if (parsedData.tax_rate !== undefined && parsedData.tax_rate !== '') {
+          if (!MoneyUtil.isValid(parsedData.tax_rate) || MoneyUtil.lessThan(parsedData.tax_rate, '0') || MoneyUtil.greaterThan(parsedData.tax_rate, '100')) {
+            errors.push('Tax rate is a percent from 0 to 100');
+          }
+        }
+        const code = String(parsedData.code || '').trim().toUpperCase();
+        const name = String(parsedData.name_fa || parsedData.name || '').trim().toLowerCase();
+        const key = code ? `code:${code}` : `name:${categoryCode}:${name}`;
+        if (seen.has(key)) errors.push(`Same product as row ${seen.get(key)}`);
+        else seen.set(key, r.row_number);
         if (parsedData.base_price === undefined || parsedData.base_price === '') {
           errors.push('Base price must be a valid number');
         } else {
@@ -384,6 +401,9 @@ export class ImportExportService {
       } else if (job.entity_type === 'CATEGORIES') {
         if (!parsedData.code) errors.push('Category Code is required');
         if (!parsedData.name_fa && !parsedData.name) errors.push('Category Name is required');
+        const key = String(parsedData.code || '').trim().toUpperCase();
+        if (key && seen.has(key)) errors.push(`Same category as row ${seen.get(key)}`);
+        else if (key) seen.set(key, r.row_number);
       }
 
       if (errors.length === 0) {
@@ -435,46 +455,48 @@ export class ImportExportService {
     const validRows = await this.rowRepo.find({ where: { job_id: jobId, status: 'VALID' } });
 
     let importedCount = 0;
-    let failedCount = 0;
+    const failedCount = 0;
+    let failedRow: ImportRow | null = null;
 
-    await this.dataSource.transaction(async (manager) => {
-      for (const row of validRows) {
-        try {
+    // All or nothing: a row that fails to save rolls back the whole file and names the row.
+    try {
+      await this.dataSource.transaction(async (manager) => {
+        const tenantId = job.tenant_id;
+        const taxDefault = await defaultTaxRate(manager, tenantId);
+        let lastCategoryOrder =
+          (await manager.getRepository(Category).maximum('sort_order', { tenant_id: tenantId })) ?? 0;
+
+        for (const row of validRows) {
+          failedRow = row;
           const data = row.parsed_data || {};
-          const tenantId = job.tenant_id;
 
           if (job.entity_type === 'PRODUCTS') {
             const code = String(data.code ?? '').trim().toUpperCase() || null;
             const isActive = data.is_active === 'false' || data.is_active === '0' ? false : true;
-            const priceStr = MoneyUtil.format(data.base_price || '0', 4);
-            const productName = String(data.name_fa || data.name_en || data.name || 'Imported Product').trim();
+            // Prices are typed in Toman and kept in Rial.
+            const priceStr = MoneyUtil.multiply(data.base_price || '0', '10');
+            const taxRate = data.tax_rate !== undefined && data.tax_rate !== '' ? MoneyUtil.divide(data.tax_rate, '100') : null;
+            const barcode = String(data.barcode ?? '').trim() || null;
+            const productName = String(data.name_fa || data.name || '').trim();
 
-            let catId: string | null = null;
-            if (data.category_code) {
-              const cat = await manager.findOne(Category, { where: { tenant_id: tenantId, code: data.category_code } });
-              if (cat) catId = cat.id;
-            }
+            const cat = await manager.findOne(Category, {
+              where: { tenant_id: tenantId, code: Raw((c) => `UPPER(${c}) = :code`, { code: String(data.category_code).trim().toUpperCase() }) },
+            });
+            if (!cat) throw new Error(`No category has the code ${data.category_code}`);
 
-            // The code finds the product when the row has one. Without it the name does: the chain
-            // has one menu, so a name is one product, or one per category at most.
+            // The code finds the product when the row has one. Without it, the same name in the
+            // same category does; otherwise the row adds a product.
             let product: Product | null;
             if (code) {
               product = await manager.findOne(Product, { where: { tenant_id: tenantId, code: Raw((c) => `UPPER(${c}) = :code`, { code }) } });
             } else {
               const named = await manager.find(Product, {
-                where: { tenant_id: tenantId, name: Raw((n) => `LOWER(TRIM(${n})) = :name`, { name: productName.toLowerCase() }) },
+                where: { tenant_id: tenantId, category_id: cat.id, name: Raw((n) => `LOWER(TRIM(${n})) = :name`, { name: productName.toLowerCase() }) },
               });
-              const inCategory = catId ? named.filter((p) => p.category_id === catId) : [];
-              const matches = inCategory.length ? inCategory : named;
-              if (matches.length > 1) {
-                throw new Error(`${matches.length} products are named "${productName}"; give this row a product code or a category`);
+              if (named.length > 1) {
+                throw new Error(`${named.length} products in this category are named "${productName}"; give this row a product code`);
               }
-              product = matches[0] ?? null;
-            }
-
-            if (!catId) {
-              const defaultCat = await manager.findOne(Category, { where: { tenant_id: tenantId } });
-              catId = defaultCat?.id || null;
+              product = named[0] ?? null;
             }
 
             if (!product) {
@@ -482,34 +504,32 @@ export class ImportExportService {
                 tenant_id: tenantId,
                 code,
                 name: productName,
-                category_id: catId || undefined,
+                category_id: cat.id,
                 base_price: priceStr,
+                tax_rate: taxRate ?? taxDefault,
+                barcode,
                 is_active: isActive,
               });
             } else {
               product.name = productName;
-              if (catId) product.category_id = catId;
+              product.category_id = cat.id;
               product.base_price = priceStr;
+              if (taxRate !== null) product.tax_rate = taxRate;
+              if (barcode !== null) product.barcode = barcode;
               product.is_active = isActive;
             }
             await manager.save(product);
           } else if (job.entity_type === 'CATEGORIES') {
-            let category = await manager.findOne(Category, { where: { tenant_id: tenantId, code: data.code } });
-            const isActive = data.is_active === 'false' || data.is_active === '0' ? false : true;
-            const categoryName = data.name_fa || data.name_en || data.name || 'Imported Category';
+            const code = String(data.code).trim().toUpperCase();
+            let category = await manager.findOne(Category, { where: { tenant_id: tenantId, code: Raw((c) => `UPPER(${c}) = :code`, { code }) } });
+            const categoryName = String(data.name_fa || data.name || '').trim();
 
             if (!category) {
-              category = manager.create(Category, {
-                tenant_id: tenantId,
-                code: data.code,
-                name: categoryName,
-                sort_order: Number(data.sort_order || 0),
-                is_active: isActive,
-              });
+              // A new category goes last.
+              lastCategoryOrder += 1;
+              category = manager.create(Category, { tenant_id: tenantId, code, name: categoryName, sort_order: lastCategoryOrder, is_active: true });
             } else {
               category.name = categoryName;
-              category.sort_order = Number(data.sort_order || category.sort_order);
-              category.is_active = isActive;
             }
             await manager.save(category);
           }
@@ -517,14 +537,18 @@ export class ImportExportService {
           row.status = 'IMPORTED';
           await manager.save(row);
           importedCount++;
-        } catch (err) {
-          failedCount++;
-          row.status = 'INVALID';
-          row.errors = [(err as Error).message];
-          await manager.save(row);
         }
-      }
-    });
+        failedRow = null;
+      });
+    } catch (err) {
+      const where = failedRow ? `Row ${(failedRow as ImportRow).row_number}: ` : '';
+      job.status = 'FAILED';
+      job.error_summary = [
+        { row: failedRow ? (failedRow as ImportRow).row_number : 0, column: job.entity_type, message: (err as Error).message },
+      ];
+      await this.jobRepo.save(job);
+      throw new BadRequestException(`${where}${(err as Error).message}. Nothing from this file was imported.`);
+    }
 
     job.status = 'COMPLETED';
     await this.jobRepo.save(job);

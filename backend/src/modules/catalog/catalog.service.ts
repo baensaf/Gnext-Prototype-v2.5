@@ -21,11 +21,11 @@ import { inStorePrice, priceKey } from '../../common/utils/price-list.util';
 import { activeItemDiscounts, discountedPrice } from '../../common/utils/item-discount.util';
 import { addDays } from '../../common/utils/business-day';
 import { loadBusinessClock } from '../../common/utils/business-clock';
+import { defaultTaxRate } from '../../common/utils/default-tax';
 
-/** What besides a whole product a stop can be on. */
+/** What besides a whole product a stop can be on: one of its sizes. Add-ons are never stopped. */
 export interface StopTarget {
   variantId?: string;
-  optionItemId?: string;
   /**
    * Off on one sales channel only (e.g. SNAPPFOOD: stopped on Snappfood, still sold in
    * store). Empty means off everywhere.
@@ -365,7 +365,7 @@ export class CatalogService {
       base_price: MoneyUtil.format(data.base_price || '0'),
       barcode: data.barcode || null,
       description: data.description || null,
-      tax_rate: data.tax_rate || '0.1000',
+      tax_rate: data.tax_rate || (await defaultTaxRate(this.prodRepo.manager, tenantId)),
       image_asset_id: data.image_asset_id || null,
       is_active: true,
     });
@@ -1036,15 +1036,14 @@ export class CatalogService {
     return { resumed, chain_wide: chainWide };
   }
 
-  /** What a stop is on: a whole product, one of its variants, or an add-on item; everywhere or on one channel. */
+  /** What a stop is on: a whole product or one of its sizes; everywhere or on one channel. */
   private stopKey(productId: string | undefined, target: StopTarget) {
     const channel = target.channel ? String(target.channel).toUpperCase() : null;
     if (channel && !STOP_CHANNELS.includes(channel)) {
       throw new BadRequestException(`An item can be stopped everywhere or on ${STOP_CHANNELS.join(', ')} only`);
     }
-    if (target.optionItemId) return { product_id: null, variant_id: null, option_item_id: target.optionItemId, channel };
-    if (!productId) throw new BadRequestException('Say which product, variant or add-on to take off sale');
-    return { product_id: productId, variant_id: target.variantId || null, option_item_id: null, channel };
+    if (!productId) throw new BadRequestException('Say which product or size to take off sale');
+    return { product_id: productId, variant_id: target.variantId || null, channel };
   }
 
   // A null in a TypeORM where is ignored, not matched, so each empty key is IsNull() explicitly.
@@ -1053,7 +1052,6 @@ export class CatalogService {
       tenant_id: tenantId,
       product_id: key.product_id ?? IsNull(),
       variant_id: key.variant_id ?? IsNull(),
-      option_item_id: key.option_item_id ?? IsNull(),
       branch_id: branchId || IsNull(),
       channel: key.channel ?? IsNull(),
     };
@@ -1071,13 +1069,6 @@ export class CatalogService {
       row.is_suspended &&
       (!row.suspended_until || new Date(row.suspended_until) > at)
     );
-  }
-
-  /** Whether an add-on is off sale at a branch. An add-on stop covers every product it is on. */
-  async getOptionItemStop(tenantId: string, optionItemId: string, branchId?: string, at: Date = new Date()) {
-    const rows = await this.availRepo.find({ where: { tenant_id: tenantId, option_item_id: optionItemId } });
-    const active = rows.find((row) => this.stopIsLive(row, branchId, at));
-    return { isSuspended: !!active, reason: active?.reason || null, suspendedUntil: active?.suspended_until || null };
   }
 
   // Add-on groups: editing what the group and its items are
@@ -1237,8 +1228,8 @@ export class CatalogService {
 
   /**
    * Every rule on what may be sold, for a whole basket checked before anything is saved: the
-   * kiosk builds its order in one go rather than line by line. Stops on the product, its size
-   * or an add-on and the per-order cap, with lines of the same item
+   * kiosk builds its order in one go rather than line by line. Stops on the product or its size
+   * and the per-order cap, with lines of the same item
    * added together.
    */
   async assertBasketSellable(
@@ -1252,10 +1243,6 @@ export class CatalogService {
     for (const line of lines) {
       const stop = await this.getSuspension(tenantId, line.product.id, branchId, at, line.variantId);
       if (stop.isSuspended) throw refuse('PRODUCT_SUSPENDED', `${line.product.name} is not available now${stop.reason ? ` (${stop.reason})` : ''}`, line.product.id);
-      for (const item of line.optionItems) {
-        const itemStop = await this.getOptionItemStop(tenantId, item.id, branchId, at);
-        if (itemStop.isSuspended) throw refuse('OPTION_SUSPENDED', `${item.name} is not available now`);
-      }
     }
 
     const byProduct = new Map<string, { product: Product; quantity: number }>();
@@ -1273,19 +1260,18 @@ export class CatalogService {
 
   /**
    * What a self-service menu should not offer right now at a branch: whole products that are
-   * stopped, and the sizes and add-ons that are.
+   * stopped, and the sizes that are.
    */
   async getUnavailableNow(tenantId: string, branchId?: string, at: Date = new Date()) {
     const live = (await this.getAvailabilities(tenantId, branchId)).filter((row) => this.stopIsLive(row, branchId, at));
     const products = new Set(live.filter((r) => r.product_id && !r.variant_id).map((r) => r.product_id as string));
     const variants = new Set(live.filter((r) => r.variant_id).map((r) => r.variant_id as string));
-    const optionItems = new Set(live.filter((r) => r.option_item_id).map((r) => r.option_item_id as string));
-    return { products, variants, optionItems };
+    return { products, variants };
   }
 
   /**
    * The checks on one order line that come from how the item is sold rather than what it
-   * is: the per-order cap, and whether each add-on is offered on this product and on sale.
+   * is: the per-order cap, and whether each add-on is offered on this product.
    * Run before the line is saved, inside the order's transaction.
    */
   async assertLineSellable(
@@ -1319,10 +1305,6 @@ export class CatalogService {
         if (excluded.has(item.id)) {
           throw new BadRequestException({ statusCode: 400, code: 'OPTION_NOT_OFFERED', message: `${item.name} is not offered on ${product.name}` });
         }
-        const stop = await this.getOptionItemStop(tenantId, item.id, order.branch_id);
-        if (stop.isSuspended) {
-          throw new BadRequestException({ statusCode: 400, code: 'OPTION_SUSPENDED', message: `${item.name} is not available now${stop.reason ? ` (${stop.reason})` : ''}` });
-        }
       }
     }
   }
@@ -1354,7 +1336,7 @@ export class CatalogService {
     // What is off on the channel: stops on it and stops everywhere. With no branch, only the
     // chain-wide ones, since a branch's own stop says nothing about the others.
     const stops = (await this.getAvailabilities(tenantId, branchId || undefined)).filter(
-      (s) => s.product_id && !s.option_item_id && (branchId || !s.branch_id) && this.stopIsLive(s, branchId || undefined, now, channel),
+      (s) => s.product_id && (branchId || !s.branch_id) && this.stopIsLive(s, branchId || undefined, now, channel),
     );
     const offOf = (product: Product, variant: ProductVariant | null) => {
       const stop = stops.find((s) => s.product_id === product.id && (!s.variant_id || s.variant_id === variant?.id));

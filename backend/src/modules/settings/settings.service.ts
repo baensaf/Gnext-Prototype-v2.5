@@ -14,6 +14,7 @@ import {
 } from '../../common/utils/setting-scope.util';
 import { canActOnBranch, isHeadOfficeUser, UserScope } from '../../common/utils/user-scope.util';
 import { BUSINESS_DAY_SETTING_KEY, businessDaySettingProblem } from '../../common/utils/business-day';
+import { CATALOG_SETTING_KEY, catalogSettingProblem } from '../../common/utils/default-tax';
 
 @Injectable()
 export class SettingsService {
@@ -100,6 +101,9 @@ export class SettingsService {
           throw new BadRequestException('CALENDAR setting property weekStartsOn must be 0 (Sunday) to 6 (Saturday)');
         }
       }
+    } else if (group === CATALOG_SETTING_KEY) {
+      const problem = catalogSettingProblem(value);
+      if (problem) throw new BadRequestException(problem);
     } else if (group === BUSINESS_DAY_SETTING_KEY) {
       const problem = businessDaySettingProblem(value);
       if (problem) throw new BadRequestException(problem);

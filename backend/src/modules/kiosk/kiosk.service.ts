@@ -134,9 +134,8 @@ export class KioskService {
       const groups = optionGroups.filter((g) => pLinks.some((l) => l.option_group_id === g.id)).map((og) => {
         const link = pLinks.find((l) => l.option_group_id === og.id)!;
         const items = optionItems
-          // Items this product leaves out of the group, and add-ons off today, are not offered.
+          // Items this product leaves out of the group are not offered.
           .filter((i) => i.option_group_id === link.option_group_id && !(link.excluded_item_ids || []).includes(i.id))
-          .filter((i) => !off.optionItems.has(i.id))
           .map((i) => ({ ...i, price: i.price_delta }));
         return {
           ...og,

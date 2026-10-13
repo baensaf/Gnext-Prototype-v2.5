@@ -181,12 +181,9 @@ export interface BulkStopRequest {
 
 export interface ProductAvailability {
   id: string;
-  /** Null on an add-on stop. */
-  product_id: string | null;
+  product_id: string;
   /** Set when only this variant is off. */
   variant_id?: string | null;
-  /** Set when the stop is on an add-on item. */
-  option_item_id?: string | null;
   branch_id?: string;
   channel?: string;
   is_suspended: boolean;
@@ -198,7 +195,6 @@ export interface ProductAvailability {
 export interface StopRequest {
   productId?: string;
   variantId?: string;
-  optionItemId?: string;
   branchId?: string;
   /** Off on this channel only (SNAPPFOOD); empty for everywhere. */
   channel?: string;
@@ -438,7 +434,6 @@ export const catalogApi = {
   resumeItem: async (target: {
     productId?: string;
     variantId?: string;
-    optionItemId?: string;
     branchId?: string;
     channel?: string;
   }): Promise<any> => {

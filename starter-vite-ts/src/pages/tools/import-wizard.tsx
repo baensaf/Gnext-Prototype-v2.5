@@ -38,24 +38,29 @@ type ImportEntityType = 'PRODUCTS' | 'CATEGORIES';
 
 const TARGET_FIELDS: Record<ImportEntityType, { field: string; labelKey: string; required?: boolean }[]> = {
   PRODUCTS: [
-    // Optional: a row without a code updates the product of the same name, or adds one.
+    // Optional: a row without a code updates the product of the same name in its category, or adds one.
     { field: 'code', labelKey: 'tools.importWizard.fields.code' },
     { field: 'name_fa', labelKey: 'tools.importWizard.fields.name_fa', required: true },
-    { field: 'name_en', labelKey: 'tools.importWizard.fields.name_en' },
-    { field: 'category_code', labelKey: 'tools.importWizard.fields.category_code' },
+    { field: 'category_code', labelKey: 'tools.importWizard.fields.category_code', required: true },
+    { field: 'base_price', labelKey: 'tools.importWizard.fields.base_price', required: true },
+    { field: 'tax_rate', labelKey: 'tools.importWizard.fields.tax_rate' },
+    { field: 'barcode', labelKey: 'tools.importWizard.fields.barcode' },
     { field: 'is_active', labelKey: 'tools.importWizard.fields.is_active' },
   ],
   CATEGORIES: [
     { field: 'code', labelKey: 'tools.importWizard.fields.code', required: true },
     { field: 'name_fa', labelKey: 'tools.importWizard.fields.name_fa', required: true },
-    { field: 'name_en', labelKey: 'tools.importWizard.fields.name_en' },
-    { field: 'is_active', labelKey: 'tools.importWizard.fields.is_active' },
   ],
 };
 
 const DEFAULT_CSV_TEMPLATES: Record<ImportEntityType, string> = {
-  PRODUCTS: 'کد کالا,نام فارسی,English Name,قیمت پایه,کد دسته بندی,وضعیت\nPROD-201,همبرگر مخصوص,Special Burger,250000,CAT-BURGER,فعال\nPROD-202,سیب زمینی سرخ کرده,French Fries,90000,CAT-SIDES,فعال\nPROD-203,پیتزا مخلوط,Mix Pizza,-10000,CAT-PIZZA,فعال',
-  CATEGORIES: 'کد,عنوان دسته,Title EN,ترتیب,وضعیت\nCAT-BURGER,برگرها,Burgers,1,فعال\nCAT-SIDES,پیش غذا و پیش خوراک,Appetizers & Sides,2,فعال',
+  PRODUCTS: 'کد کالا,نام کالا,کد دسته بندی,قیمت,مالیات,بارکد,وضعیت
+PROD-201,همبرگر مخصوص,CAT-BURGER,250000,10,,فعال
+PROD-202,سیب زمینی سرخ کرده,CAT-SIDES,90000,,6260000000012,فعال
+PROD-203,پیتزا مخلوط,CAT-PIZZA,-10000,,,فعال',
+  CATEGORIES: 'کد,عنوان دسته
+CAT-BURGER,برگرها
+CAT-SIDES,پیش غذا و پیش خوراک',
 };
 
 export function ImportWizardPage() {
