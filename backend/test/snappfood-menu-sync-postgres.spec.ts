@@ -63,9 +63,10 @@ describe('Snappfood menu sync, simulated (PostgreSQL)', () => {
     const ids = await sync.ids(tenantId);
     const numbers = [...ids.values()].map((r) => r.external_id);
     expect(new Set(numbers).size).toBe(numbers.length);
-    // Fries come in types, so each type is a Snappfood product; the burger is one.
+    // Every product has its own number from creation; fries come in types, and each type is
+    // what Snappfood sells, so the fries number itself is kept but not sent.
     expect(ids.has(`PRODUCT:${burger}`)).toBe(true);
-    expect(ids.has(`PRODUCT:${fries}`)).toBe(false);
+    expect(ids.has(`PRODUCT:${fries}`)).toBe(true);
     expect(ids.has(`VARIANT:${large}`)).toBe(true);
     expect(ids.has(`OPTION_ITEM:${cheese}`)).toBe(true);
     const again = await sync.ids(tenantId);
