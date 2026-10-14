@@ -13,6 +13,8 @@ import { OrderItem } from '../src/entities/OrderItem.entity';
 import { OrderAdjustment } from '../src/entities/OrderAdjustment.entity';
 import { ShiftService } from '../src/modules/cashier/shift.service';
 import { OrderService } from '../src/modules/order/order.service';
+import { CouponsService } from '../src/modules/discounts/coupons.service';
+import { Coupon } from '../src/entities/Coupon.entity';
 import { deleteTenantData } from './utils/tenant-teardown';
 
 // An order discount on a sent order that is edited afterwards (2026-10-14): a percent stays a
@@ -23,6 +25,7 @@ describe('Order discount after an edit (PostgreSQL)', () => {
   let app: INestApplication;
   let dataSource: DataSource;
   let orders: OrderService;
+  let coupons: CouponsService;
   let tenantId: string;
   let branchId: string;
   let terminalId: string;
@@ -36,6 +39,7 @@ describe('Order discount after an edit (PostgreSQL)', () => {
     await app.init();
     dataSource = moduleRef.get(DataSource);
     orders = moduleRef.get(OrderService);
+    coupons = moduleRef.get(CouponsService);
     const shifts = moduleRef.get(ShiftService);
 
     const save = (entity: any, data: any) => dataSource.getRepository(entity).save(dataSource.getRepository(entity).create(data)) as Promise<any>;
@@ -55,7 +59,7 @@ describe('Order discount after an edit (PostgreSQL)', () => {
   });
 
   /** Two burgers and a cola (230,000 before tax), sent with the given order discount. */
-  const sentOrder = async (manualDiscount: { calculation_type: 'PERCENTAGE' | 'FIXED_AMOUNT'; value: string }) => {
+  const sentOrder = async (manualDiscount?: { calculation_type: 'PERCENTAGE' | 'FIXED_AMOUNT'; value: string }, couponCode?: string) => {
     const draft = await orders.createDraft(tenantId, {
       branch_id: branchId,
       terminal_id: terminalId,
@@ -67,7 +71,7 @@ describe('Order discount after an edit (PostgreSQL)', () => {
         { product_id: cola, quantity: 1 },
       ],
     } as any);
-    await orders.submitOrder(tenantId, draft.id, { manualDiscount } as any, undefined, undefined, 'MANAGER');
+    await orders.submitOrder(tenantId, draft.id, { manualDiscount, couponCode } as any, undefined, undefined, 'MANAGER');
     return draft.id;
   };
 
@@ -106,5 +110,34 @@ describe('Order discount after an edit (PostgreSQL)', () => {
     expect(edited.discount_total).toBe('50000.0000');
     expect(edited.tax_total).toBe('15000.0000');
     expect(edited.grand_total).toBe('165000.0000');
+  });
+
+  const oneCode = async (batch: any) => {
+    const made = await coupons.createBatch(tenantId, { count: 1, ...batch });
+    return (await dataSource.getRepository(Coupon).findOneByOrFail({ tenant_id: tenantId, batch_id: made.id })).code;
+  };
+
+  it("keeps a percent coupon a percent of what is left, within the batch's cap", async () => {
+    const code = await oneCode({ name: '20% off', reward_type: 'PERCENT', percent: '20', max_discount: '45000' });
+    const id = await sentOrder(undefined, code);
+    // 20% of 230,000 is 46,000, capped at 45,000.
+    expect((await dataSource.getRepository(OrderHeader).findOneByOrFail({ id })).discount_total).toBe('45000.0000');
+
+    const edited = await voidCola(id);
+    // 20% of 200,000, under the cap; tax 10% of 160,000.
+    expect(edited.discount_total).toBe('40000.0000');
+    expect(edited.tax_total).toBe('16000.0000');
+    expect(edited.grand_total).toBe('176000.0000');
+  });
+
+  it('drops a free-item coupon when its line is voided', async () => {
+    const code = await oneCode({ name: 'Free cola', reward_type: 'FREE_ITEM', reward_product_id: cola });
+    const id = await sentOrder(undefined, code);
+    expect((await dataSource.getRepository(OrderHeader).findOneByOrFail({ id })).discount_total).toBe('30000.0000');
+
+    const edited = await voidCola(id);
+    expect(edited.discount_total).toBe('0.0000');
+    expect(edited.tax_total).toBe('20000.0000');
+    expect(edited.grand_total).toBe('220000.0000');
   });
 });

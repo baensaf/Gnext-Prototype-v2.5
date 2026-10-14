@@ -27,6 +27,8 @@ export interface ConsideredDiscount {
   itemDiscountId?: string;
   productId?: string;
   percent?: string;
+  /** COUPON: the batch's cap on a percent, so an edit later prices it within the same cap. */
+  maxDiscount?: string;
   discountType: string;
   status: 'APPLIED' | 'REJECTED';
   rejectionReason?: string;
@@ -282,6 +284,7 @@ export class DiscountEvaluationService {
           couponId: coupon.id,
           discountType: batch.reward_type,
           percent: batch.reward_type === 'PERCENT' ? batch.percent || undefined : undefined,
+          maxDiscount: batch.reward_type === 'PERCENT' ? batch.max_discount || undefined : undefined,
           productId: batch.reward_type === 'FREE_ITEM' ? batch.reward_product_id || undefined : undefined,
           status: 'APPLIED',
           amount: couponAmount,
