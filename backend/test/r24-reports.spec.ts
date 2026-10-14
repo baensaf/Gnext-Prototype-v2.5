@@ -196,7 +196,7 @@ describe('R24 Reports, Alerts, Exports & Audit Verification Suite', () => {
   it('should list all report catalog entries defined in Section 13 (the V2 set)', async () => {
     const catalog = await reportsService.getCatalog();
     expect(catalog).toBeDefined();
-    expect(catalog).toHaveLength(10);
+    expect(catalog).toHaveLength(15);
 
     const requiredCodes = [
       'sales-summary',
@@ -209,6 +209,11 @@ describe('R24 Reports, Alerts, Exports & Audit Verification Suite', () => {
       'snappfood-reconciliation',
       'courier-settlements',
       'tax',
+      'sales-by-day',
+      'sales-by-hour',
+      'sales-by-channel',
+      'sales-by-employee',
+      'voids-cancellations',
     ];
 
     for (const code of requiredCodes) {
