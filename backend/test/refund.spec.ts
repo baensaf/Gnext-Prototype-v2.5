@@ -97,6 +97,8 @@ describe('Refunds & Paid-Order Cancellation Suite (R16, simplified 2026-10-10)',
         return [];
       }),
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+      // The number counter (order_sequence upsert).
+      query: jest.fn().mockResolvedValue([{ last_value: 1 }]),
     };
 
     em = mockEntityManager;

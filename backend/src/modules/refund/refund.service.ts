@@ -17,6 +17,7 @@ import { ShiftService } from '../cashier/shift.service';
 import { CreditService } from '../customer/credit.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { RefundCreateDto, PaidOrderCancelDto } from './dtos/refund.dto';
+import { nextNumber } from '../../common/utils/sequence.util';
 
 /** What is left to give back of one payment, and the method it was taken by. */
 interface PaymentShare {
@@ -48,14 +49,7 @@ export class RefundService {
 
   private async generateRefundNumber(tenantId: string, em: EntityManager): Promise<string> {
     const todayStr = BusinessDateUtil.today(new Date()).replace(/-/g, ''); // the till's day, not UTC's
-    const prefix = `REF-${todayStr}-`;
-    const count = await em
-      .createQueryBuilder(Refund, 'r')
-      .where('r.tenant_id = :tenantId', { tenantId })
-      .andWhere('r.refund_number LIKE :prefix', { prefix: `${prefix}%` })
-      .getCount();
-    const seq = (count + 1).toString().padStart(4, '0');
-    return `${prefix}${seq}`;
+    return await nextNumber(em, tenantId, `REF-${todayStr}`);
   }
 
   /**

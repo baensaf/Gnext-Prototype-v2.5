@@ -95,6 +95,8 @@ describe('Payments & Split Settlement Suite (R15)', () => {
       }),
       count: jest.fn().mockResolvedValue(0),
       createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+      // The number counter (order_sequence upsert).
+      query: jest.fn().mockResolvedValue([{ last_value: 1 }]),
     };
 
     dataSource = {

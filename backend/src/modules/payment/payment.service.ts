@@ -34,6 +34,7 @@ import { AgentPaymentsService, AGENT_TERMINAL_DRIVERS } from './agent-payments.s
 import { bookSucceededPayment } from './payment-settlement';
 import { AgentConfigService } from '../agent-gateway/agent-config.service';
 import { parseDeviceConnection } from '../../common/utils/device-connection.util';
+import { nextNumber } from '../../common/utils/sequence.util';
 
 @Injectable()
 export class PaymentService {
@@ -55,14 +56,7 @@ export class PaymentService {
 
   private async generatePaymentNumber(tenantId: string, em: EntityManager): Promise<string> {
     const todayStr = BusinessDateUtil.today(new Date()).replace(/-/g, ''); // the till's day, not UTC's
-    const prefix = `PAY-${todayStr}-`;
-    const count = await em
-      .createQueryBuilder(Payment, 'p')
-      .where('p.tenant_id = :tenantId', { tenantId })
-      .andWhere('p.payment_number LIKE :prefix', { prefix: `${prefix}%` })
-      .getCount();
-    const seq = (count + 1).toString().padStart(4, '0');
-    return `${prefix}${seq}`;
+    return await nextNumber(em, tenantId, `PAY-${todayStr}`);
   }
 
   /**

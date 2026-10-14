@@ -16,6 +16,7 @@ import { CashMovement } from '../entities/CashMovement.entity';
 import { BusinessDayClose } from '../entities/BusinessDayClose.entity';
 import { MoneyUtil } from '../common/utils/money.util';
 import { BusinessDateUtil } from '../common/utils/business-date.util';
+import { nextNumber } from '../common/utils/sequence.util';
 
 /**
  * Seeds one completed trading day so the reports, shift and business-day screens open
@@ -212,7 +213,6 @@ export async function seedDemoTradingDay(
   let totalSales = '0.0000';
   let netSales = '0.0000';
   let revenueOrderCount = 0;
-  let paySeq = 1;
 
   for (const spec of DEMO_ORDERS) {
     const state = spec.cancelled ? 'CANCELLED' : 'COMPLETED';
@@ -315,7 +315,7 @@ export async function seedDemoTradingDay(
       em.create(Payment, {
         tenant_id: tenantId,
         order_id: order.id,
-        payment_number: `PAY-${businessDate.replace(/-/g, '')}-${String(paySeq++).padStart(4, '0')}`,
+        payment_number: await nextNumber(em, tenantId, `PAY-${businessDate.replace(/-/g, '')}`),
         method_id: method.id,
         method_kind: method.kind,
         status: 'SUCCEEDED',
@@ -358,7 +358,7 @@ export async function seedDemoTradingDay(
         em.create(Refund, {
           tenant_id: tenantId,
           order_id: order.id,
-          refund_number: `REF-${businessDate.replace(/-/g, '')}-0001`,
+          refund_number: await nextNumber(em, tenantId, `REF-${businessDate.replace(/-/g, '')}`),
           status: 'SUCCEEDED',
           method_id: method.id,
           method_kind: method.kind,

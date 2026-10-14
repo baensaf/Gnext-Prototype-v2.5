@@ -74,6 +74,7 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
         return qb;
       }),
       query: jest.fn(async (sql: string) => {
+        if (sql.includes('order_sequence')) return [{ last_value: 1 }];
         if (sql.includes('FROM payment')) return pendingCash;
         if (sql.includes('FROM delivery')) return deliveryOrderIds.map((order_id) => ({ order_id }));
         return [];
