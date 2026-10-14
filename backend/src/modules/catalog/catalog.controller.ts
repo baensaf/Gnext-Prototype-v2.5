@@ -166,6 +166,13 @@ export class CatalogController {
     return await this.catalogService.createProductVariant(tenantId, id, body, correlationId);
   }
 
+  /** Body: the ids of the product's sizes in their new order. */
+  @HeadOfficeOnly()
+  @Put('products/:id/variants/order')
+  async reorderVariants(@Param('id') id: string, @Body() body: { ids: string[] }, @Req() req: Request) {
+    return await this.catalogService.reorderVariants((req as any).tenantId, id, body?.ids, (req as any).correlationId);
+  }
+
   @HeadOfficeOnly()
   @Patch('products/:id/variants/:variantId')
   async updateProductVariant(

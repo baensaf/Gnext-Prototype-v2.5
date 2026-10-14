@@ -1539,14 +1539,13 @@
       },
       "variants": {
         "title": "قیمت و انواع",
-        "subtitle": "اگر محصول اندازه، حجم، وزن یا طعم متفاوتی دارد، هر نوع را با قیمت خودش تعریف کنید (مانند تک‌پرس و دوپرس).",
+        "subtitle": "اگر محصول اندازه، حجم، وزن یا طعم متفاوتی دارد، هر نوع را با قیمت خودش تعریف کنید (مانند تک‌پرس و دوپرس). برای تغییر ترتیب، ردیف را بکشید.",
         "addVariant": "نوع جدید",
         "noVariantsTitle": "این محصول هنوز نوعی ندارد",
         "noVariantsDesc": "این محصول در حال حاضر فقط با قیمت پایه پیش‌فرض ({{price}} {{currency}}) عرضه می‌شود.",
         "createFirst": "تعریف اولین نوع",
         "default": "پیش‌فرض",
         "variantName": "عنوان نوع",
-        "code": "کد",
         "barcode": "بارکد",
         "basePrice": "قیمت پایه",
         "actions": "عملیات",
@@ -1555,16 +1554,13 @@
         "isDefaultTitle": "نوع پیش‌فرض",
         "addDialogTitle": "نوع جدید",
         "editDialogTitle": "ویرایش نوع",
-        "variantCode": "کد نوع",
-        "sortOrder": "ترتیب نمایش",
-        "setDefaultSwitch": "نوع پیش‌فرض این محصول",
         "cancel": "انصراف",
         "saveVariant": "ثبت نوع",
         "savingVariant": "در حال ذخیره...",
         "deleteConfirm": "این نوع بایگانی شود؟",
         "editAria": "ویرایش {{name}}",
         "deleteAria": "حذف {{name}}",
-        "defaultMovesHint": "برای تغییر پیش‌فرض، نوع دیگری را پیش‌فرض کنید."
+        "dragToSort": "برای تغییر ترتیب بکشید"
       },
       "modifiers": {
         "title": "افزودنی‌ها",

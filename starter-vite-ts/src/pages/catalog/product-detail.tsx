@@ -18,6 +18,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import {
   Box,
   Tab,
@@ -49,7 +50,6 @@ import {
   DialogActions,
   TableContainer,
   InputAdornment,
-  FormControlLabel,
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
@@ -115,13 +115,12 @@ export function ProductDetailPage() {
   // Variant Modal State
   const [variantDialogOpen, setVariantDialogOpen] = useState(false);
   const [editingVariant, setEditingVariant] = useState<ProductVariant | null>(null);
-  const [varCode, setVarCode] = useState('');
   const [varName, setVarName] = useState('');
   const [varBarcode, setVarBarcode] = useState('');
   const [varPrice, setVarPrice] = useState('');
-  const [varIsDefault, setVarIsDefault] = useState(false);
-  const [varSortOrder, setVarSortOrder] = useState('0');
   const [savingVariant, setSavingVariant] = useState(false);
+  // Sizes are put in order by dragging their rows, the same order the register and kiosk use.
+  const [dragVariantId, setDragVariantId] = useState<string | null>(null);
 
   // The add-on group form: a group to edit, or null for a new one.
   const [sheet, setSheet] = useState<{ group: OptionGroup | null } | null>(null);
@@ -315,23 +314,17 @@ export function ProductDetailPage() {
 
   const handleOpenAddVariant = () => {
     setEditingVariant(null);
-    setVarCode('');
     setVarName('');
     setVarBarcode('');
     setVarPrice(basePrice || '0');
-    setVarIsDefault(variants.length === 0);
-    setVarSortOrder(variants.length.toString());
     setVariantDialogOpen(true);
   };
 
   const handleOpenEditVariant = (v: ProductVariant) => {
     setEditingVariant(v);
-    setVarCode(v.code);
     setVarName(v.name);
     setVarBarcode(v.barcode || '');
     setVarPrice(wholeRials(v.base_price));
-    setVarIsDefault(v.is_default);
-    setVarSortOrder(v.sort_order.toString());
     setVariantDialogOpen(true);
   };
 
@@ -343,21 +336,17 @@ export function ProductDetailPage() {
     try {
       if (editingVariant) {
         await catalogApi.updateProductVariant(id, editingVariant.id, {
-          code: varCode,
           name: varName,
           barcode: varBarcode || undefined,
           base_price: varPrice,
-          is_default: varIsDefault,
-          sort_order: parseInt(varSortOrder, 10) || 0,
         });
       } else {
+        // The code is made on the server and the first size becomes the default; the star in
+        // the table moves it later.
         await catalogApi.createProductVariant(id, {
-          code: varCode,
           name: varName,
           barcode: varBarcode || undefined,
           base_price: varPrice,
-          is_default: varIsDefault,
-          sort_order: parseInt(varSortOrder, 10) || 0,
         });
       }
       setVariantDialogOpen(false);
@@ -368,6 +357,24 @@ export function ProductDetailPage() {
       setError(err.detail || err.message || t('catalog.productDetailPage.errors.saveVariantFailed'));
     } finally {
       setSavingVariant(false);
+    }
+  };
+
+  const handleDropVariant = async (targetId: string) => {
+    if (!id || !dragVariantId || dragVariantId === targetId) return;
+    const list = [...variants];
+    const from = list.findIndex((v) => v.id === dragVariantId);
+    const to = list.findIndex((v) => v.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [moved] = list.splice(from, 1);
+    list.splice(to, 0, moved);
+    setVariants(list);
+    setDragVariantId(null);
+    try {
+      setVariants(await catalogApi.reorderProductVariants(id, list.map((v) => v.id)));
+    } catch (err: any) {
+      setError(err.detail || err.message || t('catalog.productDetailPage.errors.saveVariantFailed'));
+      setVariants(await catalogApi.getProductVariants(id));
     }
   };
 
@@ -692,9 +699,9 @@ export function ProductDetailPage() {
               <Table>
                 <TableHead>
                   <TableRow>
+                    <TableCell sx={{ width: 40 }} />
                     <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.default')}</TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.variantName')}</TableCell>
-                    <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.code')}</TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.barcode')}</TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }}>{t('catalog.productDetailPage.variants.basePrice')}</TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }} align="right">{t('catalog.productDetailPage.variants.actions')}</TableCell>
@@ -702,7 +709,19 @@ export function ProductDetailPage() {
                 </TableHead>
                 <TableBody>
                   {variants.map((v) => (
-                    <TableRow key={v.id} hover>
+                    <TableRow
+                      key={v.id}
+                      hover
+                      draggable={variants.length > 1}
+                      onDragStart={() => setDragVariantId(v.id)}
+                      onDragEnd={() => setDragVariantId(null)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => handleDropVariant(v.id)}
+                      sx={{ opacity: dragVariantId === v.id ? 0.4 : 1 }}
+                    >
+                      <TableCell sx={{ cursor: variants.length > 1 ? 'grab' : 'default', color: 'text.disabled' }}>
+                        {variants.length > 1 && <DragIndicatorIcon fontSize="small" titleAccess={t('catalog.productDetailPage.variants.dragToSort')} />}
+                      </TableCell>
                       <TableCell>
                         <IconButton
                           size="small"
@@ -717,7 +736,6 @@ export function ProductDetailPage() {
                         )}
                       </TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>{v.name}</TableCell>
-                      <TableCell>{v.code}</TableCell>
                       <TableCell>{v.barcode || '—'}</TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>
                         <span dir="ltr">{MoneyUtil.formatCurrency(v.base_price)} {currency}</span>
@@ -847,16 +865,6 @@ export function ProductDetailPage() {
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
-                  label={t('catalog.productDetailPage.variants.variantCode')}
-                  placeholder="e.g. VAR-CHB-DBL"
-                  value={varCode}
-                  onChange={(e) => setVarCode(e.target.value.toUpperCase())}
-                  fullWidth
-                  required
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
                   label={t('catalog.productDetailPage.variants.variantName')}
                   placeholder="e.g. Double Patty"
                   value={varName}
@@ -886,34 +894,6 @@ export function ProductDetailPage() {
                   fullWidth
                   required
                 />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
-                  label={t('catalog.productDetailPage.variants.sortOrder')}
-                  type="number"
-                  value={varSortOrder}
-                  onChange={(e) => setVarSortOrder(e.target.value)}
-                  fullWidth
-                />
-              </Grid>
-              <Grid size={{ xs: 12 }}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={varIsDefault}
-                      onChange={(e) => setVarIsDefault(e.target.checked)}
-                      // The default moves by making another size the default, never by switching it off here.
-                      disabled={!!editingVariant?.is_default}
-                      color="primary"
-                    />
-                  }
-                  label={t('catalog.productDetailPage.variants.setDefaultSwitch')}
-                />
-                {editingVariant?.is_default && (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                    {t('catalog.productDetailPage.variants.defaultMovesHint')}
-                  </Typography>
-                )}
               </Grid>
             </Grid>
           </DialogContent>

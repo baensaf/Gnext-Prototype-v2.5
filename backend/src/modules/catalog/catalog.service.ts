@@ -478,7 +478,7 @@ export class CatalogService {
     tenantId: string,
     productId: string,
     data: {
-      code: string;
+      code?: string;
       name: string;
       base_price?: string;
       barcode?: string;
@@ -490,15 +490,27 @@ export class CatalogService {
     const prod = await this.prodRepo.findOne({ where: { id: productId, tenant_id: tenantId } });
     if (!prod) throw new NotFoundException('Product not found');
 
-    const code = data.code.toUpperCase().trim();
-    const existing = await this.variantRepo.findOne({
-      where: { tenant_id: tenantId, product_id: productId, code, is_active: true },
-    });
-    if (existing) throw new ConflictException(`Variant code ${code} already exists for this product`);
-
     const count = await this.variantRepo.count({
       where: { tenant_id: tenantId, product_id: productId, is_active: true },
     });
+
+    // Nobody types a size's code: it is the product's code plus a running number (CHB-1, CHB-2),
+    // never reused, so exports and channel maps keep pointing at the size they meant.
+    let code = data.code?.toUpperCase().trim();
+    if (code) {
+      const existing = await this.variantRepo.findOne({
+        where: { tenant_id: tenantId, product_id: productId, code, is_active: true },
+      });
+      if (existing) throw new ConflictException(`Variant code ${code} already exists for this product`);
+    } else {
+      const taken = new Set(
+        (await this.variantRepo.find({ where: { tenant_id: tenantId, product_id: productId }, withDeleted: true, select: ['code'] })).map((v) => v.code),
+      );
+      const stem = (prod.code || 'V').toUpperCase().trim().slice(0, 26);
+      let n = taken.size + 1;
+      while (taken.has(`${stem}-${n}`)) n += 1;
+      code = `${stem}-${n}`;
+    }
 
     const isDefault = data.is_default || count === 0;
 
@@ -612,6 +624,21 @@ export class CatalogService {
     });
 
     return saved;
+  }
+
+  /** Puts a product's sizes in the order of `ids`, the way the register and kiosk list them. */
+  async reorderVariants(tenantId: string, productId: string, ids: string[], correlationId: string) {
+    const unique = [...new Set(ids || [])];
+    if (!unique.length) throw new BadRequestException('No sizes to order');
+    const rows = await this.variantRepo.find({ where: { tenant_id: tenantId, product_id: productId, id: In(unique) } });
+    if (rows.length !== unique.length) throw new BadRequestException('Order the sizes of one product at a time');
+    await this.variantRepo.manager.transaction(async (em) => {
+      for (const [index, id] of unique.entries()) {
+        await em.update(ProductVariant, { id, tenant_id: tenantId }, { sort_order: index });
+      }
+    });
+    await this.auditWriter.write({ tenantId, actorType: 'ADMIN', action: 'PRODUCT_VARIANTS_REORDERED', entityType: 'Product', entityId: productId, correlationId, details: { ids: unique } });
+    return this.getProductVariants(tenantId, productId);
   }
 
   async archiveProductVariant(

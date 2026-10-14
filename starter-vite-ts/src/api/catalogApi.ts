@@ -304,6 +304,10 @@ export const catalogApi = {
     const res = await httpClient.patch(`/api/v1/products/${productId}/variants/${variantId}`, data);
     return res.data;
   },
+  reorderProductVariants: async (productId: string, ids: string[]): Promise<ProductVariant[]> => {
+    const res = await httpClient.put(`/api/v1/products/${productId}/variants/order`, { ids });
+    return res.data;
+  },
   deleteProductVariant: async (productId: string, variantId: string): Promise<void> => {
     await httpClient.delete(`/api/v1/products/${productId}/variants/${variantId}`);
   },

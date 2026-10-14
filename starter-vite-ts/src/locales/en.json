@@ -1539,14 +1539,13 @@
       },
       "variants": {
         "title": "Product Variants",
-        "subtitle": "Configure distinct purchasable versions (e.g. Single Patty, Double Patty, Sizes) with their own prices.",
+        "subtitle": "Configure distinct purchasable versions (e.g. Single Patty, Double Patty, Sizes) with their own prices. Drag a row to change the order.",
         "addVariant": "Add Variant",
         "noVariantsTitle": "No variants configured yet",
         "noVariantsDesc": "This product currently uses only its single default base price ({{price}} {{currency}}).",
         "createFirst": "Create First Variant",
         "default": "Default",
         "variantName": "Variant Name",
-        "code": "Code",
         "barcode": "Barcode",
         "basePrice": "Base Price",
         "actions": "Actions",
@@ -1555,16 +1554,13 @@
         "isDefaultTitle": "Default Variant",
         "addDialogTitle": "Add New Product Variant",
         "editDialogTitle": "Edit Product Variant",
-        "variantCode": "Variant Code",
-        "sortOrder": "Sort Order",
-        "setDefaultSwitch": "Set as Default Variant for this product",
         "cancel": "Cancel",
         "saveVariant": "Save Variant",
         "savingVariant": "Saving...",
         "deleteConfirm": "Are you sure you want to archive this variant?",
         "editAria": "Edit {{name}}",
         "deleteAria": "Delete {{name}}",
-        "defaultMovesHint": "To change the default, make another size the default."
+        "dragToSort": "Drag to change the order"
       },
       "modifiers": {
         "title": "Add-ons",
