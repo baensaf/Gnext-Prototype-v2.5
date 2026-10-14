@@ -124,20 +124,21 @@ describe('Automatic item discounts (PostgreSQL)', () => {
     expect(order.grand_total).toBe('117000.0000');
   });
 
-  it('keeps the order discount and drops a voided line’s item discount when the totals are worked out again', async () => {
+  it('keeps the order discount a percent of what is left and drops a voided line’s item discount when the totals are worked out again', async () => {
     const order = await sell([{ product_id: burger, quantity: 1 }, { product_id: fries, quantity: 1 }], {
       manualDiscount: { calculation_type: 'PERCENTAGE', value: '10' },
     });
     const [b] = await lines(order.id);
     await dataSource.getRepository(OrderItem).update({ id: b.id }, { state: 'VOIDED' } as any);
     const again = await dataSource.transaction((em) => orders.recalculateOrderTotals(tenantId, order, em));
-    // The 13,000 order discount stays; the 20,000 item discount left with the burger.
+    // The 20,000 item discount left with the burger; the order's 10% is now 10% of the
+    // 50,000 fries (it was 13,000 on both lines).
     expect(again.item_discount_total).toBe('0.0000');
-    expect(again.discount_total).toBe('13000.0000');
-    expect(again.grand_total).toBe('37000.0000');
+    expect(again.discount_total).toBe('5000.0000');
+    expect(again.grand_total).toBe('45000.0000');
     // Working it out once more changes nothing.
     const twice = await dataSource.transaction((em) => orders.recalculateOrderTotals(tenantId, again, em));
-    expect(twice.discount_total).toBe('13000.0000');
+    expect(twice.discount_total).toBe('5000.0000');
   });
 
   it('does nothing outside its dates', async () => {

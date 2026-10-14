@@ -880,7 +880,12 @@ export class OrderService {
             discountType: disc.discountType,
             amount: disc.amount,
             ...(disc.source === 'MANUAL'
-              ? { approvalRequestId: submittedManualDiscount?.approvalRequestId || null, reasonCode: submittedManualDiscount?.reasonCode || null }
+              ? {
+                  approvalRequestId: submittedManualDiscount?.approvalRequestId || null,
+                  reasonCode: submittedManualDiscount?.reasonCode || null,
+                  // What the cashier typed (a percent or an amount), so an edit later prices it again.
+                  value: submittedManualDiscount?.value ?? null,
+                }
               : {}),
             ...(disc.source === 'CUSTOMER' ? { percent: disc.percent, reasonCode: 'FRIENDS_FAMILY' } : {}),
             ...(disc.source === 'ITEM' ? { productId: disc.productId, percent: disc.percent } : {}),
@@ -2643,6 +2648,46 @@ export class OrderService {
     }
   }
 
+  /**
+   * How a sent order's one order discount is priced when its lines change: a percent (the
+   * cashier's, or the customer's friends-and-family rate) stays a percent of what is left; an
+   * amount stays that amount, never more than what is left. A coupon keeps the amount it gave,
+   * its percent being capped by the batch. A cashier's percent recorded before the percent was
+   * kept, or a discount with no record, keeps the amount it had.
+   */
+  private async orderDiscountRule(
+    em: EntityManager,
+    tenantId: string,
+    order: OrderHeader,
+  ): Promise<{ adjustment: OrderAdjustment | null; percent: string | null; fixed: string; familyExclusions: boolean } | null> {
+    const [adjustment] = await em.find(OrderAdjustment, {
+      where: { tenant_id: tenantId, order_id: order.id, type: 'DISCOUNT', source_type: In(['MANUAL', 'CUSTOMER', 'COUPON']) },
+      order: { created_at: 'DESC' },
+      take: 1,
+    });
+    if (!adjustment) {
+      const carried = previousOrderDiscount(order);
+      return MoneyUtil.greaterThan(carried, '0.0000')
+        ? { adjustment: null, percent: null, fixed: carried, familyExclusions: false }
+        : null;
+    }
+    const snap = adjustment.calculation_snapshot || {};
+    const given = MoneyUtil.format(snap.amount ?? adjustment.amount);
+    if (adjustment.source_type === 'CUSTOMER') {
+      return { adjustment, percent: snap.percent ?? null, fixed: given, familyExclusions: true };
+    }
+    if (adjustment.source_type === 'MANUAL') {
+      const typed = snap.value !== null && snap.value !== undefined ? MoneyUtil.format(snap.value) : null;
+      return {
+        adjustment,
+        percent: snap.discountType === 'PERCENTAGE' ? typed : null,
+        fixed: snap.discountType === 'FIXED_AMOUNT' && typed ? typed : given,
+        familyExclusions: snap.reasonCode === 'FRIENDS_FAMILY',
+      };
+    }
+    return { adjustment, percent: null, fixed: given, familyExclusions: false };
+  }
+
   public async recalculateOrderTotals(tenantId: string, order: OrderHeader, em: EntityManager): Promise<OrderHeader> {
     // Voided and superseded lines stay on the order for audit and reprints, but
     // they must never reach the money. Summing every row would bill the guest
@@ -2676,33 +2721,65 @@ export class OrderService {
     order.subtotal_amount = subtotal;
     order.modifier_total = modifierTotal;
 
-    // The discount total is the one order discount, unchanged, plus the item discounts of the
-    // lines as they are now (a voided discounted line takes its discount with it).
-    order.discount_total = MoneyUtil.add(previousOrderDiscount(order), itemDiscountTotal);
+    const productIds = [...new Set(items.map((i) => i.product_id).filter(Boolean))];
+    const products = productIds.length > 0 ? await em.find(Product, { where: { id: In(productIds) } }) : [];
+    const taxRateById = new Map(products.map((p) => [p.id, p.tax_rate || '0.0000']));
+    const categoryById = new Map(products.map((p) => [p.id, p.category_id]));
+
+    // The one order discount, priced again on the lines as they are now and spread over them
+    // before tax, as DiscountEvaluationService does when the order is sent. Carrying the old
+    // amount forward kept a 10% discount at its old size after lines were voided, and taxed the
+    // lines as if nobody had discounted them.
+    const rule = await this.orderDiscountRule(em, tenantId, order);
+    let familyExcluded = new Set<string>();
+    if (rule?.familyExclusions) {
+      const rows = await em.find(TenantSetting, { where: { tenant_id: tenantId, key: 'DISCOUNT_AUTHORIZATIONS' } });
+      familyExcluded = new Set<string>((pickSettingValue(rows) as any)?.familyExcludedCategoryIds || []);
+    }
+    // What each line sells for after its own item discount.
+    const bases = items.map((i) => MoneyUtil.subtract(i.line_total, i.item_discount_total || '0.0000'));
+    const eligible = items
+      .map((_, k) => k)
+      .filter((k) => MoneyUtil.greaterThan(bases[k], '0') && !familyExcluded.has(categoryById.get(items[k].product_id) || ''));
+    const eligibleBase = eligible.reduce((sum, k) => MoneyUtil.add(sum, bases[k]), '0.0000');
+
+    let orderDiscount = '0.0000';
+    if (rule && eligible.length > 0) {
+      orderDiscount = rule.percent
+        ? MoneyUtil.multiply(eligibleBase, MoneyUtil.divide(rule.percent, '100', 6))
+        : MoneyUtil.greaterThan(rule.fixed, eligibleBase) ? eligibleBase : rule.fixed;
+    }
+    const shares: string[] = items.map(() => '0.0000');
+    if (MoneyUtil.greaterThan(orderDiscount, '0')) {
+      MoneyUtil.allocate(orderDiscount, eligible.map((k) => bases[k])).forEach((share, j) => {
+        shares[eligible[j]] = share;
+      });
+    }
+
+    // Each line is taxed on what it sells for after both discounts. A line the order discount
+    // reached is rounded to a whole Toman, the rounding folded into the discount, as when sent.
+    let taxTotal = '0.0000';
+    for (const [k, item] of items.entries()) {
+      let net = MoneyUtil.subtract(bases[k], shares[k]);
+      if (MoneyUtil.lessThan(net, '0')) net = '0.0000';
+      if (MoneyUtil.greaterThan(shares[k], '0')) {
+        const rounded = MoneyUtil.roundToman(net);
+        orderDiscount = MoneyUtil.add(orderDiscount, MoneyUtil.subtract(net, rounded));
+        net = rounded;
+      }
+      const rate = item.tax_rate ?? (taxRateById.get(item.product_id) || '0.0000');
+      taxTotal = MoneyUtil.add(taxTotal, MoneyUtil.roundToman(MoneyUtil.multiply(net, rate)));
+    }
+
+    // The discount record follows, so the discounts report shows what the order now gives.
+    if (rule?.adjustment && MoneyUtil.notEqual(rule.adjustment.amount, orderDiscount)) {
+      rule.adjustment.amount = orderDiscount;
+      await em.save(OrderAdjustment, rule.adjustment);
+    }
+
+    order.discount_total = MoneyUtil.add(orderDiscount, itemDiscountTotal);
     order.discount_amount = order.discount_total;
     order.item_discount_total = itemDiscountTotal;
-
-    // Tax has to move with the lines. Carrying order.tax_total forward would bill
-    // the guest VAT on food that was voided off the order, which is the kind of
-    // figure that stops a day reconciling. Per-product rate on the line total,
-    // matching DiscountEvaluationService; order-level discounts are not
-    // re-allocated per line here, so a discounted order's tax stays approximate
-    // until the next full quote.
-    const productIds = [...new Set(items.map((i) => i.product_id).filter(Boolean))];
-    const taxRateById = new Map<string, string>();
-    if (productIds.length > 0) {
-      const products = await em.find(Product, { where: { id: In(productIds) } });
-      products.forEach((p) => taxRateById.set(p.id, p.tax_rate || '0.0000'));
-    }
-
-    let taxTotal = '0.0000';
-    for (const item of items) {
-      const rate = item.tax_rate ?? (taxRateById.get(item.product_id) || '0.0000');
-      // Taxed on what the line sells for after its own item discount.
-      const taxable = MoneyUtil.subtract(item.line_total, item.item_discount_total || '0.0000');
-      // Each line's tax is rounded to a whole Toman, as in DiscountEvaluationService.
-      taxTotal = MoneyUtil.add(taxTotal, MoneyUtil.roundToman(MoneyUtil.multiply(taxable, rate)));
-    }
     order.tax_total = taxTotal;
     order.tax_amount = taxTotal;
 
