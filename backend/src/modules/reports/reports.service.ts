@@ -183,14 +183,12 @@ export class ReportsService {
           const disc = MoneyUtil.format(o.discount_amount || '0', 2);
           const tot = MoneyUtil.format(o.total_amount || '0', 2);
           const paid = MoneyUtil.format(o.paid_amount || '0', 2);
-          const ref = MoneyUtil.format(o.refunded_total || '0', 2);
           const pack = MoneyUtil.format(o.packaging_total || '0', 2);
           const del = MoneyUtil.format(o.delivery_fee || '0', 2);
           const mod = MoneyUtil.format(o.modifier_total || '0', 2);
-          // Net of tax AND of anything given back. paid/refunded stay gross alongside,
-          // so a refunded order still shows what was tendered — but net sales moves,
-          // which is what a refund is supposed to do to the day's revenue.
-          const net = MoneyUtil.subtract(MoneyUtil.subtract(tot, tax, 2), ref, 2);
+          // Net of tax, on the day of the sale. Money given back is a row of its own below, on
+          // the day it went back: a refund today must not rewrite last week's takings.
+          const net = MoneyUtil.subtract(tot, tax, 2);
           const rawOut = MoneyUtil.subtract(tot, paid, 2);
           const out = MoneyUtil.lessThan(rawOut, '0') ? '0.00' : rawOut;
 
@@ -202,13 +200,12 @@ export class ReportsService {
           taxTotal = MoneyUtil.add(taxTotal, tax, 2);
           netSalesTotal = MoneyUtil.add(netSalesTotal, net, 2);
           paidTotal = MoneyUtil.add(paidTotal, paid, 2);
-          refundedTotal = MoneyUtil.add(refundedTotal, ref, 2);
           outstandingTotal = MoneyUtil.add(outstandingTotal, out, 2);
 
           return {
             business_date: o.business_date || BusinessDateUtil.fromDate(o.placed_at) || '—',
             branch_id: o.branch_id,
-            channel: o.order_type || 'POS',
+            channel: o.channel || 'POS',
             type: o.order_type || 'PICKUP',
             order_number: o.order_number,
             status: o.status,
@@ -220,10 +217,65 @@ export class ReportsService {
             tax: tax,
             net_sales: net,
             paid: paid,
-            refunded: ref,
+            refunded: '0.00',
             outstanding: out,
           };
         });
+
+        // Refunds given in the period, whatever day the order was sold on. A refund takes its
+        // share of tax back with it, so net sales falls by the refund less that tax. A paid order
+        // that was cancelled is not revenue at all, so its refund is not taken off either.
+        const refundQb = this.refundRepo
+          .createQueryBuilder('r')
+          .innerJoin(OrderHeader, 'o', 'o.id = r.order_id AND o.tenant_id = r.tenant_id')
+          .select([
+            'r.refund_number AS refund_number',
+            'r.amount AS amount',
+            `${REFUND_BUSINESS_DATE_EXPR('r')} AS business_date`,
+            'o.order_number AS order_number',
+            'o.branch_id AS branch_id',
+            'o.channel AS channel',
+            'o.total_amount AS order_total',
+            'o.tax_amount AS order_tax',
+          ])
+          .where('r.tenant_id = :tenantId', { tenantId })
+          .andWhere('r.status IN (:...refundDone)', { refundDone: ['SUCCEEDED', 'COMPLETED'] })
+          .andWhere(REVENUE_ORDER_PREDICATE('o'), { nonRevenueStates: NON_REVENUE_ORDER_STATES });
+        if (branchId) refundQb.andWhere('o.branch_id = :branchId', { branchId });
+        if (channel) refundQb.andWhere('(o.channel = :channel OR o.order_type = :channel)', { channel });
+        this.applyStoredDateFilter(refundQb, REFUND_BUSINESS_DATE_EXPR('r'), startDate, endDate);
+        const refundRows = (await refundQb.getRawMany()).map((r: any) => {
+          const amount = MoneyUtil.format(r.amount || '0', 2);
+          const orderTotal = MoneyUtil.format(r.order_total || '0', 2);
+          const refundTax = MoneyUtil.greaterThan(orderTotal, '0')
+            ? MoneyUtil.format(MoneyUtil.divide(MoneyUtil.multiply(amount, r.order_tax || '0'), orderTotal, 6), 2)
+            : '0.00';
+          const refundNet = MoneyUtil.subtract(amount, refundTax, 2);
+          taxTotal = MoneyUtil.subtract(taxTotal, refundTax, 2);
+          netSalesTotal = MoneyUtil.subtract(netSalesTotal, refundNet, 2);
+          refundedTotal = MoneyUtil.add(refundedTotal, amount, 2);
+          return {
+            business_date: r.business_date || '—',
+            branch_id: r.branch_id,
+            channel: r.channel || 'POS',
+            type: 'REFUND',
+            order_number: `${r.order_number} (${r.refund_number})`,
+            status: 'REFUNDED',
+            gross_subtotal: '0.00',
+            modifiers: '0.00',
+            packaging: '0.00',
+            delivery: '0.00',
+            discounts: '0.00',
+            tax: MoneyUtil.subtract('0', refundTax, 2),
+            net_sales: MoneyUtil.subtract('0', refundNet, 2),
+            paid: '0.00',
+            refunded: amount,
+            outstanding: '0.00',
+          };
+        });
+        // Newest day first, a day's refunds after its sales.
+        rows.push(...refundRows);
+        rows.sort((a, b) => String(b.business_date).localeCompare(String(a.business_date)));
 
         return {
           report_code: reportCode,
