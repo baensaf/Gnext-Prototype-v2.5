@@ -13,6 +13,11 @@ export class RefundCreateDto {
   @IsOptional()
   @IsString()
   pin?: string;
+
+  /** The approver picked in the PIN dialog; only their pin is accepted. */
+  @IsOptional()
+  @IsUUID()
+  approverId?: string;
 }
 
 export class PaidOrderCancelDto {
@@ -31,4 +36,9 @@ export class PaidOrderCancelDto {
   @IsOptional()
   @IsString()
   pin?: string;
+
+  /** The approver picked in the PIN dialog; only their pin is accepted. */
+  @IsOptional()
+  @IsUUID()
+  approverId?: string;
 }

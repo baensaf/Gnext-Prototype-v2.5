@@ -21,7 +21,7 @@ export class RefundController {
    * Returns who released it: the approver whose pin was given, or null for an approver
    * acting on their own authority.
    */
-  private async authorize(req: Request, action: string, pin?: string) {
+  private async authorize(req: Request, action: string, pin?: string, approverId?: string) {
     return await this.approvalService.authorizeMoneyOut(
       (req as any).tenantId,
       action,
@@ -31,6 +31,7 @@ export class RefundController {
         branchId: (req as any).userBranchId ?? null,
       },
       pin,
+      approverId,
     );
   }
 
@@ -52,7 +53,7 @@ export class RefundController {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
-    const approver = await this.authorize(req, 'REFUND_ORDER', body.pin);
+    const approver = await this.authorize(req, 'REFUND_ORDER', body.pin, body.approverId);
     return await this.refundService.refundOrder(tenantId, orderId, body, {
       userId,
       correlationId,
@@ -70,7 +71,7 @@ export class RefundController {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
-    await this.authorize(req, 'CANCEL_PAID_ORDER', body.pin);
+    await this.authorize(req, 'CANCEL_PAID_ORDER', body.pin, body.approverId);
     // The PIN released this, so an approval id the client sent proves nothing and is not kept.
     return await this.refundService.cancelPaidOrder(
       tenantId,

@@ -88,11 +88,11 @@ describe('ApprovalService (Unit)', () => {
     expect(failRes.required_steps).toBe(1);
   });
 
-  it('should verify manager PIN successfully when PIN matches default 1234', async () => {
+  it('refuses the old default PIN for an account with no PIN of its own', async () => {
+    pinLogRepo.count.mockResolvedValue(0);
     userRepo.findOne.mockResolvedValue({ id: 'u-mgr', role: 'SUPERVISOR', pin_hash: null });
-    const result = await service.verifyManagerPin('t-1', 'u-mgr', '1234');
-    expect(result.success).toBe(true);
-    expect(result.role).toBe('SUPERVISOR');
+    await expect(service.verifyManagerPin('t-1', 'u-mgr', '1234')).rejects.toThrow(UnauthorizedException);
+    await expect(service.verifyManagerPin('t-1', 'u-mgr', '9999')).rejects.toThrow(UnauthorizedException);
   });
 
   it('should lock out user and throw ForbiddenException after 5 failed PIN attempts in 15 mins', async () => {

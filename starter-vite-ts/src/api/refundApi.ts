@@ -88,6 +88,7 @@ export const refundApi = {
     reason_code_id?: string;
     reason?: string;
     pin?: string;
+    approver_id?: string;
   }): Promise<RefundRecord[]> => {
     const payload = {
       reasonCodeId: data.reason_code_id,
@@ -95,15 +96,18 @@ export const refundApi = {
       // The server asks for this whenever the account issuing the refund is not one that
       // can approve on its own.
       pin: data.pin,
+      // The approver picked in the PIN dialog; only their pin is accepted.
+      approverId: data.approver_id,
     };
     const res = await httpClient.post(`/api/v1/orders/${data.order_id}/refunds`, payload);
     return (Array.isArray(res.data) ? res.data : [res.data]).map(toRecord);
   },
 
-  cancelPaidOrder: async (orderId: string, reason?: string, pin?: string): Promise<any> => {
+  cancelPaidOrder: async (orderId: string, reason?: string, pin?: string, approverId?: string): Promise<any> => {
     const res = await httpClient.post(`/api/v1/orders/${orderId}/cancel-paid`, {
       reason: reason || 'Paid order cancellation',
       pin,
+      approverId,
     });
     return res.data;
   },

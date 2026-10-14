@@ -127,6 +127,27 @@ describe('verifyApproverPin', () => {
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
+  // Every demo approver shares one pin, so the pin alone cannot say who approved.
+  it('credits the approver the cashier picked when two approvers share a pin', async () => {
+    const first = user({ id: 'm1', role: 'MANAGER', branch_id: BRANCH_A, pin_hash: managerPin });
+    const second = user({ id: 'm2', role: 'MANAGER', branch_id: BRANCH_A, pin_hash: managerPin });
+    const { service } = serviceWith([first, second]);
+
+    await expect(
+      service.verifyApproverPin('t1', '2468', 'REFUND_ORDER', 'cashier-1', BRANCH_A, 'm2'),
+    ).resolves.toMatchObject({ approver_user_id: 'm2' });
+  });
+
+  it("refuses another approver's pin for the one picked", async () => {
+    const picked = user({ id: 'm1', role: 'MANAGER', branch_id: BRANCH_A, pin_hash: await argon2.hash('1357') });
+    const other = user({ id: 'm2', role: 'MANAGER', branch_id: BRANCH_A, pin_hash: managerPin });
+    const { service } = serviceWith([picked, other]);
+
+    await expect(
+      service.verifyApproverPin('t1', '2468', 'REFUND_ORDER', 'cashier-1', BRANCH_A, 'm1'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
   it('records the attempt against whoever is trying, not against the pin owner', async () => {
     const manager = user({ id: 'm1', role: 'MANAGER', branch_id: BRANCH_A, pin_hash: managerPin });
     const { service, pinLogRepo } = serviceWith([manager]);

@@ -2838,7 +2838,10 @@
     "verifying": "Verifying...",
     "reasonPlaceholder": "Reason for supervisor authorization",
     "authorized": "Manager authorization granted",
-    "invalidPin": "Wrong manager PIN. {{count}} tries left."
+    "invalidPin": "Wrong manager PIN. {{count}} tries left.",
+    "approverLabel": "Manager",
+    "noApprovers": "No manager at this branch has a PIN set. Head office sets PINs on the Users screen.",
+    "headOffice": "Head office"
   },
   "printQueue": {
     "confirmPrinted": "It printed",
