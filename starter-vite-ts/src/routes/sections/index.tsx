@@ -51,7 +51,6 @@ import { CashDrawerPage } from 'src/pages/operations/cash-drawer';
 import { PrintQueuePage } from 'src/pages/operations/print-queue';
 /* Detail & Simulation Sub-Pages */
 import { PaymentSettingsPage } from 'src/pages/settings/payments';
-import { UserProfilePage } from 'src/pages/settings/user-profile';
 import { PriceChangesPage } from 'src/pages/catalog/price-changes';
 import { BusinessDaysPage } from 'src/pages/cashier/business-days';
 import { ReportViewerPage } from 'src/pages/reports/report-viewer';
@@ -69,10 +68,8 @@ import WalletCashbackPage from 'src/pages/customer-club/wallet-cashback';
 import { SimulationLogsPage } from 'src/pages/simulation/simulation-logs';
 import { ShiftPolicySettingsPage } from 'src/pages/settings/shift-policy';
 import { BusinessDaySettingsPage } from 'src/pages/settings/business-day';
-import { CustomerProfilePage } from 'src/pages/customers/customer-profile';
 import { IncomingOrdersProvider } from 'src/contexts/incoming-orders-context';
 import { SimulationCenterPage } from 'src/pages/simulation/simulation-center';
-import { SettlementDetailPage } from 'src/pages/operations/settlement-detail';
 import { OrderWorkflowSettingsPage } from 'src/pages/settings/order-workflow';
 import DiscountAuthorizationsPage from 'src/pages/settings/discount-authorizations';
 import { MediaLocalizationDemoPage } from 'src/pages/simulation/media-localization';
@@ -136,6 +133,12 @@ function RoleHomeRedirect() {
 function OrderRedirect() {
   const { id = '' } = useParams();
   return <Navigate to={paths.app.orders.detail(id)} replace />;
+}
+
+/** A customer, an account and a settlement had pages of their own; old links open their drawer. */
+function DrawerRedirect({ to }: { to: (id: string) => string }) {
+  const { id = '' } = useParams();
+  return <Navigate to={to(id)} replace />;
 }
 
 /** A shift's statement is its End shift page now; old links land there. */
@@ -208,7 +211,7 @@ export const routesSection: RouteObject[] = [
       { path: 'delivery/orders', element: <RequiresBranch><DeliveryPage /></RequiresBranch> },
       { path: 'delivery/couriers', element: <RequiresBranch><DeliveryPage /></RequiresBranch> },
       { path: 'delivery/settlements', element: <RequiresBranch><DeliveryPage /></RequiresBranch> },
-      { path: 'delivery/settlements/:settlementId', element: <SettlementDetailPage /> },
+      { path: 'delivery/settlements/:id', element: <DrawerRedirect to={paths.app.delivery.settlementDetail} /> },
       { path: 'delivery/zones', element: <RequiresBranch><DeliveryPage /></RequiresBranch> },
       { path: 'cashier/shifts', element: <RequiresBranch><CashDrawerPage /></RequiresBranch> },
       { path: 'cashier/shifts/:shiftId', element: <ShiftRedirect /> },
@@ -223,7 +226,7 @@ export const routesSection: RouteObject[] = [
       { path: 'wallet', element: <WalletCashbackPage /> },
       { path: 'coupons', element: <CouponsPage /> },
       { path: 'customers', element: <CustomersPage /> },
-      { path: 'customers/:id', element: <CustomerProfilePage /> },
+      { path: 'customers/:id', element: <DrawerRedirect to={paths.app.customers.detail} /> },
       // Credit lives on the customer list since 2026-10-12: the Owes filter and the row's dialog.
       { path: 'credit/accounts', element: <Navigate to="/app/customers?has=OWES" replace /> },
       { path: 'credit/accounts/:id', element: <Navigate to="/app/customers?has=OWES" replace /> },
@@ -268,7 +271,7 @@ export const routesSection: RouteObject[] = [
       { path: 'reports/:reportCode', element: <ReportViewerPage /> },
       { path: 'settings', element: <SettingsHubPage /> },
       { path: 'settings/users', element: <UsersPage /> },
-      { path: 'settings/users/:id', element: <UserProfilePage /> },
+      { path: 'settings/users/:id', element: <DrawerRedirect to={paths.app.settings.userDetail} /> },
       { path: 'settings/general', element: <GeneralSettingsPage /> },
       { path: 'settings/order-workflow', element: <OrderWorkflowSettingsPage /> },
       { path: 'settings/shift-policy', element: <ShiftPolicySettingsPage /> },

@@ -1,14 +1,13 @@
 import type { Branch } from 'src/api/tenantApi';
 import type { AdminUserRow, AdminUserWrite } from 'src/api/usersApi';
 
-import { useNavigate } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
   Box,
   Card,
@@ -35,14 +34,14 @@ import {
   CircularProgress,
 } from '@mui/material';
 
-import { paths } from 'src/routes/paths';
-
 import { usersApi } from 'src/api/usersApi';
 import { tenantApi } from 'src/api/tenantApi';
 import { ROLE_LABELS } from 'src/config/role-access';
 import { useAuthStore } from 'src/store/useAuthStore';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+
+import { UserDrawer } from './user-drawer';
 
 const ROLES = ['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'SUPERVISOR', 'CASHIER'];
 
@@ -61,7 +60,16 @@ const emptyForm: AdminUserWrite = {
 
 export function UsersPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // One account opens in its drawer as ?user=<id>, so it can be linked to.
+  const viewingId = searchParams.get('user');
+  const setViewing = (id: string | null) =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (id) next.set('user', id);
+      else next.delete('user');
+      return next;
+    });
   const currentUserId = useAuthStore((state) => state.user?.id);
 
   const [users, setUsers] = useState<AdminUserRow[]>([]);
@@ -208,7 +216,7 @@ export function UsersPage() {
                       <Link
                         component="button"
                         variant="body2"
-                        onClick={() => navigate(paths.app.settings.userDetail(user.id))}
+                        onClick={() => setViewing(user.id)}
                         sx={{ fontFamily: 'monospace' }}
                       >
                         {user.username}
@@ -238,13 +246,6 @@ export function UsersPage() {
                       />
                     </TableCell>
                     <TableCell align="center">
-                      <IconButton
-                        size="small"
-                        title={t('profile.viewProfile')}
-                        onClick={() => navigate(paths.app.settings.userDetail(user.id))}
-                      >
-                        <VisibilityIcon fontSize="small" />
-                      </IconButton>
                       {/* A courier's account is made and moved with the courier, on the delivery screen. */}
                       {user.role === 'COURIER' ? (
                         <IconButton size="small" disabled title={t('users.courierManagedOnDelivery', 'Managed with the courier, on the delivery screen')}>
@@ -263,6 +264,20 @@ export function UsersPage() {
           </TableContainer>
         </CardContent>
       </Card>
+
+      <UserDrawer
+        userId={viewingId}
+        onClose={() => setViewing(null)}
+        onEdit={(() => {
+          const row = users.find((u) => u.id === viewingId);
+          // A courier's account is made and moved with the courier, on the delivery screen.
+          if (!row || row.role === 'COURIER') return undefined;
+          return () => {
+            setViewing(null);
+            openEdit(row);
+          };
+        })()}
+      />
 
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Box sx={{ width: 380, p: 3 }}>

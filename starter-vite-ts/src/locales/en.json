@@ -1402,7 +1402,12 @@
       "note": "Who they are",
       "notePlaceholder": "e.g. the owner's brother",
       "remove": "Remove",
-      "saveFailed": "The discount could not be saved"
+      "saveFailed": "The discount could not be saved",
+      "none": "No personal discount at any branch."
+    },
+    "drawer": {
+      "birthDate": "Birthday",
+      "saveFailed": "Could not save the customer"
     },
     "creditDialog": {
       "noCredit": "No credit given to this customer.",
@@ -3392,6 +3397,7 @@
       "orders": "Orders",
       "credit": "Credit",
       "shiftsCash": "Shifts & cash",
+      "audit": "Audit trail",
       "wallet": "Wallet"
     },
     "kpi": {

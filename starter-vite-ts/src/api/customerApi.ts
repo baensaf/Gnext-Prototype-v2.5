@@ -152,7 +152,11 @@ export const customerApi = {
     const res = await httpClient.post('/api/v1/customers', data);
     return res.data;
   },
-  updateCustomer: async (id: string, data: Partial<Customer>): Promise<Customer> => {
+  /** Email and national ID take null to clear them. */
+  updateCustomer: async (
+    id: string,
+    data: Partial<Omit<Customer, 'email' | 'national_id'>> & { email?: string | null; national_id?: string | null }
+  ): Promise<Customer> => {
     const res = await httpClient.patch(`/api/v1/customers/${id}`, data);
     return res.data;
   },
