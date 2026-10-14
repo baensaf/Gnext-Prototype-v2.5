@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import React, { useState, useEffect } from 'react';
 
 import LockIcon from '@mui/icons-material/Lock';
 import {
@@ -8,6 +8,7 @@ import {
   Alert,
   Dialog,
   Button,
+  MenuItem,
   TextField,
   Typography,
   DialogTitle,
@@ -17,20 +18,25 @@ import {
 
 import { serverText } from 'src/utils/server-text';
 
-import { approvalApi } from 'src/api/approvalApi';
+import { useAuthStore } from 'src/store/useAuthStore';
+import { approvalApi, type Approver } from 'src/api/approvalApi';
 
 import { toast } from 'src/components/snackbar';
 
 interface ApprovalModalProps {
   open: boolean;
   onClose: () => void;
-  onSuccess: (pin: string, requestId?: string) => void;
+  /** `approverId` is the manager picked in the dialog, for calls that send the pin on. */
+  onSuccess: (pin: string, requestId?: string, approverId?: string) => void;
   actionName: string;
   detailsText?: string;
   entityType?: string;
   entityId?: string;
   createRequest?: boolean;
 }
+
+/** The manager picked last on this device, offered first next time. */
+const LAST_APPROVER_KEY = 'gnext.lastApproverId';
 
 export function ApprovalModal({
   open,
@@ -46,10 +52,44 @@ export function ApprovalModal({
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const userId = useAuthStore((state) => state.user?.id);
+
+  // The manager is named before the pin: every demo approver shares one pin, so the pin
+  // alone cannot say who released the action.
+  const [approvers, setApprovers] = useState<Approver[] | null>(null);
+  const [approverId, setApproverId] = useState('');
+
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
+    approvalApi
+      .listApprovers()
+      .then((list) => {
+        if (cancelled) return;
+        setApprovers(list);
+        // The manager picked last time on this device, then the signed-in account if it may
+        // approve, then the first one at the branch.
+        let remembered: string | null = null;
+        try {
+          remembered = window.localStorage.getItem(LAST_APPROVER_KEY);
+        } catch {
+          remembered = null;
+        }
+        const pick =
+          list.find((a) => a.id === remembered) || list.find((a) => a.id === userId) || list[0];
+        setApproverId(pick?.id || '');
+      })
+      .catch(() => {
+        if (!cancelled) setApprovers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, userId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pin) return;
+    if (!pin || !approverId) return;
     setLoading(true);
     setError(null);
     try {
@@ -62,13 +102,18 @@ export function ApprovalModal({
           reason: detailsText || `Manager authorization for ${actionName}`,
           details: { actionName, detailsText },
         });
-        const approved = await approvalApi.approveRequest(req.id, pin, 'Manager PIN Authorization');
+        const approved = await approvalApi.approveRequest(req.id, pin, 'Manager PIN Authorization', approverId);
         toast.success(t('approval.authorized', 'Manager authorization granted'));
-        onSuccess(pin, approved.id);
+        onSuccess(pin, approved.id, approverId);
       } else {
-        await approvalApi.verifyPin(pin, undefined, actionName);
+        await approvalApi.verifyPin(pin, undefined, actionName, approverId);
         toast.success(t('approval.authorized', 'Manager authorization granted'));
-        onSuccess(pin);
+        onSuccess(pin, undefined, approverId);
+      }
+      try {
+        window.localStorage.setItem(LAST_APPROVER_KEY, approverId);
+      } catch {
+        // Remembering the pick is a convenience only.
       }
       setPin('');
       onClose();
@@ -102,6 +147,26 @@ export function ApprovalModal({
 
             {error && <Alert severity="error">{error}</Alert>}
 
+            {approvers && approvers.length === 0 ? (
+              <Alert severity="error">{t('approval.noApprovers')}</Alert>
+            ) : (
+              <TextField
+                select
+                label={t('approval.approverLabel')}
+                value={approverId}
+                onChange={(e) => setApproverId(e.target.value)}
+                disabled={!approvers}
+                fullWidth
+              >
+                {(approvers || []).map((a) => (
+                  <MenuItem key={a.id} value={a.id}>
+                    {a.display_name}
+                    {a.head_office ? ` (${t('approval.headOffice')})` : ''}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+
             <TextField
               label={t('approval.pinLabel', 'Manager PIN')}
               type="password"
@@ -110,7 +175,7 @@ export function ApprovalModal({
               autoFocus
               required
               fullWidth
-              placeholder={t('approval.pinPlaceholder', 'Enter 4-digit PIN (e.g. 1234)')}
+              placeholder={t('approval.pinPlaceholder', 'Manager PIN')}
               slotProps={{ htmlInput: { maxLength: 8, style: { fontSize: 20, textAlign: 'center', letterSpacing: 6 } } }}
             />
           </Stack>
@@ -119,7 +184,7 @@ export function ApprovalModal({
           <Button onClick={onClose} disabled={loading}>
             {t('common.cancel', 'Cancel')}
           </Button>
-          <Button type="submit" variant="contained" color="primary" disabled={loading || !pin}>
+          <Button type="submit" variant="contained" color="primary" disabled={loading || !pin || !approverId}>
             {loading ? t('approval.verifying', 'Verifying...') : t('approval.authorize', 'Authorize')}
           </Button>
         </DialogActions>

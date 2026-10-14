@@ -72,12 +72,12 @@ export function RefundDialog({ order, orderRef, onClose, onRefunded }: Props) {
     setPinOpen(false);
   }, [orderId]);
 
-  const submit = async (pin?: string) => {
+  const submit = async (pin?: string, approverId?: string) => {
     if (!order) return;
     setSubmitting(true);
     setError(null);
     try {
-      await refundApi.createRefund({ order_id: order.id, reason, pin });
+      await refundApi.createRefund({ order_id: order.id, reason, pin, approver_id: approverId });
       onRefunded();
       onClose();
     } catch (err: any) {
@@ -135,9 +135,9 @@ export function RefundDialog({ order, orderRef, onClose, onRefunded }: Props) {
       <ApprovalModal
         open={pinOpen}
         onClose={() => setPinOpen(false)}
-        onSuccess={(pin) => {
+        onSuccess={(pin, _requestId, approverId) => {
           setPinOpen(false);
-          submit(pin);
+          submit(pin, approverId);
         }}
         actionName="REFUND_ORDER"
         entityType="ORDER"

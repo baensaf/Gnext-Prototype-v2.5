@@ -52,21 +52,34 @@ export class ApprovalController {
     return await this.approvalService.setUserPin(tenantId, targetId, body.pin, correlationId);
   }
 
+  /** Who the PIN dialog offers: the approvers for the caller's branch, then head office. */
+  @Get('approvers')
+  async listApprovers(@Req() req: Request) {
+    return await this.approvalService.listApprovers((req as any).tenantId, (req as any).userBranchId ?? null);
+  }
+
   @Post('verify-pin')
-  async verifyPin(@Body() body: { userId?: string; pin: string; actionName?: string }, @Req() req: Request) {
+  async verifyPin(
+    @Body() body: { userId?: string; pin: string; actionName?: string; approverId?: string },
+    @Req() req: Request,
+  ) {
     const tenantId = (req as any).tenantId;
     const userId = body.userId || (req as any).user?.id;
     if (!userId) throw new UnauthorizedException('User session required');
+    const sessionId = (req as any).user?.id || (req as any).userId;
 
     // An account that can approve confirms itself. Anyone else is asking someone senior to
-    // stand there, so the pin has to belong to that someone rather than to them.
-    if (!isApprover((req as any).userRole)) {
+    // stand there, so the pin has to belong to that someone rather than to them — and to
+    // the one they picked, when they picked one.
+    const pickedOther = !!body.approverId && body.approverId !== sessionId;
+    if (!isApprover((req as any).userRole) || pickedOther) {
       return await this.approvalService.verifyApproverPin(
         tenantId,
         body.pin,
         body.actionName || 'VERIFY_PIN',
-        (req as any).userId,
+        sessionId,
         (req as any).userBranchId ?? null,
+        body.approverId ?? null,
       );
     }
 
@@ -102,20 +115,46 @@ export class ApprovalController {
   }
 
   @Post('requests/:id/approve')
-  async approveRequest(@Param('id') id: string, @Body() body: { approverUserId?: string; pin: string; note?: string }, @Req() req: Request) {
+  async approveRequest(
+    @Param('id') id: string,
+    @Body() body: { approverUserId?: string; pin: string; note?: string; approverId?: string },
+    @Req() req: Request,
+  ) {
     const tenantId = (req as any).tenantId;
     const approverUserId = body.approverUserId || (req as any).user?.id;
     if (!approverUserId) throw new UnauthorizedException('User session required');
     const correlationId = (req as any).correlationId;
-    return await this.approvalService.approveRequest(tenantId, id, approverUserId, body.pin, body.note, correlationId);
+    // `approverId` is the approver the cashier picked in the PIN dialog.
+    return await this.approvalService.approveRequest(
+      tenantId,
+      id,
+      approverUserId,
+      body.pin,
+      body.note,
+      correlationId,
+      body.approverId ?? null,
+    );
   }
 
   @Post('requests/:id/reject')
-  async rejectRequest(@Param('id') id: string, @Body() body: { approverUserId?: string; pin: string; note?: string }, @Req() req: Request) {
+  async rejectRequest(
+    @Param('id') id: string,
+    @Body() body: { approverUserId?: string; pin: string; note?: string; approverId?: string },
+    @Req() req: Request,
+  ) {
     const tenantId = (req as any).tenantId;
     const approverUserId = body.approverUserId || (req as any).user?.id;
     if (!approverUserId) throw new UnauthorizedException('User session required');
     const correlationId = (req as any).correlationId;
-    return await this.approvalService.rejectRequest(tenantId, id, approverUserId, body.pin, body.note, correlationId);
+    // `approverId` is the approver the cashier picked in the PIN dialog.
+    return await this.approvalService.rejectRequest(
+      tenantId,
+      id,
+      approverUserId,
+      body.pin,
+      body.note,
+      correlationId,
+      body.approverId ?? null,
+    );
   }
 }
