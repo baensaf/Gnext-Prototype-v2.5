@@ -165,6 +165,27 @@ describe('CatalogService (Unit)', () => {
       );
     });
 
+    // Nobody types a size code: it is the product code plus the next unused number.
+    it('makes the size code from the product code when none is given', async () => {
+      prodRepo.findOne.mockResolvedValue({ id: 'prod-burger', code: 'chb', base_price: '150000.0000' });
+      variantRepo.count.mockResolvedValue(1);
+      variantRepo.find.mockResolvedValueOnce([{ code: 'CHB-1' }, { code: 'CHB-3' }]);
+
+      const created = await service.createProductVariant('t-1', 'prod-burger', { name: 'Large' }, 'c');
+      expect(created.code).toBe('CHB-4');
+    });
+
+    it('puts the sizes in the order given', async () => {
+      prodRepo.findOne.mockResolvedValue({ id: 'prod-burger' });
+      variantRepo.find.mockResolvedValueOnce([{ id: 'v-1' }, { id: 'v-2' }]).mockResolvedValueOnce([]);
+      const update = jest.fn();
+      variantRepo.manager = { transaction: (fn: any) => fn({ update }) };
+
+      await service.reorderVariants('t-1', 'prod-burger', ['v-2', 'v-1'], 'c');
+      expect(update).toHaveBeenNthCalledWith(1, expect.anything(), { id: 'v-2', tenant_id: 't-1' }, { sort_order: 0 });
+      expect(update).toHaveBeenNthCalledWith(2, expect.anything(), { id: 'v-1', tenant_id: 't-1' }, { sort_order: 1 });
+    });
+
     it('should list variants for a product', async () => {
       prodRepo.findOne.mockResolvedValue({ id: 'prod-burger' });
       variantRepo.find.mockResolvedValue([
