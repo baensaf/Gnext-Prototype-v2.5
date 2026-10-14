@@ -1338,17 +1338,17 @@ export class CatalogService {
   }
 
   // Aggregator price sheet: what each item costs on a delivery channel (Snappfood) at a
-  // branch. Read only: the price is the branch's price group's Snappfood price, or its
+  // branch. Read only: the price is the branch's price list's Snappfood price, or its
   // in-store price with the channel's markup. The menu sync sends exactly this sheet; orders
   // from the channel keep the prices the channel charged.
 
   /**
    * One row per product, or per size of a product sold in sizes, and one per add-on: the
    * in-store price (the branch's price list, else base), what the channel's markup rule makes
-   * of it, the price group's own price on the channel if it sets one, and the price that
+   * of it, the price list's own price on the channel if it sets one, and the price that
    * applies: the group's price, else the rule's, less any item discount running on the channel
    * for the branch's group (the original is `before_price`). Add-ons follow the rule only.
-   * With no branch, or a branch with no price group, it is base plus the markup.
+   * With no branch, or a branch with no price list, it is base plus the markup.
    */
   async getChannelPriceSheet(tenantId: string, channel: string, branchId: string | null = null) {
     const rule = await this.priceLists.channelRule(tenantId, channel);

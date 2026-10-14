@@ -45,7 +45,7 @@ import {
 
 /**
  * Automatic item discounts (V1): a dated percent off one item, taken off every line of it at the
- * till and the kiosk (in store) and/or on the Snappfood menu, for all price groups or chosen ones,
+ * till and the kiosk (in store) and/or on the Snappfood menu, for all price lists or chosen ones,
  * before the order's own discount. Head office sets them; branches see them. Each product page
  * shows and edits its own discounts too.
  */

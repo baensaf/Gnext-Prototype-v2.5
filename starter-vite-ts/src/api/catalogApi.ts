@@ -107,21 +107,31 @@ export interface PriceList {
   price_count: number;
 }
 
-export interface PriceListSheet {
-  price_list: { id: string; name: string; is_active: boolean };
+/** Every price list side by side: what the price grid shows. */
+export interface PriceGrid {
+  lists: PriceList[];
+  /** The categories that have items, in menu order. */
+  categories: Array<{ id: string; name: string }>;
   items: Array<{
     product_id: string;
     variant_id: string | null;
     category_id: string;
     name: string;
     base_price: string;
-    list_price: string | null;
-    price: string;
-    /** The list's own Snappfood price for the item; null while it follows the in-store price. */
-    snappfood_price: string | null;
-    /** What Snappfood gets while snappfood_price is empty: the in-store price plus the markup. */
-    snappfood_fallback: string;
+    /** What Snappfood gets at a branch with no list: the base price plus the markup. */
+    base_snappfood: string;
+    /** Per list id: its own in-store and Snappfood prices (null while it follows base), and what Snappfood gets while it sets none. */
+    lists: Record<string, { price: string | null; snappfood: string | null; snappfood_fallback: string }>;
   }>;
+}
+
+/** One price the grid sets, or clears with amount null; channel SNAPPFOOD for the Snappfood price. */
+export interface ListPriceChange {
+  listId: string;
+  productId: string;
+  variantId: string | null;
+  amount: string | null;
+  channel: string | null;
 }
 
 /** What each item costs in store at one branch: one row per product and one per size. */
@@ -223,7 +233,7 @@ export interface ChannelPriceSheet {
     name: string;
     base_price: string;
     rule_price: string;
-    /** The branch's price group's own price on the channel; null when it follows the rule. */
+    /** The branch's price list's own price on the channel; null when it follows the rule. */
     group_price: string | null;
     /** What Snappfood gets: the above, less any item discount running there. */
     price: string;
@@ -353,8 +363,18 @@ export const catalogApi = {
     const res = await httpClient.get('/api/v1/catalog/price-lists');
     return res.data;
   },
-  createPriceList: async (name: string): Promise<PriceList> => {
-    const res = await httpClient.post('/api/v1/catalog/price-lists', { name });
+  /** A new list; with `copyFromId` it starts with that list's prices, in store and on Snappfood. */
+  createPriceList: async (name: string, copyFromId: string | null = null): Promise<PriceList> => {
+    const res = await httpClient.post('/api/v1/catalog/price-lists', { name, copyFromId });
+    return res.data;
+  },
+  getPriceGrid: async (): Promise<PriceGrid> => {
+    const res = await httpClient.get('/api/v1/catalog/price-lists/grid');
+    return res.data;
+  },
+  /** Saves many list prices together, or none of them when one is refused. */
+  setListPrices: async (changes: ListPriceChange[]): Promise<{ saved: number }> => {
+    const res = await httpClient.put('/api/v1/catalog/price-lists/prices', { changes });
     return res.data;
   },
   updatePriceList: async (id: string, data: { name?: string; is_active?: boolean }): Promise<PriceList> => {
@@ -363,21 +383,6 @@ export const catalogApi = {
   },
   archivePriceList: async (id: string): Promise<void> => {
     await httpClient.delete(`/api/v1/catalog/price-lists/${id}`);
-  },
-  getPriceListSheet: async (id: string): Promise<PriceListSheet> => {
-    const res = await httpClient.get(`/api/v1/catalog/price-lists/${id}/prices`);
-    return res.data;
-  },
-  /** Sets or clears (amount null) a list's in-store price, or with `channel` SNAPPFOOD its Snappfood one. */
-  setListPrice: async (
-    id: string,
-    productId: string,
-    variantId: string | null,
-    amount: string | null,
-    channel: string | null = null
-  ): Promise<PriceListSheet> => {
-    const res = await httpClient.put(`/api/v1/catalog/price-lists/${id}/prices`, { productId, variantId, amount, channel });
-    return res.data;
   },
   assignBranchPriceList: async (branchId: string, priceListId: string | null): Promise<void> => {
     await httpClient.put('/api/v1/catalog/branch-price-list', { branchId, priceListId });
@@ -397,7 +402,7 @@ export const catalogApi = {
     return res.data;
   },
 
-  // Aggregator price sheet (Snappfood), read only: what a branch gets, from its price group's
+  // Aggregator price sheet (Snappfood), read only: what a branch gets, from its price list's
   // Snappfood price or its in-store price plus the markup.
   getChannelPriceSheet: async (channel: string, branchId?: string | null): Promise<ChannelPriceSheet> => {
     const res = await httpClient.get('/api/v1/catalog/channel-prices', { params: { channel, branchId: branchId || undefined } });

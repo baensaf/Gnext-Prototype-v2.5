@@ -42,7 +42,7 @@ export const itemDiscountStatus = (r: ItemDiscount, today = localToday()): ItemD
 export const itemDiscountStatusColor = (s: ItemDiscountStatusOrPaused) =>
   s === 'active' ? 'success' : s === 'scheduled' ? 'info' : s === 'paused' ? 'warning' : 'default';
 
-/** The price groups, for naming a discount's scope. Empty until loaded, or when the chain has none. */
+/** The price lists, for naming a discount's scope. Empty until loaded, or when the chain has none. */
 export function usePriceGroups() {
   const [groups, setGroups] = useState<PriceList[]>([]);
   useEffect(() => {
@@ -54,7 +54,7 @@ export function usePriceGroups() {
   return groups;
 }
 
-/** Which price groups a discount is for, in words: "All groups", or the chosen groups' names. */
+/** Which price lists a discount is for, in words: "All groups", or the chosen groups' names. */
 export const itemDiscountGroupsText = (r: ItemDiscount, groups: PriceList[], t: TFunction) =>
   r.all_groups
     ? t('pricing.itemDiscounts.scope.allGroups')
@@ -227,7 +227,7 @@ export function ItemDiscountDialog({ open, editing, products = [], productId, on
                 control={<Switch checked={draft.is_active} onChange={(e) => setDraft({ ...draft, is_active: e.target.checked })} />}
                 label={draft.is_active ? t('pricing.itemDiscounts.running') : t('pricing.itemDiscounts.paused')}
               />
-              {/* Price groups and Snappfood come in V2; V1 discounts are in store, for every branch. */}
+              {/* Price lists and Snappfood come in V2; V1 discounts are in store, for every branch. */}
               <TextField
                 select
                 label={<>{t('pricing.itemDiscounts.scope.where')} <VersionTag feature="pricing.itemDiscountScope" /></>}

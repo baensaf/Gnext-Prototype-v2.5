@@ -40,8 +40,8 @@ import { useBranchContextOptional } from 'src/contexts/branch-context';
 
 const CHANNEL = 'SNAPPFOOD';
 /**
- * What each item costs on Snappfood at one branch, read only: the price group's own Snappfood
- * price, or the in-store price with the channel's markup, rounded. The group's prices are set
+ * What each item costs on Snappfood at one branch, read only: the price list's own Snappfood
+ * price, or the in-store price with the channel's markup, rounded. The list's prices are set
  * on the price lists page. The markup rule is edited here. The menu sync sends this sheet.
  */
 export function ChannelPricesPage() {

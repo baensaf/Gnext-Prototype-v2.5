@@ -158,7 +158,7 @@ export function useNavData(): NavSectionProps['data'] {
           ],
         },
         {
-          title: t('nav.pricing', 'Branch Prices'),
+          title: t('nav.pricing', 'Price Lists'),
           path: '/app/pricing/price-lists',
           icon: ICONS.pricing,
         },

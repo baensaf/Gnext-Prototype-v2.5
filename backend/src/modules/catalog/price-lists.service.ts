@@ -1,12 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, LessThanOrEqual, Repository } from 'typeorm';
+import { EntityManager, In, IsNull, LessThanOrEqual, Repository } from 'typeorm';
 import { PriceGroup } from '../../entities/PriceGroup.entity';
 import { PriceGroupBranch } from '../../entities/PriceGroupBranch.entity';
 import { PriceEntry } from '../../entities/PriceEntry.entity';
 import { Product } from '../../entities/Product.entity';
 import { ProductVariant } from '../../entities/ProductVariant.entity';
 import { Branch } from '../../entities/Branch.entity';
+import { Category } from '../../entities/Category.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { inStorePrice, isLiveAt, listPricesAt, priceKey } from '../../common/utils/price-list.util';
@@ -14,8 +15,17 @@ import { CHANNEL_PRICING_KEY, applyChannelRule, readChannelRule } from '../../co
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { AuditWriter } from '../audit/audit-writer.service';
 
-/** The channels a price group can price an item on, beside the in-store price. */
+/** The channels a price list can price an item on, beside the in-store price. */
 export const LIST_PRICE_CHANNELS = ['SNAPPFOOD'];
+
+/** One price to set or clear (amount null) on a list, in store or (channel) on Snappfood. */
+export interface ListPriceChange {
+  listId: string;
+  productId: string;
+  variantId: string | null;
+  amount: string | null;
+  channel: string | null;
+}
 
 /**
  * Branch price lists. A list (a `price_group` row) holds prices for some items; a branch
@@ -150,7 +160,11 @@ export class PriceListService {
     return list;
   }
 
-  async createPriceList(tenantId: string, data: { name: string; code?: string }, correlationId: string) {
+  /**
+   * A new list. With `copyFromId` it starts with that list's prices in force, in store and on
+   * Snappfood, as its own rows from now on; after that the two lists are apart.
+   */
+  async createPriceList(tenantId: string, data: { name: string; code?: string; copyFromId?: string | null }, correlationId: string) {
     const name = (data.name || '').trim();
     if (!name) throw new BadRequestException('A price list needs a name');
     // The code is an internal handle; people see the name.
@@ -159,7 +173,35 @@ export class PriceListService {
     if (await this.listRepo.findOne({ where: { tenant_id: tenantId, code }, withDeleted: true })) {
       throw new ConflictException(`Price list ${code} already exists`);
     }
-    const saved = await this.listRepo.save(this.listRepo.create({ tenant_id: tenantId, code, name, currency_code: 'IRR', is_active: true }));
+    const source = data.copyFromId ? await this.getList(tenantId, data.copyFromId) : null;
+    const now = new Date();
+    const copies = source
+      ? await Promise.all(
+          [null, ...LIST_PRICE_CHANNELS].map(async (channel) => ({ channel, prices: listPricesAt(await this.entriesOf(tenantId, source.id, undefined, channel), now) })),
+        )
+      : [];
+    const saved = await this.listRepo.manager.transaction(async (em) => {
+      const list = await em.save(em.create(PriceGroup, { tenant_id: tenantId, code, name, currency_code: 'IRR', is_active: true }));
+      for (const { channel, prices } of copies) {
+        for (const [key, amount] of prices) {
+          const [productId, variantId] = key.split(':');
+          await em.save(
+            em.create(PriceEntry, {
+              tenant_id: tenantId,
+              product_id: productId,
+              variant_id: variantId || null,
+              price_group_id: list.id,
+              channel,
+              price_type: channel ? 'CHANNEL' : 'LIST',
+              currency_code: 'IRR',
+              amount,
+              effective_from: now,
+            }),
+          );
+        }
+      }
+      return list;
+    });
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
@@ -168,6 +210,7 @@ export class PriceListService {
       entityId: saved.id,
       correlationId,
       afterData: saved,
+      details: source ? { copiedFrom: source.id } : undefined,
     });
     return saved;
   }
@@ -280,6 +323,59 @@ export class PriceListService {
   }
 
   /**
+   * Every list side by side, for the price grid: one row per product, or per size of a product
+   * sold in sizes, with its base price and, per list, the list's own in-store and Snappfood
+   * prices and what Snappfood gets while the list sets none. Rows run in menu order.
+   */
+  async getPriceGrid(tenantId: string) {
+    const lists = await this.getPriceLists(tenantId);
+    const now = new Date();
+    const rule = await this.channelRule(tenantId, 'SNAPPFOOD');
+    const based = listPricesAt(await this.entriesOf(tenantId, null), now);
+    const entries = lists.length
+      ? await this.entryRepo.find({
+          where: { tenant_id: tenantId, price_group_id: In(lists.map((l) => l.id)), branch_id: IsNull(), order_type: IsNull(), modifier_option_id: IsNull() },
+        })
+      : [];
+    const pricesOf = (listId: string, channel: string | null) =>
+      listPricesAt(entries.filter((e) => e.price_group_id === listId && (e.channel ?? null) === channel), now);
+    const byList = lists.map((l) => ({ id: l.id, inStore: pricesOf(l.id, null), snappfood: pricesOf(l.id, 'SNAPPFOOD') }));
+
+    const categories = await this.listRepo.manager.find(Category, { where: { tenant_id: tenantId }, order: { sort_order: 'ASC', name: 'ASC' } });
+    const rank = new Map(categories.map((c, i) => [c.id, i]));
+    const products = (await this.productRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { code: 'ASC' } })).sort(
+      (a, b) => (rank.get(a.category_id) ?? categories.length) - (rank.get(b.category_id) ?? categories.length),
+    );
+    const variants = await this.variantRepo.find({ where: { tenant_id: tenantId, is_active: true }, order: { sort_order: 'ASC', code: 'ASC' } });
+
+    const row = (product: Product, variant: ProductVariant | null) => {
+      const key = priceKey(product.id, variant?.id);
+      const base = inStorePrice(based, product, variant);
+      return {
+        product_id: product.id,
+        variant_id: variant?.id || null,
+        category_id: product.category_id,
+        name: variant ? `${product.name} — ${variant.name}` : product.name,
+        base_price: base,
+        // What Snappfood gets at a branch with no list.
+        base_snappfood: applyChannelRule(base, rule),
+        lists: Object.fromEntries(
+          byList.map((l) => {
+            const own = l.inStore.get(key) ?? null;
+            return [l.id, { price: own, snappfood: l.snappfood.get(key) ?? null, snappfood_fallback: applyChannelRule(own ?? base, rule) }];
+          }),
+        ),
+      };
+    };
+    const items = products.flatMap((p) => {
+      const sizes = variants.filter((v) => v.product_id === p.id);
+      return sizes.length ? sizes.map((v) => row(p, v)) : [row(p, null)];
+    });
+    const used = new Set(products.map((p) => p.category_id));
+    return { lists, categories: categories.filter((c) => used.has(c.id)).map((c) => ({ id: c.id, name: c.name })), items };
+  }
+
+  /**
    * Set one item's price on a list from now on, or clear it (amount null) so the item sells at
    * base on that list. With `channel` (Snappfood) it is the list's price on that channel, and
    * clearing it makes Snappfood follow the list's in-store price plus the markup. The price in
@@ -295,6 +391,37 @@ export class PriceListService {
     correlationId: string,
     channel: string | null = null,
   ) {
+    await this.setListPrices(tenantId, [{ listId, productId, variantId, amount, channel }], correlationId);
+    return this.getPriceListSheet(tenantId, listId);
+  }
+
+  /**
+   * Many list prices at once, as the price grid saves them: every change is checked first,
+   * then all are written together or none is.
+   */
+  async setListPrices(tenantId: string, changes: ListPriceChange[], correlationId: string) {
+    for (const change of changes) await this.checkListPrice(tenantId, change);
+    const now = new Date();
+    const befores = await this.entryRepo.manager.transaction(async (em) => {
+      const out: (string | null)[] = [];
+      for (const change of changes) out.push(await this.writeListPrice(em, tenantId, change, now));
+      return out;
+    });
+    for (const [i, { listId, productId, variantId, amount, channel }] of changes.entries()) {
+      await this.auditWriter.write({
+        tenantId,
+        actorType: 'ADMIN',
+        action: channel ? 'PRICE_LIST_CHANNEL_PRICE_SET' : 'PRICE_LIST_PRICE_SET',
+        entityType: 'Product',
+        entityId: productId,
+        correlationId,
+        details: { priceListId: listId, channel, variantId, before: befores[i], after: amount === null ? null : MoneyUtil.format(amount) },
+      });
+    }
+    return { saved: changes.length };
+  }
+
+  private async checkListPrice(tenantId: string, { listId, productId, variantId, amount, channel }: ListPriceChange) {
     await this.getList(tenantId, listId);
     if (channel && !LIST_PRICE_CHANNELS.includes(channel)) {
       throw new BadRequestException(`A list prices an item in store or on ${LIST_PRICE_CHANNELS.join(', ')} only`);
@@ -311,56 +438,45 @@ export class PriceListService {
     if (amount !== null && (!MoneyUtil.isValid(amount) || MoneyUtil.lessThan(amount, '0'))) {
       throw new BadRequestException('A price is a number, 0 or more');
     }
+  }
 
-    const now = new Date();
-    let before: string | null = null;
-    await this.entryRepo.manager.transaction(async (em) => {
-      const live = (
-        await em.find(PriceEntry, {
-          where: {
-            tenant_id: tenantId,
-            price_group_id: listId,
-            product_id: productId,
-            variant_id: variantId || IsNull(),
-            branch_id: IsNull(),
-            channel: channel ?? IsNull(),
-            order_type: IsNull(),
-            modifier_option_id: IsNull(),
-            effective_from: LessThanOrEqual(now),
-          },
-        })
-      ).filter((e) => isLiveAt(e, now));
-      before = listPricesAt(live, now).get(priceKey(productId, variantId)) ?? null;
-      for (const entry of live) {
-        entry.effective_to = now;
-        await em.save(PriceEntry, entry);
-      }
-      if (amount !== null) {
-        await em.save(
-          em.create(PriceEntry, {
-            tenant_id: tenantId,
-            product_id: productId,
-            variant_id: variantId || null,
-            price_group_id: listId,
-            channel,
-            price_type: channel ? 'CHANNEL' : 'LIST',
-            currency_code: 'IRR',
-            amount: MoneyUtil.format(amount),
-            effective_from: now,
-          }),
-        );
-      }
-    });
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: channel ? 'PRICE_LIST_CHANNEL_PRICE_SET' : 'PRICE_LIST_PRICE_SET',
-      entityType: 'Product',
-      entityId: productId,
-      correlationId,
-      details: { priceListId: listId, channel, variantId, before, after: amount === null ? null : MoneyUtil.format(amount) },
-    });
-    return this.getPriceListSheet(tenantId, listId);
+  /** Close the price in force and, unless clearing, open the new one. Returns the old price. */
+  private async writeListPrice(em: EntityManager, tenantId: string, { listId, productId, variantId, amount, channel }: ListPriceChange, now: Date) {
+    const live = (
+      await em.find(PriceEntry, {
+        where: {
+          tenant_id: tenantId,
+          price_group_id: listId,
+          product_id: productId,
+          variant_id: variantId || IsNull(),
+          branch_id: IsNull(),
+          channel: channel ?? IsNull(),
+          order_type: IsNull(),
+          modifier_option_id: IsNull(),
+          effective_from: LessThanOrEqual(now),
+        },
+      })
+    ).filter((e) => isLiveAt(e, now));
+    const before = listPricesAt(live, now).get(priceKey(productId, variantId)) ?? null;
+    for (const entry of live) {
+      entry.effective_to = now;
+      await em.save(PriceEntry, entry);
+    }
+    if (amount !== null) {
+      await em.save(
+        em.create(PriceEntry, {
+          tenant_id: tenantId,
+          product_id: productId,
+          variant_id: variantId || null,
+          price_group_id: listId,
+          channel,
+          price_type: channel ? 'CHANNEL' : 'LIST',
+          currency_code: 'IRR',
+          amount: MoneyUtil.format(amount),
+          effective_from: now,
+        }),
+      );
+    }
+    return before;
   }
 }
