@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, EntityManager } from 'typeorm';
 import { OrderSequence } from '../../entities/OrderSequence.entity';
 import { BusinessDateUtil } from '../../common/utils/business-date.util';
+import { nextNumber } from '../../common/utils/sequence.util';
 
 @Injectable()
 export class OrderSequenceService {
@@ -20,41 +21,8 @@ export class OrderSequenceService {
     const dateStr = BusinessDateUtil.today(new Date()).replace(/-/g, '');
     const prefix = `ORD-${dateStr}`;
 
-    const executeRepo = entityManager
-      ? entityManager.getRepository(OrderSequence)
-      : this.sequenceRepo;
-
-    let nextValue = 1;
-    const maxRetries = 5;
-
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        let seqRecord = await executeRepo.findOne({
-          where: { tenant_id: tenantId, prefix },
-        });
-
-        if (!seqRecord) {
-          seqRecord = executeRepo.create({
-            tenant_id: tenantId,
-            prefix,
-            last_value: 1,
-          });
-          const saved = await executeRepo.save(seqRecord);
-          nextValue = saved.last_value;
-        } else {
-          seqRecord.last_value += 1;
-          const saved = await executeRepo.save(seqRecord);
-          nextValue = saved.last_value;
-        }
-        break;
-      } catch (err) {
-        if (attempt === maxRetries - 1) {
-          nextValue = Math.floor(Math.random() * 9000) + 1000;
-        }
-      }
-    }
-
-    const paddedNum = String(nextValue).padStart(4, '0');
-    return `${prefix}-${paddedNum}`;
+    // One upsert: the read-then-save this replaced let two orders placed at once take the same
+    // number, and fell back to a random one after five tries.
+    return await nextNumber(entityManager ?? this.sequenceRepo.manager, tenantId, prefix);
   }
 }

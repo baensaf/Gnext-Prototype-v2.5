@@ -19,6 +19,7 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { currentTillTerminalId } from '../../common/utils/till-context';
+import { nextNumber } from '../../common/utils/sequence.util';
 import { ShiftPolicy, resolveShiftPolicy } from './shift-policy';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
@@ -404,7 +405,7 @@ export class ShiftService {
           detail: `A shift opens on the current business day, ${dateStr}, not ${dto.businessDate}.`,
         });
       }
-      const shiftNum = `SHF-${dateStr.replace(/-/g, '')}-${Math.floor(Math.random() * 9000) + 1000}`;
+      const shiftNum = await nextNumber(em, tenantId, `SHF-${dateStr.replace(/-/g, '')}`);
       const openingCash = MoneyUtil.format(dto.openingCash || dto.openingFloat || '0.0000');
 
       const shift = em.create(CashierShift, {

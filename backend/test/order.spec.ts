@@ -278,15 +278,12 @@ describe('Order Aggregate & State Machine Suite (R12)', () => {
 
   describe('Database Order Sequence Generator (R12)', () => {
     it('should generate order number matching ORD-YYYYMMDD-XXXX format using database sequence', async () => {
-      sequenceRepo.findOne.mockResolvedValue({
-        tenant_id: 't-1',
-        prefix: 'ORD-20260809',
-        last_value: 5,
-      });
-      sequenceRepo.save.mockImplementation((s) => Promise.resolve(s));
+      const query = jest.fn().mockResolvedValue([{ last_value: 6 }]);
+      sequenceRepo.manager = { query };
 
       const orderNum = await sequenceService.generateOrderNumber('t-1');
       expect(orderNum).toMatch(/^ORD-\d{8}-0006$/);
+      expect(query.mock.calls[0][1]).toEqual(['t-1', expect.stringMatching(/^ORD-\d{8}$/)]);
     });
   });
 
