@@ -5,8 +5,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 
+import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import {
   Box,
@@ -14,9 +14,11 @@ import {
   Chip,
   Grid,
   Link,
+  Alert,
   Stack,
   Table,
   Paper,
+  Drawer,
   Button,
   Dialog,
   Divider,
@@ -33,6 +35,7 @@ import {
   DialogContent,
   DialogActions,
   TableContainer,
+  CircularProgress,
 } from '@mui/material';
 
 import { paths } from 'src/routes/paths';
@@ -64,50 +67,110 @@ const ORDER_STATE_COLOR: Record<string, 'success' | 'error' | 'warning' | 'info'
 
 // ----------------------------------------------------------------------
 
-type ProfileHeaderProps = {
-  title: ReactNode;
+type ProfileDrawerProps = {
+  open: boolean;
+  onClose: () => void;
+  title?: ReactNode;
   subtitle?: ReactNode;
   chips?: ReactNode;
-  backTo: string;
+  /** Shown before the first load has finished. */
+  loading: boolean;
+  error?: string | null;
   onRefresh: () => void;
+  /** Tabs or anything else that stays put above the scrolling body. */
+  bar?: ReactNode;
+  /** Buttons that stay put below the scrolling body. */
+  footer?: ReactNode;
+  /** Wider for a drawer whose body is a wide table. */
+  wide?: boolean;
+  children?: ReactNode;
 };
 
-export function ProfileHeader({ title, subtitle, chips, backTo, onRefresh }: ProfileHeaderProps) {
+/**
+ * One customer, user or settlement opened over its list, as an order opens on the orders
+ * list: the list keeps its filters and its place. These were pages of their own until
+ * 2026-10-14; the old addresses open the drawer.
+ */
+export function ProfileDrawer({
+  open,
+  onClose,
+  title,
+  subtitle,
+  chips,
+  loading,
+  error,
+  onRefresh,
+  bar,
+  footer,
+  wide,
+  children,
+}: ProfileDrawerProps) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
 
   return (
-    <Stack
-      sx={{
-        flexDirection: { xs: 'column', md: 'row' },
-        alignItems: { md: 'center' },
-        justifyContent: 'space-between',
-        gap: 2,
-        mb: 3,
+    <Drawer
+      anchor="right"
+      open={open}
+      onClose={onClose}
+      slotProps={{
+        paper: {
+          sx: { width: { xs: '100%', sm: 640, md: wide ? 960 : 760 }, display: 'flex', flexDirection: 'column' },
+        },
       }}
     >
-      <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 0 }}>
-        <Button startIcon={<ArrowBackIcon />} onClick={() => navigate(backTo)}>
-          {t('profile.back')}
-        </Button>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="h4" noWrap>
-            {title}
-          </Typography>
-          {subtitle && (
-            <Typography variant="body2" color="text.secondary">
-              {subtitle}
+      <Box sx={{ p: 2.5, pb: bar ? 0 : 2, borderBottom: 1, borderColor: 'divider', bgcolor: 'background.neutral' }}>
+        <Stack sx={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h5" noWrap>
+              {title ?? ' '}
             </Typography>
-          )}
-        </Box>
-      </Stack>
-      <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-        {chips}
-        <IconButton onClick={onRefresh} title={t('profile.refresh')}>
-          <RefreshIcon />
-        </IconButton>
-      </Stack>
-    </Stack>
+            {subtitle && (
+              <Typography variant="body2" color="text.secondary">
+                {subtitle}
+              </Typography>
+            )}
+          </Box>
+          <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>
+            {chips}
+            <IconButton onClick={onRefresh} title={t('profile.refresh')}>
+              <RefreshIcon />
+            </IconButton>
+            <IconButton onClick={onClose} title={t('profile.close')}>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+        </Stack>
+        {bar}
+      </Box>
+      <Box sx={{ flex: 1, overflowY: 'auto', p: 2.5 }}>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          children
+        )}
+      </Box>
+      {footer && !loading && (
+        <Stack
+          sx={{
+            flexDirection: 'row',
+            justifyContent: 'flex-end',
+            gap: 1,
+            p: 2,
+            borderTop: 1,
+            borderColor: 'divider',
+          }}
+        >
+          {footer}
+        </Stack>
+      )}
+    </Drawer>
   );
 }
 
@@ -115,17 +178,18 @@ export function ProfileHeader({ title, subtitle, chips, backTo, onRefresh }: Pro
 
 export type ProfileKpi = { label: string; value: ReactNode; hint?: ReactNode };
 
+/** The headline figures, three to a row in a drawer. */
 export function ProfileKpis({ items }: { items: ProfileKpi[] }) {
   return (
-    <Grid container spacing={2} sx={{ mb: 3 }}>
+    <Grid container spacing={1.5} sx={{ mb: 2.5 }}>
       {items.map((item) => (
-        <Grid key={item.label} size={{ xs: 6, sm: 4, lg: 12 / Math.min(items.length, 6) }}>
+        <Grid key={item.label} size={{ xs: 6, sm: 4 }}>
           <Card variant="outlined" sx={{ height: '100%' }}>
-            <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+            <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                 {item.label}
               </Typography>
-              <Typography variant="h6" sx={{ mt: 0.5 }} dir="auto">
+              <Typography variant="subtitle1" sx={{ mt: 0.25, fontWeight: 700 }} dir="auto">
                 {item.value}
               </Typography>
               {item.hint && (

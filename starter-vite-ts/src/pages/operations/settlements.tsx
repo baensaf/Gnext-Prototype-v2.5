@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
@@ -39,6 +40,7 @@ import { httpClient as axios } from 'src/api/httpClient';
 import { useBranchContext } from 'src/contexts/branch-context';
 
 import { Iconify } from 'src/components/iconify';
+import { ProfileDrawer } from 'src/components/entity-profile';
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 
 interface CourierUnsettledSummary {
@@ -110,7 +112,20 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
   const [settleApprovalOpen, setSettleApprovalOpen] = useState(false);
   const [settleDone, setSettleDone] = useState<string | null>(null);
 
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  // One settlement opens in its drawer as ?settlement=<id>, so it can be linked to.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const detailId = searchParams.get('settlement');
+  const setDetailId = useCallback(
+    (id: string | null) =>
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (id) next.set('settlement', id);
+        else next.delete('settlement');
+        return next;
+      }),
+    [setSearchParams]
+  );
+  const closeDetail = () => setDetailId(null);
   const [activeSettlementDetail, setActiveSettlementDetail] = useState<any>(null);
   const [editableLines, setEditableLines] = useState<SettlementLine[]>([]);
   const [adjAmount, setAdjAmount] = useState('0.00');
@@ -215,17 +230,28 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
     }
   };
 
-  const handleOpenDetail = async (settlementId: string) => {
+  const loadDetail = useCallback(async () => {
+    if (!detailId) {
+      setActiveSettlementDetail(null);
+      return;
+    }
     try {
-      const res = await axios.get(`/api/v1/delivery/settlements/${settlementId}`);
+      const res = await axios.get(`/api/v1/delivery/settlements/${detailId}`);
       setActiveSettlementDetail(res.data);
       setEditableLines(res.data.lines || []);
       setAdjAmount(res.data.total_adjustment_amount || '0.00');
-      setDetailDialogOpen(true);
     } catch {
       alert(t('settlements.errors.detailFailed'));
+      setDetailId(null);
     }
-  };
+  }, [detailId, setDetailId, t]);
+
+  useEffect(() => {
+    setActiveSettlementDetail(null);
+    loadDetail();
+  }, [loadDetail]);
+
+  const handleOpenDetail = (settlementId: string) => setDetailId(settlementId);
 
   const handleLineReceiptToggle = (lineId: string) => {
     setEditableLines((prev) =>
@@ -301,7 +327,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
       await saveLines();
       await axios.post(`/api/v1/delivery/settlements/${activeSettlementDetail.id}/close`);
       alert(t('settlements.alerts.closed'));
-      setDetailDialogOpen(false);
+      closeDetail();
       fetchData();
     } catch (err) {
       alert(t('settlements.errors.closeFailed') + ': ' + ((err as any).response?.data?.message || (err as any).message));
@@ -316,7 +342,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
     try {
       await axios.post(`/api/v1/delivery/settlements/${activeSettlementDetail.id}/reverse`, { reason });
       alert(t('settlements.alerts.reversed'));
-      setDetailDialogOpen(false);
+      closeDetail();
       fetchData();
     } catch {
       alert(t('settlements.errors.reverseFailed'));
@@ -612,20 +638,42 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
         createRequest
       />
 
-      {/* DIALOG: Settlement Detail & Verification */}
-      <Dialog open={detailDialogOpen} onClose={() => setDetailDialogOpen(false)} maxWidth="lg" fullWidth>
-        {activeSettlementDetail && (
-          <>
-            <DialogTitle>
-              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography component="span" variant="h6">
-                  {t('settlements.detailModal.title', { number: activeSettlementDetail.settlement_number, name: activeSettlementDetail.courier_name })}
-                </Typography>
-                {getStatusChip(activeSettlementDetail.status)}
-              </Stack>
-            </DialogTitle>
+      {/* The settlement: the cashier checks each order's cash and card, then closes it. */}
+      <ProfileDrawer
+        open={!!detailId}
+        onClose={closeDetail}
+        wide
+        title={
+          activeSettlementDetail &&
+          t('settlements.detailModal.title', {
+            number: activeSettlementDetail.settlement_number,
+            name: activeSettlementDetail.courier_name,
+          })
+        }
+        chips={activeSettlementDetail && getStatusChip(activeSettlementDetail.status)}
+        loading={!!detailId && !activeSettlementDetail}
+        onRefresh={loadDetail}
+        footer={
+          activeSettlementDetail && (
+            <>
+              <Button onClick={closeDetail}>{t('settlements.detailModal.closeWindow')}</Button>
 
-            <DialogContent dividers>
+              {activeSettlementDetail.status === 'DRAFT' && (
+                <Button variant="contained" color="success" disabled={detailCashOver} onClick={handleCloseSettlement}>
+                  {t('settlements.detailModal.finalizeClose')}
+                </Button>
+              )}
+
+              {activeSettlementDetail.status === 'CLOSED' && (
+                <Button variant="outlined" color="error" onClick={handleReverseSettlement}>
+                  {t('settlements.detailModal.reverseSettlement')}
+                </Button>
+              )}
+            </>
+          )
+        }
+      >
+        {activeSettlementDetail && (
               <Stack spacing={3}>
                 {/* Summary Row */}
                 <Grid container spacing={2}>
@@ -756,26 +804,8 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                   </Table>
                 </TableContainer>
               </Stack>
-            </DialogContent>
-
-            <DialogActions>
-              <Button onClick={() => setDetailDialogOpen(false)}>{t('settlements.detailModal.closeWindow')}</Button>
-
-              {activeSettlementDetail.status === 'DRAFT' && (
-                <Button variant="contained" color="success" disabled={detailCashOver} onClick={handleCloseSettlement}>
-                  {t('settlements.detailModal.finalizeClose')}
-                </Button>
-              )}
-
-              {activeSettlementDetail.status === 'CLOSED' && (
-                <Button variant="outlined" color="error" onClick={handleReverseSettlement}>
-                  {t('settlements.detailModal.reverseSettlement')}
-                </Button>
-              )}
-            </DialogActions>
-          </>
         )}
-      </Dialog>
+      </ProfileDrawer>
 
       {/* DIALOG: Statement Printable Modal */}
       <Dialog open={statementModalOpen} onClose={() => setStatementModalOpen(false)} maxWidth="md" fullWidth>

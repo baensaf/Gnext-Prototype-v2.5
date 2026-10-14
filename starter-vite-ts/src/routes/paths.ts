@@ -30,7 +30,8 @@ export const paths = {
       orders: `${ROOTS.APP}/delivery/orders`,
       couriers: `${ROOTS.APP}/delivery/couriers`,
       settlements: `${ROOTS.APP}/delivery/settlements`,
-      settlementDetail: (id: string) => `${ROOTS.APP}/delivery/settlements/${id}`,
+      // A settlement, a customer and an account open in a drawer over their list.
+      settlementDetail: (id: string) => `${ROOTS.APP}/delivery/settlements?settlement=${id}`,
       zones: `${ROOTS.APP}/delivery/zones`,
     },
     cashier: {
@@ -41,7 +42,7 @@ export const paths = {
     payments: `${ROOTS.APP}/payments`,
     customers: {
       root: `${ROOTS.APP}/customers`,
-      detail: (id: string) => `${ROOTS.APP}/customers/${id}`,
+      detail: (id: string) => `${ROOTS.APP}/customers?customer=${id}`,
     },
     catalog: {
       categories: `${ROOTS.APP}/catalog/categories`,
@@ -81,7 +82,7 @@ export const paths = {
     settings: {
       root: `${ROOTS.APP}/settings`,
       users: `${ROOTS.APP}/settings/users`,
-      userDetail: (id: string) => `${ROOTS.APP}/settings/users/${id}`,
+      userDetail: (id: string) => `${ROOTS.APP}/settings/users?user=${id}`,
       general: `${ROOTS.APP}/settings/general`,
       orderWorkflow: `${ROOTS.APP}/settings/order-workflow`,
       shiftPolicy: `${ROOTS.APP}/settings/shift-policy`,

@@ -1,18 +1,14 @@
 import type { GridFilterModel, GridPaginationModel } from '@mui/x-data-grid-premium';
 import type { CreditSummary } from 'src/api/creditApi';
-import type { AddressDraftState } from 'src/components/customer-register';
-import type { Customer, CustomerAddress, CustomerListFilter } from 'src/api/customerApi';
+import type { CustomerDrawerTab } from './customer-drawer';
+import type { Customer, CustomerListFilter } from 'src/api/customerApi';
 
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 import { useMemo, useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
-import HomeIcon from '@mui/icons-material/Home';
-import PlaceIcon from '@mui/icons-material/Place';
-import VisibilityIcon from '@mui/icons-material/Visibility';
 import CreditScoreIcon from '@mui/icons-material/CreditScore';
-import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import {
   Box,
@@ -25,34 +21,24 @@ import {
   Stack,
   Alert,
   Button,
-  Dialog,
-  MenuItem,
-  TextField,
   Typography,
-  IconButton,
   CardContent,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  InputAdornment,
 } from '@mui/material';
-
-import { paths } from 'src/routes/paths';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { useCurrencyLabel } from 'src/utils/currency';
 
 import { creditApi } from 'src/api/creditApi';
 import { customerApi } from 'src/api/customerApi';
-import { isManagerOrAbove } from 'src/config/role-access';
+import { useIsHeadOffice } from 'src/store/useAuthStore';
 import { useBranchContext } from 'src/contexts/branch-context';
-import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
 import { Label } from 'src/components/label';
 import { VersionTag } from 'src/components/version-tag';
 import { ServerDataGrid } from 'src/components/server-data-grid';
-import { CustomerCreditDialog } from 'src/components/customer-credit/customer-credit-dialog';
-import { CustomerAddressFields, CustomerRegisterDialog } from 'src/components/customer-register';
+import { CustomerRegisterDialog } from 'src/components/customer-register';
+
+import { CustomerDrawer } from './customer-drawer';
 
 const fullName = (c?: Customer | null) => (c ? `${c.first_name || ''} ${c.last_name || ''}`.trim() : '');
 
@@ -62,31 +48,42 @@ const owedOf = (c: Customer) => {
   return MoneyUtil.greaterThan('0', balance) ? MoneyUtil.subtract('0', balance) : '0';
 };
 
-/** The rates HAMI's data shows: 10% and 20% cover most friends and family. */
-const FAMILY_PRESETS = ['10', '15', '20'];
+const DRAWER_TABS: CustomerDrawerTab[] = ['overview', 'orders', 'addresses', 'wallet', 'credit'];
 
 export function CustomersPage() {
   const { t } = useTranslation();
   const currency = useCurrencyLabel();
-  const navigate = useNavigate();
   const isHeadOffice = useIsHeadOffice();
-  const userRole = useAuthStore((state) => state.user?.role);
-  // Friends and family are each branch's own: a manager keeps theirs, head office any branch's.
-  const canSetFamily = isManagerOrAbove(userRole);
   const { branches, selectedBranch, canChangeScope } = useBranchContext();
   const branchName = (id?: string | null) => branches.find((b) => b.id === id)?.name || '—';
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [filter, setFilter] = useState<CustomerListFilter | ''>(() => {
     const has = searchParams.get('has');
     return has === 'FAMILY' || has === 'OWES' || has === 'WALLET' ? has : '';
   });
 
-  // Friends-and-family dialog: one person's percent at one branch.
-  const [familyFor, setFamilyFor] = useState<Customer | null>(null);
-  const [familyBranchId, setFamilyBranchId] = useState('');
-  const [familyPercent, setFamilyPercent] = useState('');
-  const [familyNote, setFamilyNote] = useState('');
-  const [familySaving, setFamilySaving] = useState(false);
+  // One customer opens in the drawer as ?customer=<id> (and &tab=), so it can be linked to.
+  const drawerCustomerId = searchParams.get('customer');
+  const tabParam = searchParams.get('tab') as CustomerDrawerTab | null;
+  const drawerTab: CustomerDrawerTab = tabParam && DRAWER_TABS.includes(tabParam) ? tabParam : 'overview';
+  const openCustomer = (id: string, tab: CustomerDrawerTab = 'overview') =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('customer', id);
+      if (tab === 'overview') next.delete('tab');
+      else next.set('tab', tab);
+      return next;
+    });
+  const setDrawerTab = (tab: CustomerDrawerTab) => {
+    if (drawerCustomerId) openCustomer(drawerCustomerId, tab);
+  };
+  const closeCustomer = () =>
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('customer');
+      next.delete('tab');
+      return next;
+    });
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
@@ -95,24 +92,8 @@ export function CustomersPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [registerOpen, setRegisterOpen] = useState(false);
-
-  // Credit account dialog (V3): balance, limit and the account's transactions
-  const [creditFor, setCreditFor] = useState<Customer | null>(null);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   // The chain's credit in one line, shown with the Owes filter.
   const [creditSummary, setCreditSummary] = useState<CreditSummary | null>(null);
-
-  // Address dialog
-  const [addressDialogOpen, setAddressDialogOpen] = useState(false);
-  const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
-  const emptyDraft = (): AddressDraftState => ({
-    title: t('customers.register.addressTitleDefault'),
-    address_text: '',
-    postal_code: '',
-    latitude: null,
-    longitude: null,
-  });
-  const [draft, setDraft] = useState<AddressDraftState>(emptyDraft);
 
   // Paged on the server: a chain can have 500,000 customers. Search waits for a pause in
   // typing and needs 3 characters (fewer lists everyone, newest first).
@@ -199,73 +180,6 @@ export function CustomersPage() {
   const visibleFamily = (c: Customer) =>
     (c.family_discounts || []).filter((f) => canChangeScope || f.branch_id === selectedBranch?.id);
 
-  const openFamily = (c: Customer) => {
-    const branchId = selectedBranch?.id || branches[0]?.id || '';
-    const current = (c.family_discounts || []).find((f) => f.branch_id === branchId);
-    setFamilyFor(c);
-    setFamilyBranchId(branchId);
-    setFamilyPercent(current ? String(Number(current.percent)) : '');
-    setFamilyNote(current?.note || '');
-  };
-
-  const pickFamilyBranch = (branchId: string) => {
-    const current = (familyFor?.family_discounts || []).find((f) => f.branch_id === branchId);
-    setFamilyBranchId(branchId);
-    setFamilyPercent(current ? String(Number(current.percent)) : '');
-    setFamilyNote(current?.note || '');
-  };
-
-  /** Saves the percent, or takes it away when `remove` (or the box is empty). */
-  const saveFamily = async (remove = false) => {
-    if (!familyFor) return;
-    setFamilySaving(true);
-    try {
-      await customerApi.setFamilyDiscount({
-        customer_id: familyFor.id,
-        branch_id: familyBranchId || undefined,
-        percent: remove || !familyPercent ? null : familyPercent,
-        note: familyNote.trim() || null,
-      });
-      setFamilyFor(null);
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || t('customers.family.saveFailed'));
-    } finally {
-      setFamilySaving(false);
-    }
-  };
-
-  const handleOpenCredit = (c: Customer) => setCreditFor(c);
-
-  const handleOpenAddresses = async (c: Customer) => {
-    setSelectedCustomer(c);
-    setDraft(emptyDraft());
-    setAddressDialogOpen(true);
-    try {
-      setAddresses(await customerApi.getAddresses(c.id));
-    } catch (err: any) {
-      setError(err.detail || t('customers.directory.errors.addressesFailed'));
-    }
-  };
-
-  const handleAddAddress = async () => {
-    if (!selectedCustomer || !draft.address_text.trim()) return;
-    try {
-      await customerApi.createAddress(selectedCustomer.id, {
-        title: draft.title.trim() || t('customers.register.addressTitleDefault'),
-        address_text: draft.address_text.trim(),
-        postal_code: draft.postal_code?.trim() || undefined,
-        latitude: draft.latitude ?? null,
-        longitude: draft.longitude ?? null,
-        is_default: addresses.length === 0,
-      });
-      setAddresses(await customerApi.getAddresses(selectedCustomer.id));
-      setDraft(emptyDraft());
-    } catch (err: any) {
-      setError(err.detail || t('customers.directory.errors.addressesFailed'));
-    }
-  };
-
   return (
     <Box>
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3, gap: 2, flexWrap: 'wrap' }}>
@@ -331,11 +245,7 @@ export function CustomersPage() {
             minWidth: 180,
             valueGetter: (_value, row) => fullName(row as Customer),
             renderCell: (params) => (
-              <Link
-                component="button"
-                onClick={() => navigate(paths.app.customers.detail(params.row.id))}
-                sx={{ fontWeight: 600 }}
-              >
+              <Link component="button" onClick={() => openCustomer(params.row.id)} sx={{ fontWeight: 600 }}>
                 {params.value || '—'}
               </Link>
             ),
@@ -431,7 +341,11 @@ export function CustomersPage() {
                           label={`${MoneyUtil.formatCurrency(owed)} ${currency}`}
                           color={MoneyUtil.greaterThan(owed, '0') ? 'error' : 'default'}
                           size="small"
-                          onClick={() => handleOpenCredit(c)}
+                          onClick={(e) => {
+                            // The row would open the drawer on its first tab.
+                            e.stopPropagation();
+                            openCustomer(c.id, 'credit');
+                          }}
                           sx={{ fontWeight: 600, cursor: 'pointer' }}
                         />
                         <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.75rem' }}>
@@ -455,36 +369,9 @@ export function CustomersPage() {
                 />
               ),
           },
-          {
-            field: 'actions',
-            headerName: t('customers.directory.actions'),
-            width: 200,
-            sortable: false,
-            renderCell: (params) => {
-              const c = params.row as Customer;
-              return (
-                <Stack direction="row" spacing={0.5}>
-                  <IconButton size="small" title={t('customers.directory.viewProfile')} onClick={() => navigate(paths.app.customers.detail(c.id))}>
-                    <VisibilityIcon fontSize="small" />
-                  </IconButton>
-                  {canSetFamily && (
-                    <IconButton size="small" title={t('customers.family.title')} color="secondary" onClick={() => openFamily(c)}>
-                      <VolunteerActivismIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                  {isHeadOffice && (
-                    <IconButton size="small" title={t('customers.directory.credit.title')} color="primary" onClick={() => handleOpenCredit(c)}>
-                      <CreditScoreIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                  <IconButton size="small" title={t('customers.directory.addresses')} color="info" onClick={() => handleOpenAddresses(c)}>
-                    <HomeIcon fontSize="small" />
-                  </IconButton>
-                </Stack>
-              );
-            },
-          },
         ]}
+        onRowClick={(params) => openCustomer(String(params.id))}
+        sx={{ '& .MuiDataGrid-row': { cursor: 'pointer' } }}
         loading={loading}
         rowCount={total}
         paginationModel={paging}
@@ -506,130 +393,13 @@ export function CustomersPage() {
         showCredit={isHeadOffice}
       />
 
-      {/* Credit (V3): what they owe, repayments and the limit, from the row. */}
-      <CustomerCreditDialog customer={creditFor} onClose={() => setCreditFor(null)} onChanged={() => loadData()} />
-
-      {/* Friends and family: one person's percent off at one branch, filled in on the till. */}
-      <Dialog open={!!familyFor} onClose={() => setFamilyFor(null)} maxWidth="xs" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>
-          {t('customers.family.title')} — {fullName(familyFor)} <VersionTag feature="customers.family" sx={{ ml: 1 }} />
-        </DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {t('customers.family.help')}
-          </Typography>
-          <Stack spacing={2}>
-            {canChangeScope && (
-              <TextField
-                select
-                size="small"
-                label={t('customers.family.branch')}
-                value={familyBranchId}
-                onChange={(e) => pickFamilyBranch(e.target.value)}
-              >
-                {branches.map((b) => (
-                  <MenuItem key={b.id} value={b.id}>
-                    {b.name}
-                  </MenuItem>
-                ))}
-              </TextField>
-            )}
-            <TextField
-              size="small"
-              autoFocus
-              label={t('customers.family.percent')}
-              value={familyPercent}
-              onChange={(e) => setFamilyPercent(e.target.value.replace(/[^0-9.]/g, ''))}
-              slotProps={{ input: { endAdornment: <InputAdornment position="end">%</InputAdornment> } }}
-            />
-            <Stack direction="row" spacing={1}>
-              {FAMILY_PRESETS.map((pct) => (
-                <Chip
-                  key={pct}
-                  label={`${pct}%`}
-                  size="small"
-                  variant={familyPercent === pct ? 'filled' : 'outlined'}
-                  color="secondary"
-                  onClick={() => setFamilyPercent(pct)}
-                />
-              ))}
-            </Stack>
-            <TextField
-              size="small"
-              label={t('customers.family.note')}
-              placeholder={t('customers.family.notePlaceholder')}
-              value={familyNote}
-              onChange={(e) => setFamilyNote(e.target.value)}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          {(familyFor?.family_discounts || []).some((f) => f.branch_id === familyBranchId) && (
-            <Button color="error" disabled={familySaving} onClick={() => saveFamily(true)} sx={{ mr: 'auto' }}>
-              {t('customers.family.remove')}
-            </Button>
-          )}
-          <Button onClick={() => setFamilyFor(null)}>{t('common.cancel')}</Button>
-          <Button
-            variant="contained"
-            disabled={familySaving || !familyPercent || Number(familyPercent) <= 0 || Number(familyPercent) > 100 || !familyBranchId}
-            onClick={() => saveFamily()}
-          >
-            {t('common.save')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Addresses */}
-      <Dialog open={addressDialogOpen} onClose={() => setAddressDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 'bold' }}>
-          {t('customers.directory.addresses')} — {fullName(selectedCustomer)}
-        </DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-            {t('customers.directory.savedAddresses')}
-          </Typography>
-          <Stack spacing={1} sx={{ mb: 3 }}>
-            {addresses.length === 0 && (
-              <Typography variant="body2" color="text.secondary">
-                {t('customers.register.noAddresses')}
-              </Typography>
-            )}
-            {addresses.map((a) => (
-              <Card key={a.id} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                  {a.title} {a.is_default && <Chip label={t('customers.directory.default')} size="small" color="primary" sx={{ ml: 1 }} />}
-                  {a.latitude != null && (
-                    <Chip icon={<PlaceIcon />} label={t('customers.register.pinPlaced')} size="small" variant="outlined" sx={{ ml: 1 }} />
-                  )}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {a.address_text}
-                  {a.postal_code ? ` — ${a.postal_code}` : ''}
-                </Typography>
-              </Card>
-            ))}
-          </Stack>
-
-          <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
-            {t('customers.register.addAddress')}
-          </Typography>
-          <CustomerAddressFields value={draft} onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))} />
-          <Button
-            variant="contained"
-            size="small"
-            sx={{ mt: 1.5, fontWeight: 'bold' }}
-            disabled={!draft.address_text.trim()}
-            onClick={handleAddAddress}
-          >
-            {t('customers.register.addAddress')}
-          </Button>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddressDialogOpen(false)}>{t('common.close')}</Button>
-        </DialogActions>
-      </Dialog>
-
+      <CustomerDrawer
+        customerId={drawerCustomerId}
+        tab={drawerTab}
+        onTabChange={setDrawerTab}
+        onClose={closeCustomer}
+        onChanged={loadData}
+      />
     </Box>
   );
 }

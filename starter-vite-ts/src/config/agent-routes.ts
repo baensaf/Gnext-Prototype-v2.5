@@ -40,9 +40,8 @@ export const AGENT_ROUTES: AgentRoute[] = [
   // delivery audit and the fleet roll-up are the manager's and head office's.
   { path: '/app/delivery', exact: true },
   { path: '/app/delivery/orders' },
-  // Below it: a courier's page (/app/delivery/couriers/:courierId).
   { path: '/app/delivery/couriers' },
-  // Below it: one settlement (/app/delivery/settlements/:settlementId).
+  // One settlement opens in a drawer (?settlement=<id>); the old /:id address redirects.
   { path: '/app/delivery/settlements' },
 
   // The cashier's shifts and drawer. Below it: one shift (/app/cashier/shifts/:shiftId).
