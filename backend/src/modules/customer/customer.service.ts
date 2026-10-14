@@ -291,8 +291,8 @@ export class CustomerService {
     correlationId: string,
     actorId?: string,
   ) {
+    // The mobile number is what finds a customer again; a name is optional at the till.
     const fullName = data.name !== undefined ? String(data.name || '').trim() : null;
-    if (fullName === '') throw new BadRequestException({ code: 'NAME_REQUIRED', message: 'A customer needs a name' });
     // Checked before anything is saved, so a bad address doesn't leave a customer behind.
     const addresses = (Array.isArray(data.addresses) ? data.addresses : []).map(normalizeAddress);
 

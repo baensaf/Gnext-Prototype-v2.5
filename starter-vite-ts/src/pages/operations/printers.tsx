@@ -164,8 +164,9 @@ export function PrintersPage() {
   };
 
   const handleSavePrinter = async () => {
-    if (!printerForm.code.trim() || !printerForm.name.trim()) {
-      setError(t('common.requiredFields', 'Printer code and name are required.'));
+    // The code is made on the server; a new printer is 80 mm and in use.
+    if (!printerForm.name.trim()) {
+      setError(t('operations.printers.nameRequired'));
       return;
     }
 
@@ -330,7 +331,6 @@ export function PrintersPage() {
               <Table sx={{ minWidth: 760 }}>
                 <TableHead>
                   <TableRow>
-                    <TableCell>{t('operations.printers.colCode', 'Code')}</TableCell>
                     <TableCell>{t('operations.printers.colName', 'Printer Name')}</TableCell>
                     <TableCell>{t('operations.printers.colType', 'Type')}</TableCell>
                     <TableCell>{t('operations.printers.colAddress', 'Network Address')}</TableCell>
@@ -344,8 +344,7 @@ export function PrintersPage() {
                 <TableBody>
                   {printers.map((pr) => (
                       <TableRow key={pr.id}>
-                        <TableCell><strong>{pr.code}</strong></TableCell>
-                        <TableCell>{pr.name}</TableCell>
+                        <TableCell><strong>{pr.name}</strong></TableCell>
                         <TableCell>
                           <Chip
                             label={t(`operations.printers.types.${pr.printer_type}`, pr.printer_type)}
@@ -414,7 +413,7 @@ export function PrintersPage() {
                     ))}
                   {printers.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} align="center" sx={{ py: 5, color: 'text.secondary' }}>
+                      <TableCell colSpan={6} align="center" sx={{ py: 5, color: 'text.secondary' }}>
                         {t('common.noRecords', 'No printers found. Click "Add Printer" to create one.')}
                       </TableCell>
                     </TableRow>
@@ -434,13 +433,6 @@ export function PrintersPage() {
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField
-              label={t('operations.printers.formCode', 'Printer Code')}
-              value={printerForm.code}
-              onChange={(e) => setPrinterForm({ ...printerForm, code: e.target.value })}
-              fullWidth
-              required
-            />
             <TextField
               label={t('operations.printers.formName', 'Printer Name')}
               value={printerForm.name}
@@ -474,14 +466,6 @@ export function PrintersPage() {
                 )}
               </Select>
             </FormControl>
-            {connForm.kind === 'none' && (
-              <TextField
-                label={t('operations.printers.formAddress', 'Simulated Address / IP Port')}
-                value={printerForm.simulated_address}
-                onChange={(e) => setPrinterForm({ ...printerForm, simulated_address: e.target.value })}
-                fullWidth
-              />
-            )}
             {connForm.kind === 'tcp' && (
               <Stack direction="row" spacing={2}>
                 <TextField
@@ -530,13 +514,16 @@ export function PrintersPage() {
                 )}
               </Alert>
             )}
-            <TextField
-              label={t('operations.printers.formPaper', 'Paper Width (mm)')}
-              type="number"
-              value={printerForm.paper_width_mm}
-              onChange={(e) => setPrinterForm({ ...printerForm, paper_width_mm: Number(e.target.value) })}
-              fullWidth
-            />
+            {editingPrinterId && (
+              <TextField
+                label={t('operations.printers.formPaper', 'Paper Width (mm)')}
+                type="number"
+                value={printerForm.paper_width_mm}
+                onChange={(e) => setPrinterForm({ ...printerForm, paper_width_mm: Number(e.target.value) })}
+                fullWidth
+              />
+            )}
+            {editingPrinterId && (
             <FormControlLabel
               control={
                 <Switch
@@ -546,6 +533,7 @@ export function PrintersPage() {
               }
               label={t('operations.printers.formActive', 'Device Status Active')}
             />
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>

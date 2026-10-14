@@ -22,6 +22,7 @@ import { activeItemDiscounts, discountedPrice } from '../../common/utils/item-di
 import { addDays } from '../../common/utils/business-day';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { defaultTaxRate } from '../../common/utils/default-tax';
+import { nextCode, typedCode } from '../../common/utils/next-code.util';
 
 /** What besides a whole product a stop can be on: one of its sizes. Add-ons are never stopped. */
 export interface StopTarget {
@@ -130,10 +131,10 @@ export class CatalogService {
     return all.reduce((max, c) => Math.max(max, c.sort_order || 0), 0) + 1;
   }
 
-  async createCategory(tenantId: string, data: { code: string; name: string; sort_order?: number; image_asset_id?: string }, correlationId: string) {
-    const code = (data.code || '').trim().toUpperCase();
+  async createCategory(tenantId: string, data: { code?: string; name: string; sort_order?: number; image_asset_id?: string }, correlationId: string) {
     const name = (data.name || '').trim();
-    if (!code || !name) throw new BadRequestException('A category needs a code and a name');
+    if (!name) throw new BadRequestException('A category needs a name');
+    const code = typedCode(data.code) || (await nextCode(this.catRepo, { tenant_id: tenantId }, 'CAT'));
     const existing = await this.catRepo.findOne({ where: { tenant_id: tenantId, code }, withDeleted: true });
     if (existing) throw new ConflictException(`Category code ${code} already exists`);
 

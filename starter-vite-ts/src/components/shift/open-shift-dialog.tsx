@@ -115,3 +115,48 @@ export function OpenShiftDialog({ open, onClose, terminal, branchName, defaultFl
     </Dialog>
   );
 }
+
+/**
+ * The same count, on the register's "no shift open" card: the float is already filled in from
+ * the branch policy, so most shifts open with one press and no popup.
+ */
+export function OpenShiftInline({ terminal, defaultFloat, onOpened }: Omit<Props, 'open' | 'onClose' | 'branchName'>) {
+  const currencyLabel = useCurrencyLabel();
+  const { t } = useTranslation();
+  const [openingFloat, setOpeningFloat] = useState(defaultFloat);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => setOpeningFloat(defaultFloat), [defaultFloat]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setError(null);
+    try {
+      onOpened(await shiftApi.openShift({ terminalId: terminal.id, openingCash: openingFloat || '0' }));
+    } catch (err: any) {
+      setError(err.detail || err.message || t('shift.open.error', 'Could not open the shift'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Stack component="form" onSubmit={handleSubmit} spacing={2} sx={{ alignItems: 'center', width: '100%', maxWidth: 360 }}>
+      {error && <Alert severity="error" sx={{ width: '100%' }}>{error}</Alert>}
+      <TextField
+        label={t('shift.open.float', 'Opening float ({{currency}})', { currency: currencyLabel })}
+        type="number"
+        size="small"
+        fullWidth
+        value={toToman(openingFloat)}
+        onChange={(e) => setOpeningFloat(fromToman(e.target.value))}
+        slotProps={{ htmlInput: { min: 0, dir: 'ltr' } }}
+      />
+      <Button type="submit" size="large" fullWidth variant="contained" color="success" startIcon={<LockOpenIcon />} disabled={submitting}>
+        {t('shift.open.confirm', 'Open shift')}
+      </Button>
+    </Stack>
+  );
+}

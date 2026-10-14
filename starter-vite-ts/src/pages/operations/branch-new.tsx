@@ -10,13 +10,10 @@ import CheckIcon from '@mui/icons-material/Check';
 import {
   Box,
   Card,
-  Step,
   Alert,
   Stack,
   Button,
   Divider,
-  Stepper,
-  StepLabel,
   Typography,
   CardContent,
   CircularProgress,
@@ -35,44 +32,31 @@ const BranchLocationMap = lazy(() =>
   import('src/components/branch/branch-location-map').then((m) => ({ default: m.BranchLocationMap }))
 );
 
-const STEPS = ['details', 'location', 'hours', 'review'] as const;
-type StepKey = (typeof STEPS)[number];
-
 /**
- * Head office adds a branch in four steps: details, the pin on the map, the weekly hours, and
- * a last look. Nothing is saved until the end, and then everything is saved together. The
- * pin is required.
+ * Head office adds a branch on one page: the title, the pin on the map, and the weekly hours,
+ * which start from the usual week and fold away unless someone changes them. Nothing is saved
+ * until Add branch, and then everything is saved together. The pin is required: delivery zones
+ * are drawn around it.
  */
 export function BranchNewPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const branchScope = useBranchContextOptional();
 
-  const [step, setStep] = useState(0);
   const [details, setDetails] = useState<BranchDetails>(emptyDetails);
   const [pin, setPin] = useState<Pin | null>(null);
   const [week, setWeek] = useState<WeekHours>(defaultWeek);
-  const [tried, setTried] = useState<Partial<Record<StepKey, boolean>>>({});
+  const [hoursOpen, setHoursOpen] = useState(false);
+  const [tried, setTried] = useState(false);
   const [nameError, setNameError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const stepKey = STEPS[step];
   const hoursOk = Object.keys(weekProblems(week)).length === 0;
-  const ready: Record<StepKey, boolean> = {
-    details: !!details.name.trim(),
-    location: !!pin,
-    hours: hoursOk,
-    review: true,
-  };
-
-  const next = () => {
-    setTried((prev) => ({ ...prev, [stepKey]: true }));
-    if (ready[stepKey]) setStep((s) => s + 1);
-  };
 
   const create = async () => {
-    if (!pin) return;
+    setTried(true);
+    if (!details.name.trim() || !pin || !hoursOk) return;
     setSaving(true);
     setError(null);
     try {
@@ -91,20 +75,12 @@ export function BranchNewPage() {
     } catch (err: any) {
       if (err.code === 'BRANCH_TITLE_TAKEN') {
         setNameError(t('branchMgmt.details.titleTaken', 'Another branch of the chain already has this title.'));
-        setStep(0);
       } else {
         setError(err.detail || err.message || t('operations.branches.createError', 'Failed to create branch'));
       }
     } finally {
       setSaving(false);
     }
-  };
-
-  const stepLabels: Record<StepKey, string> = {
-    details: t('branchMgmt.steps.details', 'Details'),
-    location: t('branchMgmt.steps.location', 'Location'),
-    hours: t('branchMgmt.steps.hours', 'Opening hours'),
-    review: t('branchMgmt.steps.review', 'Review'),
   };
 
   return (
@@ -118,14 +94,6 @@ export function BranchNewPage() {
         ]}
       />
 
-      <Stepper activeStep={step} alternativeLabel sx={{ mb: 4 }}>
-        {STEPS.map((key, index) => (
-          <Step key={key} completed={index < step}>
-            <StepLabel>{stepLabels[key]}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
-
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
           {error}
@@ -134,9 +102,9 @@ export function BranchNewPage() {
 
       <Card sx={{ borderRadius: 3 }}>
         <CardContent sx={{ p: { xs: 2, md: 4 } }}>
-          {stepKey === 'details' && (
-            <>
-              <StepIntro
+          <Stack spacing={4} divider={<Divider flexItem />}>
+            <Box>
+              <SectionIntro
                 title={t('branchMgmt.new.detailsTitle', 'What is the branch called, and where?')}
                 body={t('branchMgmt.new.detailsBody', 'The title is the name staff and customers see. You can change any of this later.')}
               />
@@ -146,99 +114,63 @@ export function BranchNewPage() {
                   setDetails(d);
                   setNameError(null);
                 }}
-                showErrors={tried.details}
+                showErrors={tried}
                 nameError={nameError}
               />
-            </>
-          )}
+            </Box>
 
-          {stepKey === 'location' && (
-            <>
-              <StepIntro
+            <Box>
+              <SectionIntro
                 title={t('branchMgmt.new.locationTitle', 'Place the branch on the map')}
                 body={t('branchMgmt.new.locationBody', 'Search the address, then click the map or drag the pin to the front door. Delivery zones are drawn around this pin.')}
               />
               <Suspense fallback={<MapLoading />}>
                 <BranchLocationMap value={pin} onChange={setPin} />
               </Suspense>
-              {tried.location && !pin && (
+              {tried && !pin && (
                 <Alert severity="warning" sx={{ mt: 2 }}>
                   {t('branchMgmt.new.pinRequired', 'A branch cannot be added without its pin on the map.')}
                 </Alert>
               )}
-            </>
-          )}
+            </Box>
 
-          {stepKey === 'hours' && (
-            <>
-              <StepIntro
-                title={t('branchMgmt.new.hoursTitle', 'When is the branch open?')}
-                body={t('branchMgmt.new.hoursBody', 'Add a second shift for a lunch and dinner split. A shift that closes after midnight, such as 18:00–02:00, belongs to the day it opens. Outside these hours the till still sells, with a warning.')}
-              />
-              <BranchHoursEditor value={week} onChange={setWeek} />
-            </>
-          )}
-
-          {stepKey === 'review' && (
-            <>
-              <StepIntro
-                title={t('branchMgmt.new.reviewTitle', 'Check and add the branch')}
-                body={t('branchMgmt.new.reviewBody', 'It starts active, with no tills, printers, staff or menu stops. Set those up next.')}
-              />
-              <Stack spacing={2.5} divider={<Divider flexItem />}>
-                <ReviewRow label={stepLabels.details} onEdit={() => setStep(0)}>
-                  <Typography sx={{ fontWeight: 600 }}>{details.name}</Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {[details.address, details.phone].filter(Boolean).join(' · ') ||
-                      t('branchMgmt.details.noAddressPhone', 'No address or phone')}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {details.time_zone}
-                  </Typography>
-                </ReviewRow>
-                <ReviewRow label={stepLabels.location} onEdit={() => setStep(1)}>
-                  <Suspense fallback={<MapLoading height={180} />}>
-                    <BranchLocationMap value={pin} height={180} />
-                  </Suspense>
-                </ReviewRow>
-                <ReviewRow label={stepLabels.hours} onEdit={() => setStep(2)}>
-                  <WeekSummary week={week} />
-                </ReviewRow>
+            <Box>
+              <Stack direction="row" sx={{ alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+                <SectionIntro
+                  title={t('branchMgmt.new.hoursTitle', 'When is the branch open?')}
+                  body={t('branchMgmt.new.hoursBody', 'Add a second shift for a lunch and dinner split. A shift that closes after midnight, such as 18:00–02:00, belongs to the day it opens. Outside these hours the till still sells, with a warning.')}
+                />
+                {!hoursOpen && (
+                  <Button size="small" onClick={() => setHoursOpen(true)} sx={{ flexShrink: 0 }}>
+                    {t('common.edit', 'Edit')}
+                  </Button>
+                )}
               </Stack>
-            </>
-          )}
+              {hoursOpen || !hoursOk ? <BranchHoursEditor value={week} onChange={setWeek} /> : <WeekSummary week={week} />}
+            </Box>
+          </Stack>
         </CardContent>
 
         <Divider />
         <Stack direction="row" sx={{ p: 2, justifyContent: 'space-between' }}>
-          <Button
-            color="inherit"
-            onClick={() => (step === 0 ? navigate('/app/operations/branches') : setStep((s) => s - 1))}
-            disabled={saving}
-          >
-            {step === 0 ? t('common.cancel', 'Cancel') : t('branchMgmt.new.back', 'Back')}
+          <Button color="inherit" onClick={() => navigate('/app/operations/branches')} disabled={saving}>
+            {t('common.cancel', 'Cancel')}
           </Button>
-          {stepKey === 'review' ? (
-            <Button
-              variant="contained"
-              startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <CheckIcon />}
-              onClick={create}
-              disabled={saving || !pin}
-            >
-              {t('branchMgmt.new.create', 'Add branch')}
-            </Button>
-          ) : (
-            <Button variant="contained" onClick={next} disabled={stepKey === 'hours' && !hoursOk}>
-              {t('branchMgmt.new.next', 'Next')}
-            </Button>
-          )}
+          <Button
+            variant="contained"
+            startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <CheckIcon />}
+            onClick={create}
+            disabled={saving || (tried && (!pin || !hoursOk))}
+          >
+            {t('branchMgmt.new.create', 'Add branch')}
+          </Button>
         </Stack>
       </Card>
     </Box>
   );
 }
 
-function StepIntro({ title, body }: { title: string; body: string }) {
+function SectionIntro({ title, body }: { title: string; body: string }) {
   return (
     <Box sx={{ mb: 3 }}>
       <Typography variant="h6">{title}</Typography>
@@ -246,23 +178,6 @@ function StepIntro({ title, body }: { title: string; body: string }) {
         {body}
       </Typography>
     </Box>
-  );
-}
-
-function ReviewRow({ label, onEdit, children }: { label: string; onEdit: () => void; children: React.ReactNode }) {
-  const { t } = useTranslation();
-  return (
-    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-      <Typography variant="subtitle2" color="text.secondary" sx={{ width: { sm: 160 }, flexShrink: 0 }}>
-        {label}
-      </Typography>
-      <Box sx={{ flex: 1, minWidth: 0 }}>{children}</Box>
-      <Box>
-        <Button size="small" onClick={onEdit}>
-          {t('common.edit', 'Edit')}
-        </Button>
-      </Box>
-    </Stack>
   );
 }
 

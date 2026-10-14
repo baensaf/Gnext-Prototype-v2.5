@@ -18,7 +18,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import {
   Box,
   Tab,
@@ -34,6 +35,7 @@ import {
   Dialog,
   Select,
   Switch,
+  Collapse,
   TableRow,
   MenuItem,
   TableBody,
@@ -65,6 +67,8 @@ import { useBranchContext } from 'src/contexts/branch-context';
 
 import { VersionTag } from 'src/components/version-tag';
 import { AmountInWords } from 'src/components/amount-in-words';
+import { useDragSort, DragHandleCell } from 'src/components/drag-sort';
+import { useConfirm } from 'src/components/confirm-dialog/use-confirm';
 
 import { ProductPhotos } from './product-photos';
 import { AddonGroupSheet } from './addon-group-sheet';
@@ -82,6 +86,7 @@ export function ProductDetailPage() {
   const creating = !id;
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   // A branch can open this to see what it is selling; head office is who changes it.
   // See the same flag on the products list.
@@ -112,6 +117,8 @@ export function ProductDetailPage() {
   const { selectedBranchId } = useBranchContext();
   const [stops, setStops] = useState<ProductAvailability[]>([]);
 
+  const [moreOpen, setMoreOpen] = useState(false);
+
   // Variant Modal State
   const [variantDialogOpen, setVariantDialogOpen] = useState(false);
   const [editingVariant, setEditingVariant] = useState<ProductVariant | null>(null);
@@ -119,8 +126,7 @@ export function ProductDetailPage() {
   const [varBarcode, setVarBarcode] = useState('');
   const [varPrice, setVarPrice] = useState('');
   const [savingVariant, setSavingVariant] = useState(false);
-  // Sizes are put in order by dragging their rows, the same order the register and kiosk use.
-  const [dragVariantId, setDragVariantId] = useState<string | null>(null);
+  const [varMoreOpen, setVarMoreOpen] = useState(false);
 
   // The add-on group form: a group to edit, or null for a new one.
   const [sheet, setSheet] = useState<{ group: OptionGroup | null } | null>(null);
@@ -314,6 +320,7 @@ export function ProductDetailPage() {
 
   const handleOpenAddVariant = () => {
     setEditingVariant(null);
+    setVarMoreOpen(false);
     setVarName('');
     setVarBarcode('');
     setVarPrice(basePrice || '0');
@@ -322,6 +329,7 @@ export function ProductDetailPage() {
 
   const handleOpenEditVariant = (v: ProductVariant) => {
     setEditingVariant(v);
+    setVarMoreOpen(!!v.barcode);
     setVarName(v.name);
     setVarBarcode(v.barcode || '');
     setVarPrice(wholeRials(v.base_price));
@@ -360,16 +368,10 @@ export function ProductDetailPage() {
     }
   };
 
-  const handleDropVariant = async (targetId: string) => {
-    if (!id || !dragVariantId || dragVariantId === targetId) return;
-    const list = [...variants];
-    const from = list.findIndex((v) => v.id === dragVariantId);
-    const to = list.findIndex((v) => v.id === targetId);
-    if (from < 0 || to < 0) return;
-    const [moved] = list.splice(from, 1);
-    list.splice(to, 0, moved);
+  // Sizes are put in order by dragging their rows, the same order the register and kiosk use.
+  const handleDropVariant = async (list: ProductVariant[]) => {
+    if (!id) return;
     setVariants(list);
-    setDragVariantId(null);
     try {
       setVariants(await catalogApi.reorderProductVariants(id, list.map((v) => v.id)));
     } catch (err: any) {
@@ -378,9 +380,13 @@ export function ProductDetailPage() {
     }
   };
 
+  const variantDrag = useDragSort(variants, handleDropVariant);
+  const hasMoreValues = !!(maxPerOrder || code || barcode);
+  const showMore = moreOpen || hasMoreValues;
+
   const handleDeleteVariant = async (variantId: string) => {
     if (!id) return;
-    if (!window.confirm(t('catalog.productDetailPage.variants.deleteConfirm'))) return;
+    if (!(await confirm(t('catalog.productDetailPage.variants.deleteConfirm')))) return;
     try {
       await catalogApi.deleteProductVariant(id, variantId);
       const updatedList = await catalogApi.getProductVariants(id);
@@ -407,6 +413,7 @@ export function ProductDetailPage() {
 
   return (
     <Container maxWidth="xl" sx={{ py: 4 }}>
+      {confirmDialog}
       {/* Header */}
       <Stack sx={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Stack sx={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
@@ -499,7 +506,7 @@ export function ProductDetailPage() {
                       >
                         {categories.map((c) => (
                           <MenuItem key={c.id} value={c.id}>
-                            {c.name} ({c.code})
+                            {c.name}
                           </MenuItem>
                         ))}
                       </Select>
@@ -520,35 +527,6 @@ export function ProductDetailPage() {
                     />
                     <AmountInWords amount={basePrice} />
                   </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <TextField
-                      label={t('catalog.productDetailPage.general.maxPerOrder', 'Most per order')}
-                      type="number"
-                      value={maxPerOrder}
-                      onChange={(e) => setMaxPerOrder(e.target.value)}
-                      helperText={
-                        <>
-                          {t('catalog.productDetailPage.general.maxPerOrderHelp', 'Empty for no limit')}{' '}
-                          <VersionTag feature="catalog.maxPerOrder" />
-                        </>
-                      }
-                      slotProps={{ htmlInput: { min: 1, step: 1 } }}
-                      fullWidth
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <TextField
-                      label={t('catalog.productDetailPage.general.taxRate')}
-                      type="number"
-                      value={taxRate}
-                      onChange={(e) => setTaxRate(e.target.value)}
-                      slotProps={{
-                        htmlInput: { min: 0, max: 100, step: 0.01 },
-                        input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
-                      }}
-                      fullWidth
-                    />
-                  </Grid>
                   <Grid size={{ xs: 12 }}>
                     <TextField
                       label={t('catalog.productDetailPage.general.description')}
@@ -559,28 +537,70 @@ export function ProductDetailPage() {
                       rows={3}
                     />
                   </Grid>
+                  {/* Rarely changed: the cap, the tax rate (the chain's default fills it), the code and
+                      barcode. Folded away unless one of them is set. */}
                   <Grid size={{ xs: 12 }}>
-                    <Typography variant="overline" color="text.secondary">
-                      {t('catalog.productsPage.identifiersTitle')}
-                    </Typography>
+                    <Button
+                      size="small"
+                      onClick={() => setMoreOpen((o) => !o)}
+                      endIcon={showMore ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                      disabled={hasMoreValues}
+                    >
+                      {t('catalog.productDetailPage.general.moreDetails')}
+                    </Button>
                   </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <TextField
-                      label={t('catalog.productDetailPage.general.code')}
-                      value={code}
-                      onChange={(e) => setCode(e.target.value.toUpperCase())}
-                      helperText={t('catalog.productsPage.codeHelp')}
-                      slotProps={{ htmlInput: { maxLength: 32 } }}
-                      fullWidth
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <TextField
-                      label={t('catalog.productDetailPage.general.barcode')}
-                      value={barcode}
-                      onChange={(e) => setBarcode(e.target.value)}
-                      fullWidth
-                    />
+                  <Grid size={{ xs: 12 }}>
+                    <Collapse in={showMore} unmountOnExit>
+                      <Grid container spacing={2}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                          <TextField
+                            label={t('catalog.productDetailPage.general.maxPerOrder', 'Most per order')}
+                            type="number"
+                            value={maxPerOrder}
+                            onChange={(e) => setMaxPerOrder(e.target.value)}
+                            helperText={
+                              <>
+                                {t('catalog.productDetailPage.general.maxPerOrderHelp', 'Empty for no limit')}{' '}
+                                <VersionTag feature="catalog.maxPerOrder" />
+                              </>
+                            }
+                            slotProps={{ htmlInput: { min: 1, step: 1 } }}
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                          <TextField
+                            label={t('catalog.productDetailPage.general.taxRate')}
+                            type="number"
+                            value={taxRate}
+                            onChange={(e) => setTaxRate(e.target.value)}
+                            slotProps={{
+                              htmlInput: { min: 0, max: 100, step: 0.01 },
+                              input: { endAdornment: <InputAdornment position="end">%</InputAdornment> },
+                            }}
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                          <TextField
+                            label={t('catalog.productDetailPage.general.code')}
+                            value={code}
+                            onChange={(e) => setCode(e.target.value.toUpperCase())}
+                            helperText={t('catalog.productsPage.codeHelp')}
+                            slotProps={{ htmlInput: { maxLength: 32 } }}
+                            fullWidth
+                          />
+                        </Grid>
+                        <Grid size={{ xs: 12, sm: 6 }}>
+                          <TextField
+                            label={t('catalog.productDetailPage.general.barcode')}
+                            value={barcode}
+                            onChange={(e) => setBarcode(e.target.value)}
+                            fullWidth
+                          />
+                        </Grid>
+                      </Grid>
+                    </Collapse>
                   </Grid>
                 </Grid>
 
@@ -709,19 +729,8 @@ export function ProductDetailPage() {
                 </TableHead>
                 <TableBody>
                   {variants.map((v) => (
-                    <TableRow
-                      key={v.id}
-                      hover
-                      draggable={variants.length > 1}
-                      onDragStart={() => setDragVariantId(v.id)}
-                      onDragEnd={() => setDragVariantId(null)}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={() => handleDropVariant(v.id)}
-                      sx={{ opacity: dragVariantId === v.id ? 0.4 : 1 }}
-                    >
-                      <TableCell sx={{ cursor: variants.length > 1 ? 'grab' : 'default', color: 'text.disabled' }}>
-                        {variants.length > 1 && <DragIndicatorIcon fontSize="small" titleAccess={t('catalog.productDetailPage.variants.dragToSort')} />}
-                      </TableCell>
+                    <TableRow key={v.id} hover {...variantDrag.rowProps(v.id)}>
+                      <DragHandleCell show={variantDrag.canDrag} />
                       <TableCell>
                         <IconButton
                           size="small"
@@ -875,14 +884,6 @@ export function ProductDetailPage() {
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
-                  label={t('catalog.productDetailPage.variants.barcode')}
-                  value={varBarcode}
-                  onChange={(e) => setVarBarcode(e.target.value)}
-                  fullWidth
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6 }}>
-                <TextField
                   label={t('catalog.productDetailPage.variants.basePrice')}
                   type="number"
                   value={toToman(varPrice)}
@@ -894,6 +895,20 @@ export function ProductDetailPage() {
                   fullWidth
                   required
                 />
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                {varMoreOpen ? (
+                  <TextField
+                    label={t('catalog.productDetailPage.variants.barcode')}
+                    value={varBarcode}
+                    onChange={(e) => setVarBarcode(e.target.value)}
+                    fullWidth
+                  />
+                ) : (
+                  <Button size="small" onClick={() => setVarMoreOpen(true)}>
+                    {t('catalog.productDetailPage.variants.addBarcode')}
+                  </Button>
+                )}
               </Grid>
             </Grid>
           </DialogContent>

@@ -483,6 +483,13 @@ export class CatalogController {
     );
   }
 
+  /** Body: the ids of the phrases in their new order. */
+  @HeadOfficeOnly()
+  @Put('note-templates/order')
+  async reorderNoteTemplates(@Body() body: { ids: string[] }, @Req() req: Request) {
+    return await this.noteTemplates.reorder((req as any).tenantId, body?.ids, (req as any).userId, (req as any).correlationId);
+  }
+
   @HeadOfficeOnly()
   @Patch('note-templates/:id')
   async updateNoteTemplate(@Param('id') id: string, @Body() body: any, @Req() req: Request) {

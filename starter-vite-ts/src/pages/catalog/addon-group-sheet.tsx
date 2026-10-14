@@ -26,6 +26,7 @@ import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 import { catalogApi } from 'src/api/catalogApi';
 
 import { AmountInWords } from 'src/components/amount-in-words';
+import { useConfirm } from 'src/components/confirm-dialog/use-confirm';
 
 interface DraftItem {
   /** Absent for an add-on added in this form. */
@@ -53,6 +54,7 @@ export function AddonGroupSheet({
   onSaved: (saved: OptionGroup) => void;
 }) {
   const { t } = useTranslation();
+  const { confirm, dialog: confirmDialog } = useConfirm();
   const currencyLabel = useCurrencyLabel();
 
   const [name, setName] = useState('');
@@ -103,7 +105,7 @@ export function AddonGroupSheet({
 
   const handleDelete = async () => {
     if (!group) return;
-    if (!window.confirm(t('catalog.addonSheet.deleteConfirm', { name: group.name, n: (group.product_ids || []).length }))) return;
+    if (!(await confirm(t('catalog.addonSheet.deleteConfirm', { name: group.name, n: (group.product_ids || []).length })))) return;
     try {
       await catalogApi.deleteOptionGroup(group.id);
       onSaved({ ...group, items: [] });
@@ -115,6 +117,8 @@ export function AddonGroupSheet({
   const title = name.trim() || t('catalog.addonSheet.thisGroup');
 
   return (
+    <>
+    {confirmDialog}
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ fontWeight: 'bold' }}>
         {group ? t('catalog.addonSheet.editTitle') : t('catalog.addonSheet.newTitle')}
@@ -225,5 +229,6 @@ export function AddonGroupSheet({
         </Button>
       </DialogActions>
     </Dialog>
+    </>
   );
 }

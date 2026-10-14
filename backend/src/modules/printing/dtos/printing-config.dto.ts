@@ -31,9 +31,9 @@ export class CreatePrinterDto {
   @IsUUID()
   branch_id: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  code: string;
+  code?: string;
 
   @IsString()
   @IsNotEmpty()

@@ -167,7 +167,8 @@
     "noRecords": "Nothing here yet.",
     "deleteError": "Could not delete this.",
     "time": "Time",
-    "close": "Close"
+    "close": "Close",
+    "dragToSort": "Drag to change the order"
   },
   "dashboard": {
     "title": "Operations Dashboard",
@@ -592,17 +593,19 @@
       "documentType": "Document type",
       "customerReceipt": "Customer receipt",
       "kitchenTicket": "Kitchen ticket",
-      "reason": "Reprint reason",
-      "reasonPlaceholder": "For example: customer copy was damaged",
       "cancel": "Cancel",
       "confirm": "Queue reprint",
-      "reasonRequired": "Enter a reason for this reprint",
       "success": "{{document}} for order {{orderNumber}} was added to the print queue.",
       "failed": "Failed to queue the reprint",
       "guestBill": "Guest bill",
       "courierSlip": "Courier slip",
       "printer": "Printer",
-      "allPrinters": "Every printer"
+      "allPrinters": "Every printer",
+      "quickReasons": {
+        "customerAsked": "Customer asked",
+        "paperJam": "Printer jammed",
+        "lostChit": "Chit lost"
+      }
     },
     "drawer": {
       "printTrouble": {
@@ -822,7 +825,6 @@
     "couriers": {
       "title": "Courier Profiles & Roster",
       "addCourier": "Add Courier",
-      "code": "Code",
       "nameAndPhone": "Name & Phone"
     },
     "zones": {
@@ -831,7 +833,6 @@
       "notDrawn": "Not drawn",
       "title": "Delivery Zones",
       "addZone": "Add Delivery Zone",
-      "code": "Code",
       "zoneName": "Zone Name",
       "standardFee": "Standard Delivery Fee",
       "estimatedMinutes": "Estimated Minutes",
@@ -851,17 +852,8 @@
         "cancel": "Cancel",
         "submit": "Send out"
       },
-      "complete": {
-        "title": "Mark Delivered",
-        "description": "Order #{{orderNumber}} was handed to the customer.",
-        "owedLabel": "To collect from customer",
-        "settleNote": "How the customer paid — card on the courier's reader, cash, or both — is entered when the courier comes back and is settled, from the card slip.",
-        "cancel": "Cancel",
-        "submit": "Mark Delivered"
-      },
       "addCourier": {
         "title": "Add Courier Profile",
-        "code": "Courier Code",
         "name": "Courier Name",
         "phone": "Phone Number",
         "phoneHelp": "Also their username for the courier app, which they sign in to later. A courier already riding for another branch is found by this number and moved, not added twice.",
@@ -869,18 +861,17 @@
         "submit": "Save Courier"
       },
       "editZone": {
-        "title": "Edit zone {{code}}",
+        "title": "Edit zone {{name}}",
         "cancel": "Cancel",
         "submit": "Save Zone",
         "remove": "Remove zone",
-        "removeConfirm": "Remove zone {{code}}? It stops being offered at the POS. Orders already placed in it keep it.",
+        "removeConfirm": "Remove zone {{name}}? It stops being offered at the POS. Orders already placed in it keep it.",
         "removeYes": "Remove",
         "removeNo": "Keep"
       },
       "addZone": {
         "mapHelp": "Draw the zone with the polygon tool, top left. Only a picture of the area for now: the till still picks the zone by postal code.",
         "title": "Add Delivery Zone",
-        "code": "Zone Code",
         "name": "Zone Name",
         "fee": "Delivery Fee ({{currency}})",
         "estimatedMinutes": "Estimated Minutes",
@@ -1387,13 +1378,14 @@
       "pinOptional": "Optional",
       "submit": "Register",
       "errors": {
-        "nameAndMobile": "Name and mobile are required",
         "mobileExists": "A customer with this mobile is already registered",
         "invalidMobile": "That is not a mobile number",
         "addressText": "Each address needs its text",
         "saveFailed": "Could not register the customer",
-        "fieldRequired": "{{name}} is required"
-      }
+        "fieldRequired": "{{name}} is required",
+        "mobileRequired": "Enter the customer's mobile number."
+      },
+      "nameOptional": "Name (optional)"
     },
     "filters": {
       "all": "All",
@@ -1535,7 +1527,8 @@
         "save": "Save Product",
         "saving": "Saving...",
         "maxPerOrder": "Most per order",
-        "maxPerOrderHelp": "Empty for no limit"
+        "maxPerOrderHelp": "Empty for no limit",
+        "moreDetails": "More details"
       },
       "variants": {
         "title": "Product Variants",
@@ -1560,7 +1553,7 @@
         "deleteConfirm": "Are you sure you want to archive this variant?",
         "editAria": "Edit {{name}}",
         "deleteAria": "Delete {{name}}",
-        "dragToSort": "Drag to change the order"
+        "addBarcode": "+ Add barcode"
       },
       "modifiers": {
         "title": "Add-ons",
@@ -1647,7 +1640,6 @@
         "toggleFailed": "Could not change whether this item is on the menu",
         "reorderFailed": "Could not save the order of the products"
       },
-      "identifiersTitle": "Codes (optional)",
       "codeHelp": "Optional. Chains use it to search, or to update products from a spreadsheet.",
       "viewDetails": "View details",
       "manageAvailability": "Manage availability",
@@ -1658,16 +1650,12 @@
       "onMenu": "On the menu",
       "offMenu": "Off the menu",
       "noMatches": "No products match.",
-      "categoryOff": "Hidden: its category is off the menu",
-      "order": "Order",
-      "moveUp": "Move up",
-      "moveDown": "Move down"
+      "categoryOff": "Hidden: its category is off the menu"
     },
     "categoriesPage": {
       "title": "Catalog Categories",
       "subtitle": "Name, order and group the categories the register and kiosk show",
       "newCategory": "New Category",
-      "code": "Category Code",
       "name": "Category Name",
       "actions": "Actions",
       "archive": "Archive",
@@ -1680,13 +1668,9 @@
         "reorderFailed": "Failed to reorder categories"
       },
       "products": "Products",
-      "order": "Order",
-      "moveUp": "Move up",
-      "moveDown": "Move down",
       "edit": "Edit",
       "editDrawerTitle": "Edit Category",
       "submitSave": "Save",
-      "codeLocked": "The code can't change: other records refer to it.",
       "archiveTitle": "Archive {{name}}",
       "archiveEmpty": "{{name}} has no products. Archive it?",
       "archiveMove": "{{name}} still has {{count}} products. Pick where they move before it's archived.",
@@ -2383,7 +2367,6 @@
       "taxSaved": "Default tax rate saved. New products start with it.",
       "title": "Business profile",
       "tenantProfile": "Tenant Organization Profile",
-      "tenantCode": "Tenant Code",
       "tenantName": "Tenant Name",
       "defaultLocale": "Default Locale",
       "timeZone": "Time Zone",
@@ -2396,10 +2379,8 @@
       "title": "Payment Methods",
       "subtitle": "Configure tender instruments (Cash, EFT POS, Credit) and device requirements.",
       "addMethod": "Add Payment Method",
-      "colCode": "Code",
       "colName": "Name",
       "colKind": "Kind",
-      "colCurrency": "Currency",
       "colDevice": "Device / Reference",
       "colStatus": "Status",
       "colActions": "Actions",
@@ -2409,12 +2390,9 @@
       "newMethod": "New Payment Method",
       "editMethod": "Edit Payment Method",
       "drawerSubtitle": "Configure instrument parameters and reconciliation flags.",
-      "formCode": "Method Code",
-      "formCodePlaceholder": "e.g. CARD_POS, CASH",
       "formName": "Display Name",
       "formNamePlaceholder": "e.g. Bank POS Terminal, Cash Tender",
       "formKind": "Instrument Kind",
-      "formCurrency": "Currency Code",
       "reqDevice": "Requires Hardware EFT POS Terminal",
       "reqRef": "Requires Transaction Reference / RRN",
       "formActive": "Active & Available at POS",
@@ -2500,7 +2478,6 @@
       "title": "Reason Codes Management",
       "subtitle": "Configure standardized operational reasons for cancellations, refunds, shifts, and overrides",
       "createReason": "Create Reason Code",
-      "colCode": "Code",
       "colName": "Reason Name",
       "colAppliesTo": "Applies To",
       "colRequiresNote": "Requires Note",
@@ -2509,8 +2486,6 @@
       "no": "No",
       "drawerTitleCreate": "Create Reason Code",
       "drawerTitleEdit": "Edit Reason Code",
-      "formCode": "Reason Code",
-      "formCodePlaceholder": "e.g. CUSTOMER_CANCEL",
       "formName": "Reason Display Name",
       "formNamePlaceholder": "e.g. Customer Requested Cancellation",
       "formDomains": "Applies To Operational Domains",
@@ -2743,12 +2718,10 @@
       "colScope": "Applies To",
       "colText": "Phrase",
       "colCategory": "Group",
-      "colOrder": "Order",
       "scopeOrder": "Whole order",
       "scopeItem": "Single item",
       "textHelp": "Exactly as it should print on the kitchen ticket.",
       "categoryHelp": "Optional, e.g. Allergies or Delivery.",
-      "orderHelp": "Lower numbers appear first on the register.",
       "help": "These phrases appear as one-tap chips on the register when a cashier adds a note. Order phrases apply to the whole ticket; item phrases apply to a single line.",
       "empty": "No phrases yet. Cashiers can still type notes freely; adding phrases here makes the common ones one tap.",
       "loadError": "Failed to load note templates",
@@ -3025,7 +2998,6 @@
       "addPrinter": "Add Printer",
       "editPrinter": "Edit Printer",
       "routingHint": "Where each paper prints is set where it belongs. Kitchen chits print on the printers each category or product is sent to on Print routing; anything not sent anywhere prints on the branch's default kitchen printer. Receipts, bills and courier slips print on the printer of the till the order was taken on.",
-      "colCode": "Code",
       "colName": "Printer Name",
       "colType": "Printer Type",
       "colAddress": "Network Address",
@@ -3036,10 +3008,8 @@
       "deletePrinterContent": "Are you sure you want to delete printer \"{{name}}\"? What it prints moves to the default kitchen printer, and its tills stop printing on it.",
       "createPrinterModal": "Configure Thermal / Network Printer",
       "editPrinterModal": "Edit Thermal / Network Printer",
-      "formCode": "Printer Code",
       "formName": "Printer Name",
       "formType": "Printer Type",
-      "formAddress": "Simulated Address / IP Port",
       "formPaper": "Paper Width (mm)",
       "formActive": "Device Status Active",
       "createPrinterBtn": "Create Printer Device",
@@ -3077,7 +3047,8 @@
         "DETAILED": "Detailed"
       },
       "tillsLink": "Tills",
-      "routingLink": "Print routing"
+      "routingLink": "Print routing",
+      "nameRequired": "A printer needs a name."
     },
     "agents": {
       "title": "Branch Agents",
@@ -3517,12 +3488,6 @@
   "branchMgmt": {
     "discard": "Discard changes",
     "listSeparator": ", ",
-    "steps": {
-      "details": "Details",
-      "location": "Location",
-      "hours": "Opening hours",
-      "review": "Review"
-    },
     "tabs": {
       "overview": "Overview",
       "hours": "Opening hours",
@@ -3602,10 +3567,6 @@
       "pinRequired": "A branch cannot be added without its pin on the map.",
       "hoursTitle": "When is the branch open?",
       "hoursBody": "One opening time a day. Hours that close after midnight, such as 11:00–04:00, belong to the day they open. Outside these hours the till still sells, with a warning.",
-      "reviewTitle": "Check and add the branch",
-      "reviewBody": "It starts active, with no tills, printers, staff or menu stops. Set those up next.",
-      "back": "Back",
-      "next": "Next",
       "create": "Add branch",
       "created": "Branch added. Next: enrol its branch agent, add its tills and printers, and give staff this branch."
     },

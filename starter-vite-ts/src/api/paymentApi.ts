@@ -176,7 +176,7 @@ export const paymentApi = {
 
   createAccount: async (data: any): Promise<SettlementAccount> => {
     const payload = {
-      code: data.code || `SA-${Date.now()}`,
+      code: data.code || undefined,
       name: data.name || data.bank_name || 'Bank Account',
       accountType: data.account_type || data.accountType || 'BANK_ACCOUNT',
       maskedIdentifier: data.masked_identifier || data.account_number || data.iban || data.maskedIdentifier,
@@ -197,7 +197,7 @@ export const paymentApi = {
 
   createDevice: async (data: any): Promise<PaymentDevice> => {
     const payload = {
-      code: data.code || `DEV-${Date.now()}`,
+      code: data.code || undefined,
       name: data.name || 'Payment Terminal',
       kind: data.kind || (data.device_type === 'MOBILE_POS' ? 'MOBILE' : 'POS'),
       ownership: data.ownership || 'COMPANY',

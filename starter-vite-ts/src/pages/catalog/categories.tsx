@@ -6,8 +6,6 @@ import React, { useState, useEffect } from 'react';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import {
   Box,
   Card,
@@ -36,6 +34,8 @@ import {
 
 import { catalogApi } from 'src/api/catalogApi';
 
+import { useDragSort, DragHandleCell } from 'src/components/drag-sort';
+
 /**
  * A menu has categories and nothing under them. The server returns them in menu order, which
  * is also the order the register and kiosk show them in.
@@ -49,7 +49,6 @@ export function CategoriesPage() {
   // The drawer creates a category, or edits `editing`.
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
-  const [code, setCode] = useState('');
   const [name, setName] = useState('');
 
   const [archiving, setArchiving] = useState<Category | null>(null);
@@ -71,14 +70,12 @@ export function CategoriesPage() {
 
   const openCreate = () => {
     setEditing(null);
-    setCode('');
     setName('');
     setDrawerOpen(true);
   };
 
   const openEdit = (c: Category) => {
     setEditing(c);
-    setCode(c.code);
     setName(c.name);
     setDrawerOpen(true);
   };
@@ -89,7 +86,7 @@ export function CategoriesPage() {
       if (editing) {
         await catalogApi.updateCategory(editing.id, { name });
       } else {
-        await catalogApi.createCategory({ code, name });
+        await catalogApi.createCategory({ name });
       }
       setDrawerOpen(false);
       loadData();
@@ -98,18 +95,16 @@ export function CategoriesPage() {
     }
   };
 
-  const move = async (c: Category, step: -1 | 1) => {
-    const ids = categories.map((o) => o.id);
-    const from = ids.indexOf(c.id);
-    const to = from + step;
-    if (to < 0 || to >= ids.length) return;
-    [ids[from], ids[to]] = [ids[to], ids[from]];
+  const handleDrop = async (list: Category[]) => {
+    setCategories(list);
     try {
-      setCategories(await catalogApi.reorderCategories(ids));
+      setCategories(await catalogApi.reorderCategories(list.map((o) => o.id)));
     } catch (err: any) {
       setError(err.detail || t('catalog.categoriesPage.errors.reorderFailed'));
+      loadData();
     }
   };
+  const drag = useDragSort(categories, handleDrop);
 
   // Off menu hides the category and every item in it from the till, kiosk and Snappfood menu.
   // The items keep their own switch, so turning the category back on brings them back as they were.
@@ -169,21 +164,19 @@ export function CategoriesPage() {
             <Table>
               <TableHead>
                 <TableRow>
+                  <TableCell sx={{ width: 40 }} />
                   <TableCell>{t('catalog.categoriesPage.name')}</TableCell>
                   <TableCell align="center">{t('catalog.categoriesPage.products')}</TableCell>
                   <TableCell>{t('common.status', 'Status')}</TableCell>
-                  <TableCell align="center">{t('catalog.categoriesPage.order')}</TableCell>
                   <TableCell align="center">{t('catalog.categoriesPage.actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {categories.map((c, index) => (
-                    <TableRow key={c.id}>
+                {categories.map((c) => (
+                    <TableRow key={c.id} {...drag.rowProps(c.id)}>
+                      <DragHandleCell show={drag.canDrag} />
                       <TableCell>
                         <Typography variant="subtitle2">{c.name}</Typography>
-                        <Typography variant="caption" color="text.secondary" component="code">
-                          {c.code}
-                        </Typography>
                       </TableCell>
                       <TableCell align="center">{c.product_count ?? 0}</TableCell>
                       <TableCell>
@@ -198,24 +191,6 @@ export function CategoriesPage() {
                             {c.is_active !== false ? t('catalog.productsPage.onMenu') : t('catalog.productsPage.offMenu')}
                           </Typography>
                         </Stack>
-                      </TableCell>
-                      <TableCell align="center">
-                        <IconButton
-                          size="small"
-                          title={t('catalog.categoriesPage.moveUp')}
-                          disabled={index <= 0}
-                          onClick={() => move(c, -1)}
-                        >
-                          <ArrowUpwardIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton
-                          size="small"
-                          title={t('catalog.categoriesPage.moveDown')}
-                          disabled={index >= categories.length - 1}
-                          onClick={() => move(c, 1)}
-                        >
-                          <ArrowDownwardIcon fontSize="small" />
-                        </IconButton>
                       </TableCell>
                       <TableCell align="center">
                         <IconButton title={t('catalog.categoriesPage.edit')} onClick={() => openEdit(c)}>
@@ -240,16 +215,6 @@ export function CategoriesPage() {
           </Typography>
           <form onSubmit={handleSave}>
             <Stack spacing={2.5}>
-              <TextField
-                label={t('catalog.categoriesPage.code')}
-                placeholder="e.g. CAT-DESSERTS"
-                required
-                fullWidth
-                disabled={!!editing}
-                helperText={editing ? t('catalog.categoriesPage.codeLocked') : undefined}
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-              />
               <TextField
                 label={t('catalog.categoriesPage.name')}
                 placeholder="e.g. Desserts & Cakes"

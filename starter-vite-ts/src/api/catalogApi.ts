@@ -460,6 +460,10 @@ export const catalogApi = {
     const res = await httpClient.post('/api/v1/note-templates', data);
     return res.data;
   },
+  reorderNoteTemplates: async (ids: string[]): Promise<NoteTemplate[]> => {
+    const res = await httpClient.put('/api/v1/note-templates/order', { ids });
+    return res.data;
+  },
   updateNoteTemplate: async (id: string, data: Partial<NoteTemplate>): Promise<NoteTemplate> => {
     const res = await httpClient.patch(`/api/v1/note-templates/${id}`, data);
     return res.data;

@@ -13,6 +13,7 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { CreatePrinterDto, PreviewKitchenChitsDto, SetNotPrintedDto, SetPrinterRoutesDto, UpdatePrinterDto } from './dtos/printing-config.dto';
+import { nextCode, typedCode } from '../../common/utils/next-code.util';
 
 @Controller('api/v1')
 export class PrintersController {
@@ -71,7 +72,7 @@ export class PrintersController {
     const printer = this.printerRepo.create({
       tenant_id: tenantId,
       branch_id: body.branch_id,
-      code: body.code.toUpperCase(),
+      code: typedCode(body.code) || (await nextCode(this.printerRepo, { tenant_id: tenantId }, 'PRN')),
       name: body.name,
       printer_type: body.printer_type || 'THERMAL_RECEIPT',
       simulated_address: body.simulated_address || '192.168.1.100:9100',

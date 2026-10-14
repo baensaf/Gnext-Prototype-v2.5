@@ -22,9 +22,9 @@ export class CreateZoneDto {
   @IsUUID()
   branch_id: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  code: string;
+  code?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -58,9 +58,9 @@ export class CreateCourierDto {
   @IsUUID()
   branch_id?: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  code: string;
+  code?: string;
 
   @IsString()
   @IsNotEmpty()

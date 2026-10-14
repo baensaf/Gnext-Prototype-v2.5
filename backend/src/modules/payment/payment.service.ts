@@ -34,6 +34,7 @@ import { bookSucceededPayment } from './payment-settlement';
 import { AgentConfigService } from '../agent-gateway/agent-config.service';
 import { parseDeviceConnection } from '../../common/utils/device-connection.util';
 import { nextBranchNumber } from '../../common/utils/sequence.util';
+import { nextCode, typedCode } from '../../common/utils/next-code.util';
 
 @Injectable()
 export class PaymentService {
@@ -607,7 +608,7 @@ export class PaymentService {
     const device = this.deviceRepo.create({
       tenant_id: tenantId,
       branch_id: dto.branchId || null,
-      code: dto.code,
+      code: typedCode(dto.code) || (await nextCode(this.deviceRepo, { tenant_id: tenantId }, 'DEV')),
       name: dto.name,
       kind: dto.kind,
       ownership: dto.ownership || 'COMPANY',
@@ -625,7 +626,7 @@ export class PaymentService {
   async createSettlementAccount(tenantId: string, dto: SettlementAccountCreateDto) {
     const acc = this.accountRepo.create({
       tenant_id: tenantId,
-      code: dto.code,
+      code: typedCode(dto.code) || (await nextCode(this.accountRepo, { tenant_id: tenantId }, 'ACC')),
       name: dto.name,
       account_type: dto.accountType,
       masked_identifier: dto.maskedIdentifier || null,
