@@ -267,9 +267,32 @@ export class CatalogController {
     return await this.priceLists.getPriceLists((req as any).tenantId);
   }
 
+  // Every list side by side, for the price grid.
+  @Get('catalog/price-lists/grid')
+  async getPriceGrid(@Req() req: Request) {
+    return await this.priceLists.getPriceGrid((req as any).tenantId);
+  }
+
+  // The grid's changes, saved together or not at all.
+  @HeadOfficeOnly()
+  @Put('catalog/price-lists/prices')
+  async setListPrices(
+    @Body() body: { changes: { listId: string; productId: string; variantId?: string | null; amount: string | null; channel?: string | null }[] },
+    @Req() req: Request,
+  ) {
+    const changes = (Array.isArray(body?.changes) ? body.changes : []).map((c) => ({
+      listId: c.listId,
+      productId: c.productId,
+      variantId: c.variantId || null,
+      amount: c.amount === '' || c.amount === undefined ? null : c.amount,
+      channel: c.channel ? String(c.channel).toUpperCase() : null,
+    }));
+    return await this.priceLists.setListPrices((req as any).tenantId, changes, (req as any).correlationId);
+  }
+
   @HeadOfficeOnly()
   @Post('catalog/price-lists')
-  async createPriceList(@Body() body: { name: string; code?: string }, @Req() req: Request) {
+  async createPriceList(@Body() body: { name: string; code?: string; copyFromId?: string | null }, @Req() req: Request) {
     return await this.priceLists.createPriceList((req as any).tenantId, body, (req as any).correlationId);
   }
 

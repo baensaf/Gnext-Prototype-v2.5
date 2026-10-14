@@ -155,6 +155,39 @@ describe('Branch price lists (PostgreSQL)', () => {
     expect(await linePrices(downtown, [{ product_id: tea, quantity: '1' }])).toEqual(['50000.0000']);
   });
 
+  it('starts a new list with the prices of the list it copies, then keeps them apart', async () => {
+    await priceLists.setListPrice(tenantId, listId, tea, null, '80000', 'test', 'SNAPPFOOD');
+    const copyId = (await priceLists.createPriceList(tenantId, { name: 'Copy', copyFromId: listId }, 'test')).id;
+    const grid = await priceLists.getPriceGrid(tenantId);
+    const row = (productId: string, variantId: string | null) => grid.items.find((i) => i.product_id === productId && i.variant_id === variantId)!;
+    expect(grid.lists.map((l) => l.id)).toEqual(expect.arrayContaining([listId, copyId]));
+    expect(row(tea, null).lists[copyId]).toMatchObject({ price: '66000.0000', snappfood: '80000.0000' });
+    expect(row(pizza, large).lists[copyId].price).toBe('451000.0000');
+    expect(row(pizza, small).lists[copyId].price).toBeNull();
+    expect(row(pizza, small).base_price).toBe('250000.0000');
+
+    await priceLists.setListPrice(tenantId, listId, tea, null, '67000', 'test');
+    const after = (await priceLists.getPriceGrid(tenantId)).items.find((i) => i.product_id === tea)!;
+    expect(after.lists[listId].price).toBe('67000.0000');
+    expect(after.lists[copyId].price).toBe('66000.0000');
+    await priceLists.archivePriceList(tenantId, copyId, 'test');
+  });
+
+  it('saves the grid changes together, or none of them when one is wrong', async () => {
+    const good = { listId, productId: tea, variantId: null, amount: '68000', channel: null };
+    // Pizza is sold in sizes, so a price for the product itself is refused.
+    const bad = { listId, productId: pizza, variantId: null, amount: '1', channel: null };
+    await expect(priceLists.setListPrices(tenantId, [good, bad], 'test')).rejects.toMatchObject({ response: { code: 'VARIANT_REQUIRED' } });
+    expect(await linePrices(uptown, [{ product_id: tea, quantity: '1' }])).toEqual(['67000.0000']);
+
+    await priceLists.setListPrices(tenantId, [good, { listId, productId: pizza, variantId: small, amount: '260000', channel: null }], 'test');
+    expect(await linePrices(uptown, [{ product_id: tea, quantity: '1' }, { product_id: pizza, variant_id: small, quantity: '1' }])).toEqual([
+      '68000.0000',
+      '260000.0000',
+    ]);
+    await priceLists.setListPrices(tenantId, [{ listId, productId: pizza, variantId: small, amount: null, channel: null }], 'test');
+  });
+
   it('sends a branch back to base when it leaves the list or the list is archived', async () => {
     await priceLists.assignBranch(tenantId, downtown, listId, 'test');
     expect(await linePrices(downtown, [{ product_id: pizza, variant_id: large, quantity: '1' }])).toEqual(['451000.0000']);

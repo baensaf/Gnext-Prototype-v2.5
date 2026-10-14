@@ -69,7 +69,7 @@ export interface ItemDiscount {
   starts_on: string;
   ends_on: string | null;
   note: string | null;
-  /** Every price group (and branches with no group); otherwise only `price_group_ids`. */
+  /** Every price list (and branches with no group); otherwise only `price_group_ids`. */
   all_groups: boolean;
   price_group_ids: string[];
   applies_to: ItemDiscountChannel;

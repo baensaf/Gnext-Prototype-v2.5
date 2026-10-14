@@ -12,7 +12,7 @@ export const DISCOUNT_APPLIES_TO = ['IN_STORE', 'SNAPPFOOD', 'BOTH'] as const;
 
 type Scope = Pick<ItemDiscount, 'all_groups' | 'price_group_ids' | 'applies_to'>;
 
-/** Whether a discount reaches a branch on `groupId` (null for a branch with no price group). */
+/** Whether a discount reaches a branch on `groupId` (null for a branch with no price list). */
 export function coversGroup(discount: Pick<Scope, 'all_groups' | 'price_group_ids'>, groupId: string | null): boolean {
   return discount.all_groups || (!!groupId && (discount.price_group_ids || []).includes(groupId));
 }
@@ -28,7 +28,7 @@ export function sharesScope(a: Scope, b: Scope): boolean {
   return groups && channel;
 }
 
-/** The price group a branch sells from, when it has one in use. */
+/** The price list a branch sells from, when it has one in use. */
 export async function priceGroupOfBranch(em: EntityManager, tenantId: string, branchId: string | null | undefined): Promise<string | null> {
   if (!branchId) return null;
   const link = await em.findOne(PriceGroupBranch, { where: { tenant_id: tenantId, branch_id: branchId } });
@@ -46,7 +46,7 @@ export interface ActiveItemDiscount {
 /**
  * The discount each product gets at a branch on a channel, on the branch's business day (the
  * day turns at the chain's cutoff, so a sale at 01:00 belongs to the day before): the
- * discounts dated today whose groups include the branch's price group (or are for all
+ * discounts dated today whose groups include the branch's price list (or are for all
  * groups) and whose channel includes this one. Products with none are absent.
  */
 export async function activeItemDiscounts(

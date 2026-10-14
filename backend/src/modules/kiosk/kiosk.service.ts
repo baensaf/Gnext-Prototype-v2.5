@@ -126,7 +126,7 @@ export class KioskService {
     // The price this branch charges (its price list's, else base), so the screen shows what
     // the order will cost.
     const listed = await this.priceLists.pricesForBranch(tenantId, branch?.id);
-    // The item discounts running in store today for this branch's price group, so the screen
+    // The item discounts running in store today for this branch's price list, so the screen
     // can show the total the order will be charged.
     const discountsToday = await activeItemDiscounts(this.productRepo.manager, tenantId, branch?.id, 'IN_STORE');
 
@@ -384,7 +384,7 @@ export class KioskService {
       let itemDiscountStr = '0.0000';
       let lineNumber = 1;
 
-      // The item discounts running today for this branch's price group, in store: the kiosk
+      // The item discounts running today for this branch's price list, in store: the kiosk
       // gives them like the till does, once, as the order is placed.
       const discountsToday = await activeItemDiscounts(em, tenantId, data.branch_id, 'IN_STORE', lines.map((l) => l.product.id));
 

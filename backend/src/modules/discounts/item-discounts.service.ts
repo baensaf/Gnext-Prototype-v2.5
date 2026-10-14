@@ -17,7 +17,7 @@ export interface ItemDiscountInput {
   starts_on: string;
   ends_on?: string | null;
   note?: string | null;
-  /** Every price group (the default), or only `price_group_ids`. */
+  /** Every price list (the default), or only `price_group_ids`. */
   all_groups?: boolean;
   price_group_ids?: string[];
   /** IN_STORE (the default; till and kiosk), SNAPPFOOD, or BOTH. */
@@ -31,7 +31,7 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 /**
  * Automatic item discounts (V1, 2026-10-03): a dated percent off chosen products, applied to
  * every line of them at the till and the kiosk, and on the Snappfood menu. Head office sets them up
- * for all price groups or chosen ones, in store, on Snappfood or both (2026-10-12); the quote
+ * for all price lists or chosen ones, in store, on Snappfood or both (2026-10-12); the quote
  * engine asks `activeFor` which apply on the branch's business day. A product has at most one
  * discount for any group and channel on any day, so overlapping ones are refused rather than
  * resolved.
@@ -126,7 +126,7 @@ export class ItemDiscountsService {
     const groupIds = allGroups ? [] : [...new Set((input.price_group_ids || []).map(String))];
     if (!allGroups) {
       const found = groupIds.length ? await this.groupRepo.count({ where: { tenant_id: tenantId, id: In(groupIds) } }) : 0;
-      if (!groupIds.length || found !== groupIds.length) throw refuse('ITEM_DISCOUNT_GROUPS', 'Pick the price groups the discount is for');
+      if (!groupIds.length || found !== groupIds.length) throw refuse('ITEM_DISCOUNT_GROUPS', 'Pick the price lists the discount is for');
     }
     return {
       product_ids: wanted,
@@ -160,7 +160,7 @@ export class ItemDiscountsService {
       throw new ConflictException({
         statusCode: 409,
         code: 'ITEM_DISCOUNT_OVERLAP',
-        message: `${names.join(', ') || 'An item'} already ${names.length > 1 ? 'have' : 'has'} a ${Number(clash.percent)}% discount from ${clash.starts_on}${clash.ends_on ? ` to ${clash.ends_on}` : ''} for the same price groups and channel`,
+        message: `${names.join(', ') || 'An item'} already ${names.length > 1 ? 'have' : 'has'} a ${Number(clash.percent)}% discount from ${clash.starts_on}${clash.ends_on ? ` to ${clash.ends_on}` : ''} for the same price lists and channel`,
         discountId: clash.id,
       });
     }
