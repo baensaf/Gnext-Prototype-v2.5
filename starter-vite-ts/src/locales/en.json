@@ -375,9 +375,9 @@
       "remove": "Remove discount",
       "apply": "Apply",
       "applyWithPin": "Apply with manager PIN",
-      "family": "Friends & family {{pct}}%",
-      "familyTakeOff": "Take the friends-and-family discount off this order",
-      "familyPutBack": "Put the friends-and-family discount back"
+      "family": "Personal {{pct}}%",
+      "familyTakeOff": "Take the personal discount off this order",
+      "familyPutBack": "Put the personal discount back"
     },
     "held": {
       "discard": "Discard",
@@ -1389,13 +1389,13 @@
     },
     "filters": {
       "all": "All",
-      "family": "Friends & family",
+      "family": "Personal discount",
       "wallet": "Wallet money",
       "owes": "Owes"
     },
     "family": {
-      "column": "Friends & family",
-      "title": "Friends & family discount",
+      "column": "Personal discount",
+      "title": "Personal discount",
       "help": "A percent off this person's orders at the branch, filled in on the till when they are picked. The cashier can take it off an order.",
       "branch": "Branch",
       "percent": "Discount",
@@ -1962,8 +1962,8 @@
     "savedSuccess": "Role-based manual discount authorization policy saved successfully.",
     "failedToLoad": "Failed to load discount authorization policy",
     "failedToSave": "Failed to save discount authorization settings",
-    "familyTitle": "Friends & family discount",
-    "familyDesc": "Categories that stay at full price for friends and family, such as drinks. This covers a customer's own rate and a cashier discount given for this reason.",
+    "familyTitle": "Personal discount",
+    "familyDesc": "Categories a personal discount never touches, such as drinks. This covers a customer's own rate and a cashier discount given with the Personal discount reason.",
     "familyExcluded": "Never discounted",
     "familyExcludedPlaceholder": "Pick categories"
   },

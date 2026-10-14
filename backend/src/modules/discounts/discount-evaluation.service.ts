@@ -445,7 +445,7 @@ export class DiscountEvaluationService {
             discountTotal = MoneyUtil.add(discountTotal, custDiscountAmt);
             consideredDiscounts.push({
               source: 'CUSTOMER',
-              name: `Friends & family ${Number(customerDiscount.discount_percentage)}%`,
+              name: `Personal discount ${Number(customerDiscount.discount_percentage)}%`,
               percent: customerDiscount.discount_percentage,
               discountType: 'CUSTOMER_DISCOUNT',
               status: 'APPLIED',

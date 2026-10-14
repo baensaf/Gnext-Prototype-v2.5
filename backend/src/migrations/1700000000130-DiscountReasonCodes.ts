@@ -8,7 +8,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  */
 const DISCOUNT_REASONS: Array<[string, string]> = [
   ['CUSTOMER_SATISFACTION', 'رضایت مشتری / مهمان‌نوازی'],
-  ['FRIENDS_FAMILY', 'دوستان و آشنایان'],
+  ['FRIENDS_FAMILY', 'تخفیف اختصاصی'],
   ['STAFF_DISCOUNT', 'تخفیف کارکنان'],
   ['DAMAGED_ITEM', 'ایراد جزئی / مشکل بسته‌بندی'],
   ['VIP_COURTESY', 'عضو ویژه باشگاه'],

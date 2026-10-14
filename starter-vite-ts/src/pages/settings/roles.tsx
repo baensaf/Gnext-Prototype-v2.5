@@ -145,7 +145,7 @@ const GROUPS: { titleKey: string; title: string; rows: Capability[] }[] = [
       {
         path: '/app/customers',
         labelKey: 'rolesPage.caps.discounts',
-        label: 'Set friends-and-family discounts',
+        label: 'Set personal discounts',
         write: { CASHIER: 'NONE', MANAGER: 'FULL', HEAD_OFFICE: 'FULL' },
         note: "A manager sets their own branch's people; head office any branch's.",
       },
