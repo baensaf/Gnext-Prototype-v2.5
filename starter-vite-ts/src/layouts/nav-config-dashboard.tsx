@@ -157,25 +157,29 @@ export function useNavData(): NavSectionProps['data'] {
             // Import & Export is a button on Products Catalog, not a sidebar entry.
           ],
         },
+        // One drawer entry for everything that sets what an item costs.
         {
-          title: t('nav.pricing', 'Price Lists'),
+          title: t('nav.pricesGroup', 'Prices'),
           path: '/app/pricing/price-lists',
           icon: ICONS.pricing,
-        },
-        {
-          title: t('nav.priceChanges', 'Price Changes'),
-          path: '/app/pricing/changes',
-          icon: ICONS.pricing,
-        },
-        {
-          title: t('nav.itemDiscounts', 'Item Discounts'),
-          path: '/app/pricing/item-discounts',
-          icon: ICONS.pricing,
-        },
-        {
-          title: t('nav.snappfoodPrices', 'Snappfood Prices'),
-          path: '/app/pricing/snappfood',
-          icon: ICONS.pricing,
+          children: [
+            {
+              title: t('nav.pricing', 'Price Lists'),
+              path: '/app/pricing/price-lists',
+            },
+            {
+              title: t('nav.priceChanges', 'Price Changes'),
+              path: '/app/pricing/changes',
+            },
+            {
+              title: t('nav.snappfoodPrices', 'Snappfood Prices'),
+              path: '/app/pricing/snappfood',
+            },
+            {
+              title: t('nav.itemDiscounts', 'Item Discounts'),
+              path: '/app/pricing/item-discounts',
+            },
+          ],
         },
         // One place for the customer: the list (with friends-and-family rates, wallet and credit
         // on each row, and the credit actions in the row's dialog), and the wallets with the
