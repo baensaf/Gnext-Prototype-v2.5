@@ -369,12 +369,7 @@
       "needsPin": "Needs a manager PIN when applied",
       "withinLimit": "Within your limit",
       "reason": {
-        "label": "Reason for the discount",
-        "CUSTOMER_SATISFACTION": "Customer satisfaction / courtesy",
-        "STAFF_DISCOUNT": "Staff discount",
-        "DAMAGED_ITEM": "Minor defect / packaging issue",
-        "VIP_COURTESY": "VIP club member",
-        "FRIENDS_FAMILY": "Friends & family"
+        "label": "Reason for the discount"
       },
       "remove": "Remove discount",
       "apply": "Apply",
@@ -2536,6 +2531,7 @@
         "REPRINT": "Receipt Reprint",
         "PRICE_OVERRIDE": "Price Override",
         "ITEM_VOID": "Item Void",
+        "DISCOUNT": "Discount",
         "OTHER": "Other"
       }
     },

@@ -377,6 +377,12 @@ export async function runSeed() {
     { code: 'PAYOUT_COURIER', name: 'پرداخت به پیک', type: 'CASH', applies_to: ['SHIFT_CLOSE', 'SETTLEMENT_CLOSE'] },
     { code: 'CUSTOMER_COPY', name: 'درخواست نسخه دوم مشتری', type: 'OTHER', applies_to: ['REPRINT'] },
     { code: 'MANAGER_DISCOUNT', name: 'تخفیف مدیریتی', type: 'OVERRIDE', applies_to: ['PRICE_OVERRIDE'] },
+    // What the till offers as a discount's reason. FRIENDS_FAMILY applies the friends-and-family exclusions.
+    { code: 'CUSTOMER_SATISFACTION', name: 'رضایت مشتری / مهمان‌نوازی', type: 'DISCOUNT', applies_to: ['DISCOUNT'] },
+    { code: 'FRIENDS_FAMILY', name: 'دوستان و آشنایان', type: 'DISCOUNT', applies_to: ['DISCOUNT'] },
+    { code: 'STAFF_DISCOUNT', name: 'تخفیف کارکنان', type: 'DISCOUNT', applies_to: ['DISCOUNT'] },
+    { code: 'DAMAGED_ITEM', name: 'ایراد جزئی / مشکل بسته‌بندی', type: 'DISCOUNT', applies_to: ['DISCOUNT'] },
+    { code: 'VIP_COURTESY', name: 'عضو ویژه باشگاه', type: 'DISCOUNT', applies_to: ['DISCOUNT'] },
   ];
   for (const r of tillReasons) {
     if (await reasonRepo.findOne({ where: { tenant_id: tenant.id, code: r.code } })) continue;
