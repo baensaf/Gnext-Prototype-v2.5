@@ -15,6 +15,8 @@ import { OrderHeader, OrderState } from '../../entities/OrderHeader.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { OrderItemOption } from '../../entities/OrderItemOption.entity';
 import { OrderAdjustment } from '../../entities/OrderAdjustment.entity';
+import { Coupon } from '../../entities/Coupon.entity';
+import { CouponBatch } from '../../entities/CouponBatch.entity';
 import { OrderNote } from '../../entities/OrderNote.entity';
 import { OrderLink } from '../../entities/OrderLink.entity';
 import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
@@ -108,6 +110,21 @@ const isActiveLine = (item: { state?: string }): boolean =>
   (item.state || ACTIVE_LINE_STATE) === ACTIVE_LINE_STATE;
 
 /** The one order discount (manual or customer rate) inside an order's discount total. */
+/** How a sent order's one order discount is priced again after an edit (see orderDiscountRule). */
+interface OrderDiscountRule {
+  adjustment: OrderAdjustment | null;
+  /** A percent of what the lines now sell for. */
+  percent: string | null;
+  /** The most a percent may take off (a coupon batch's cap). */
+  cap?: string | null;
+  /** The amount, when the discount is not a percent. */
+  fixed: string;
+  /** Leaves out the categories head office keeps out of friends-and-family discounts. */
+  familyExclusions: boolean;
+  /** Only this product's lines carry the discount (a free-item coupon). */
+  onlyProductId?: string | null;
+}
+
 const previousOrderDiscount = (order: OrderHeader): string => {
   const rest = MoneyUtil.subtract(order.discount_total || order.discount_amount || '0.0000', order.item_discount_total || '0.0000');
   return MoneyUtil.greaterThan(rest, '0.0000') ? rest : '0.0000';
@@ -889,7 +906,9 @@ export class OrderService {
               : {}),
             ...(disc.source === 'CUSTOMER' ? { percent: disc.percent, reasonCode: 'FRIENDS_FAMILY' } : {}),
             ...(disc.source === 'ITEM' ? { productId: disc.productId, percent: disc.percent } : {}),
-            ...(disc.source === 'COUPON' ? { couponCode: dto.couponCode, percent: disc.percent, productId: disc.productId } : {}),
+            ...(disc.source === 'COUPON'
+              ? { couponCode: dto.couponCode, percent: disc.percent, maxDiscount: disc.maxDiscount ?? null, productId: disc.productId }
+              : {}),
           },
         });
         await em.save(OrderAdjustment, adj);
@@ -2651,15 +2670,15 @@ export class OrderService {
   /**
    * How a sent order's one order discount is priced when its lines change: a percent (the
    * cashier's, or the customer's friends-and-family rate) stays a percent of what is left; an
-   * amount stays that amount, never more than what is left. A coupon keeps the amount it gave,
-   * its percent being capped by the batch. A cashier's percent recorded before the percent was
-   * kept, or a discount with no record, keeps the amount it had.
+   * amount stays that amount, never more than what is left. A percent coupon stays its percent
+   * within the batch's cap; a free-item coupon follows its product's line. A cashier's percent
+   * recorded before the percent was kept, or a discount with no record, keeps the amount it had.
    */
   private async orderDiscountRule(
     em: EntityManager,
     tenantId: string,
     order: OrderHeader,
-  ): Promise<{ adjustment: OrderAdjustment | null; percent: string | null; fixed: string; familyExclusions: boolean } | null> {
+  ): Promise<OrderDiscountRule | null> {
     const [adjustment] = await em.find(OrderAdjustment, {
       where: { tenant_id: tenantId, order_id: order.id, type: 'DISCOUNT', source_type: In(['MANUAL', 'CUSTOMER', 'COUPON']) },
       order: { created_at: 'DESC' },
@@ -2685,7 +2704,18 @@ export class OrderService {
         familyExclusions: snap.reasonCode === 'FRIENDS_FAMILY',
       };
     }
-    return { adjustment, percent: null, fixed: given, familyExclusions: false };
+    // A coupon: a percent within the batch's cap (read from the batch for a coupon recorded
+    // before the cap was kept); a free item only on its own product's line.
+    if (snap.discountType === 'PERCENT' && snap.percent) {
+      let cap: string | null = snap.maxDiscount ?? null;
+      if (snap.maxDiscount === undefined && adjustment.source_id) {
+        const coupon = await em.findOne(Coupon, { where: { id: adjustment.source_id, tenant_id: tenantId } });
+        const batch = coupon ? await em.findOne(CouponBatch, { where: { id: coupon.batch_id, tenant_id: tenantId } }) : null;
+        cap = batch?.max_discount ?? null;
+      }
+      return { adjustment, percent: snap.percent, cap, fixed: given, familyExclusions: false };
+    }
+    return { adjustment, percent: null, fixed: given, familyExclusions: false, onlyProductId: snap.productId ?? null };
   }
 
   public async recalculateOrderTotals(tenantId: string, order: OrderHeader, em: EntityManager): Promise<OrderHeader> {
@@ -2740,7 +2770,13 @@ export class OrderService {
     const bases = items.map((i) => MoneyUtil.subtract(i.line_total, i.item_discount_total || '0.0000'));
     const eligible = items
       .map((_, k) => k)
-      .filter((k) => MoneyUtil.greaterThan(bases[k], '0') && !familyExcluded.has(categoryById.get(items[k].product_id) || ''));
+      .filter(
+        (k) =>
+          MoneyUtil.greaterThan(bases[k], '0') &&
+          !familyExcluded.has(categoryById.get(items[k].product_id) || '') &&
+          // A free-item coupon sits on its product's line, and goes when that line is voided.
+          (!rule?.onlyProductId || items[k].product_id === rule.onlyProductId),
+      );
     const eligibleBase = eligible.reduce((sum, k) => MoneyUtil.add(sum, bases[k]), '0.0000');
 
     let orderDiscount = '0.0000';
@@ -2748,6 +2784,7 @@ export class OrderService {
       orderDiscount = rule.percent
         ? MoneyUtil.multiply(eligibleBase, MoneyUtil.divide(rule.percent, '100', 6))
         : MoneyUtil.greaterThan(rule.fixed, eligibleBase) ? eligibleBase : rule.fixed;
+      if (rule.cap && MoneyUtil.greaterThan(orderDiscount, rule.cap)) orderDiscount = MoneyUtil.format(rule.cap);
     }
     const shares: string[] = items.map(() => '0.0000');
     if (MoneyUtil.greaterThan(orderDiscount, '0')) {
