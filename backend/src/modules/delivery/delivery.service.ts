@@ -30,6 +30,7 @@ import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
 import { courierDeliveryFee } from './delivery-fee';
 import { normalizeZonePolygon } from './zone-shape';
+import { nextCode, typedCode } from '../../common/utils/next-code.util';
 
 const ACTIVE_DELIVERY_STATES: DeliveryState[] = ['ASSIGNED', 'PICKED_UP', 'EN_ROUTE'];
 
@@ -80,14 +81,19 @@ export class DeliveryService {
     return await this.zoneRepo.find({ where, order: { name: 'ASC' } });
   }
 
-  async createZone(tenantId: string, data: { branch_id: string; code: string; name: string; fee?: string | number; estimated_minutes?: number; polygon?: any; postal_prefixes?: string[] }) {
-    const existing = await this.zoneRepo.findOne({ where: { tenant_id: tenantId, branch_id: data.branch_id, code: data.code.toUpperCase() } });
-    if (existing) throw new ConflictException(`Delivery zone code ${data.code} already exists for this branch`);
+  async createZone(tenantId: string, data: { branch_id: string; code?: string; name: string; fee?: string | number; estimated_minutes?: number; polygon?: any; postal_prefixes?: string[] }) {
+    let code = typedCode(data.code);
+    if (code) {
+      const existing = await this.zoneRepo.findOne({ where: { tenant_id: tenantId, branch_id: data.branch_id, code } });
+      if (existing) throw new ConflictException(`Delivery zone code ${code} already exists for this branch`);
+    } else {
+      code = await nextCode(this.zoneRepo, { tenant_id: tenantId, branch_id: data.branch_id }, 'ZN');
+    }
 
     const zone = this.zoneRepo.create({
       tenant_id: tenantId,
       branch_id: data.branch_id,
-      code: data.code.toUpperCase(),
+      code,
       name: data.name,
       fee: MoneyUtil.format(data.fee || '0', 4),
       estimated_minutes: data.estimated_minutes || 30,
@@ -176,11 +182,12 @@ export class DeliveryService {
 
   async createCourier(
     tenantId: string,
-    data: { branch_id?: string; code: string; name: string; phone?: string; vehicle_type?: string },
+    data: { branch_id?: string; code?: string; name: string; phone?: string; vehicle_type?: string },
     correlationId: string = 'corr-courier-create',
     actorId?: string,
   ) {
-    const code = data.code.trim().toUpperCase();
+    // A courier is known by their mobile number; the code is made here unless an import gives one.
+    const code = typedCode(data.code) || (await nextCode(this.courierRepo, { tenant_id: tenantId }, 'CR'));
     const onFile = await this.findCourierOnFile(tenantId, code, data.phone);
     if (onFile) {
       const branch = onFile.branch_id ? await this.branchRepo.findOne({ where: { id: onFile.branch_id, tenant_id: tenantId } }) : null;

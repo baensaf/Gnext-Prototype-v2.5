@@ -185,9 +185,11 @@ describe('CustomerService (Unit)', () => {
       expect(saved).toMatchObject({ first_name: 'Sara Ahmadi', last_name: '', code: '+989121234567' });
     });
 
-    it('refuses an empty name', async () => {
-      await expect(service.createCustomer('t-1', { name: ' ', mobile: '09121234567' } as any, 'corr')).rejects.toThrow(BadRequestException);
-      expect(customerRepo.save).not.toHaveBeenCalled();
+    // 2026-10-14: the till registers a customer by mobile alone; the name is optional.
+    it('registers a customer with a mobile and no name', async () => {
+      const saved = await service.createCustomer('t-1', { name: ' ', mobile: '09121234567' } as any, 'corr');
+      expect(saved.first_name).toBe('');
+      expect(saved.mobile).toBe('+989121234567');
     });
 
     it('saves the addresses typed with the customer, the first as default, with an optional pin', async () => {

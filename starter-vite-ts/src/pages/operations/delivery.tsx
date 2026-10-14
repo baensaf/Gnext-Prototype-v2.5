@@ -249,16 +249,14 @@ export function DeliveryPage() {
   const [selectedDeliveryForAssign, setSelectedDeliveryForAssign] = useState<Delivery | null>(null);
   const [selectedCourierId, setSelectedCourierId] = useState('');
 
-  const [completeModalOpen, setCompleteModalOpen] = useState(false);
-  const [selectedDeliveryForComplete, setSelectedDeliveryForComplete] = useState<Delivery | null>(null);
 
   const [courierModalOpen, setCourierModalOpen] = useState(false);
   // Couriers are on a salary, so a new one carries no pay of their own (FLAT at zero).
-  const emptyCourierForm = () => ({ code: '', name: '', phone: '', vehicle_type: 'MOTORCYCLE' });
+  const emptyCourierForm = () => ({ name: '', phone: '', vehicle_type: 'MOTORCYCLE' });
   const [courierForm, setCourierForm] = useState(emptyCourierForm);
 
   const [zoneModalOpen, setZoneModalOpen] = useState(false);
-  const emptyZoneForm = () => ({ code: '', name: '', fee: '500000', estimated_minutes: 30, polygon: null as DeliveryZone['polygon'] });
+  const emptyZoneForm = () => ({ name: '', fee: '500000', estimated_minutes: 30, polygon: null as DeliveryZone['polygon'] });
   const [zoneForm, setZoneForm] = useState(emptyZoneForm);
   const [zoneEdit, setZoneEdit] = useState<{
     zone: DeliveryZone;
@@ -368,22 +366,13 @@ export function DeliveryPage() {
     }
   };
 
-  const handleOpenCompleteModal = (del: Delivery) => {
-    setSelectedDeliveryForComplete(del);
-    setCompleteModalOpen(true);
-  };
-
-  // What the customer still owed when the order left. Completing only marks it delivered:
-  // how the customer paid — card on the courier's reader, cash, or both — is not known
-  // until the courier is back, so it is entered on the settlement from the card slip.
-  const owedOnDelivery = selectedDeliveryForComplete?.outstanding_total ?? selectedDeliveryForComplete?.grand_total ?? '0';
-
-  const handleCompleteDelivery = async () => {
-    if (!selectedDeliveryForComplete) return;
+  // One press: the card already shows what the customer owes. Completing only marks it
+  // delivered; how the customer paid — card on the courier's reader, cash, or both — is not
+  // known until the courier is back, so it is entered on the settlement from the card slip.
+  const handleCompleteDelivery = async (del: Delivery) => {
     try {
-      setPendingAction(`complete:${selectedDeliveryForComplete.id}`);
-      await deliveryApi.completeDelivery(selectedDeliveryForComplete.id);
-      setCompleteModalOpen(false);
+      setPendingAction(`complete:${del.id}`);
+      await deliveryApi.completeDelivery(del.id);
       await loadData();
     } catch (err: any) {
       setError(err.detail || t('delivery.errors.completeFailed'));
@@ -516,7 +505,8 @@ export function DeliveryPage() {
                         color="success"
                         size="small"
                         disabled={Boolean(pendingAction)}
-                        onClick={() => handleOpenCompleteModal(del)}
+                        startIcon={pendingAction === `complete:${del.id}` ? <CircularProgress size={16} color="inherit" /> : undefined}
+                        onClick={() => handleCompleteDelivery(del)}
                       >
                         {t('delivery.card.complete')}
                       </Button>
@@ -543,14 +533,12 @@ export function DeliveryPage() {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>{t('delivery.couriers.code')}</TableCell>
                 <TableCell>{t('delivery.couriers.nameAndPhone')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {couriers.map((c) => (
                 <TableRow key={c.id}>
-                  <TableCell><strong>{c.code}</strong></TableCell>
                   <TableCell>
                     <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{c.name}</Typography>
                     <Typography variant="caption" color="text.secondary">{c.phone || t('delivery.card.noPhone')}</Typography>
@@ -586,7 +574,6 @@ export function DeliveryPage() {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>{t('delivery.zones.code')}</TableCell>
                 <TableCell>{t('delivery.zones.zoneName')}</TableCell>
                 <TableCell>{t('delivery.zones.standardFee')}</TableCell>
                 <TableCell>{t('delivery.zones.estimatedMinutes')}</TableCell>
@@ -598,7 +585,6 @@ export function DeliveryPage() {
             <TableBody>
               {zones.map((z) => (
                 <TableRow key={z.id}>
-                  <TableCell><strong>{z.code}</strong></TableCell>
                   <TableCell>{z.name}</TableCell>
                   <TableCell>{MoneyUtil.formatCurrency(z.fee)} {currency}</TableCell>
                   <TableCell>{z.estimated_minutes} {t('delivery.zones.mins')}</TableCell>
@@ -673,34 +659,11 @@ export function DeliveryPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Complete Delivery Modal */}
-      <Dialog open={completeModalOpen} onClose={() => setCompleteModalOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>{t('delivery.modals.complete.title')}</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ pt: 1 }}>
-            <Typography variant="body2">
-              {t('delivery.modals.complete.description', { orderNumber: orderRefOf(selectedDeliveryForComplete, showOrderCode) })}
-            </Typography>
-            <Typography variant="body2">
-              {t('delivery.modals.complete.owedLabel')}: <strong>{MoneyUtil.formatCurrency(owedOnDelivery)} {currency}</strong>
-            </Typography>
-            <Alert severity="info">{t('delivery.modals.complete.settleNote')}</Alert>
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCompleteModalOpen(false)}>{t('delivery.modals.complete.cancel')}</Button>
-          <Button variant="contained" color="success" disabled={Boolean(pendingAction)} onClick={handleCompleteDelivery}>
-            {pendingAction?.startsWith('complete:') ? <CircularProgress size={20} color="inherit" /> : t('delivery.modals.complete.submit')}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
       {/* Add Courier Modal */}
       <Dialog open={courierModalOpen} onClose={() => setCourierModalOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>{t('delivery.modals.addCourier.title')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField label={t('delivery.modals.addCourier.code')} value={courierForm.code} onChange={(e) => setCourierForm({ ...courierForm, code: e.target.value })} fullWidth />
             <TextField label={t('delivery.modals.addCourier.name')} value={courierForm.name} onChange={(e) => setCourierForm({ ...courierForm, name: e.target.value })} fullWidth />
             <TextField
               required
@@ -717,7 +680,7 @@ export function DeliveryPage() {
           <Button onClick={() => setCourierModalOpen(false)}>{t('delivery.modals.addCourier.cancel')}</Button>
           <Button
             variant="contained"
-            disabled={!courierForm.code.trim() || !courierForm.name.trim() || !courierForm.phone.trim()}
+            disabled={!courierForm.name.trim() || !courierForm.phone.trim()}
             onClick={handleCreateCourier}
           >
             {t('delivery.modals.addCourier.submit')}
@@ -727,7 +690,7 @@ export function DeliveryPage() {
 
       {/* Edit Zone */}
       <Dialog open={Boolean(zoneEdit)} onClose={() => setZoneEdit(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>{t('delivery.modals.editZone.title', { code: zoneEdit?.zone.code })}</DialogTitle>
+        <DialogTitle>{t('delivery.modals.editZone.title', { name: zoneEdit?.zone.name })}</DialogTitle>
         <DialogContent>
           {zoneEdit && (
             <Stack spacing={2} sx={{ pt: 1 }}>
@@ -774,7 +737,7 @@ export function DeliveryPage() {
                     </Stack>
                   }
                 >
-                  {t('delivery.modals.editZone.removeConfirm', { code: zoneEdit.zone.code })}
+                  {t('delivery.modals.editZone.removeConfirm', { name: zoneEdit.zone.name })}
                 </Alert>
               )}
             </Stack>
@@ -796,7 +759,6 @@ export function DeliveryPage() {
         <DialogTitle>{t('delivery.modals.addZone.title')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <TextField label={t('delivery.modals.addZone.code')} value={zoneForm.code} onChange={(e) => setZoneForm({ ...zoneForm, code: e.target.value })} fullWidth />
             <TextField label={t('delivery.modals.addZone.name')} value={zoneForm.name} onChange={(e) => setZoneForm({ ...zoneForm, name: e.target.value })} fullWidth />
             <TextField label={t('delivery.modals.addZone.fee', { currency: currencyLabel })} value={toToman(zoneForm.fee)} onChange={(e) => setZoneForm({ ...zoneForm, fee: fromToman(e.target.value) })} fullWidth />
             <TextField label={t('delivery.modals.addZone.estimatedMinutes')} type="number" value={zoneForm.estimated_minutes} onChange={(e) => setZoneForm({ ...zoneForm, estimated_minutes: Number(e.target.value) })} fullWidth />

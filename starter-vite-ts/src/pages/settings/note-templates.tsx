@@ -37,6 +37,7 @@ import { useBranchContext } from 'src/contexts/branch-context';
 
 import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+import { useDragSort, DragHandleCell } from 'src/components/drag-sort';
 
 const SCOPES: NoteTemplateScope[] = ['ITEM', 'ORDER'];
 
@@ -63,7 +64,6 @@ export function NoteTemplatesPage() {
   const [scope, setScope] = useState<NoteTemplateScope>('ORDER');
   const [text, setText] = useState('');
   const [category, setCategory] = useState('');
-  const [sortOrder, setSortOrder] = useState('0');
 
   const loadData = async () => {
     try {
@@ -86,7 +86,6 @@ export function NoteTemplatesPage() {
     setScope('ORDER');
     setText('');
     setCategory('');
-    setSortOrder('0');
     setDrawerOpen(true);
   };
 
@@ -95,7 +94,6 @@ export function NoteTemplatesPage() {
     setScope(template.scope);
     setText(template.text);
     setCategory(template.category || '');
-    setSortOrder(String(template.sort_order ?? 0));
     setDrawerOpen(true);
   };
 
@@ -105,7 +103,6 @@ export function NoteTemplatesPage() {
       scope,
       text: text.trim(),
       category: category.trim() || null,
-      sort_order: Number(sortOrder) || 0,
     };
     try {
       if (editing) {
@@ -120,6 +117,18 @@ export function NoteTemplatesPage() {
       setError(err?.detail || t('settings.notesPage.saveError', 'Failed to save note template'));
     }
   };
+
+  // Phrases are put in order by dragging their rows: the order the register offers them in.
+  const handleDrop = async (list: NoteTemplate[]) => {
+    setTemplates(list);
+    try {
+      setTemplates(await catalogApi.reorderNoteTemplates(list.map((n) => n.id)));
+    } catch (err: any) {
+      setError(err?.detail || t('settings.notesPage.saveError', 'Failed to save note template'));
+      loadData();
+    }
+  };
+  const drag = useDragSort(templates, handleDrop, isHeadOffice);
 
   const handleToggleActive = async (template: NoteTemplate, active: boolean) => {
     try {
@@ -184,17 +193,18 @@ export function NoteTemplatesPage() {
             <Table>
               <TableHead>
                 <TableRow>
+                  <TableCell sx={{ width: 40 }} />
                   <TableCell>{t('settings.notesPage.colScope', 'Applies To')}</TableCell>
                   <TableCell>{t('settings.notesPage.colText', 'Phrase')}</TableCell>
                   <TableCell>{t('settings.notesPage.colCategory', 'Group')}</TableCell>
-                  <TableCell align="center">{t('settings.notesPage.colOrder', 'Order')}</TableCell>
                   <TableCell align="center">{t('settings.reasonsPage.colActive', 'Active')}</TableCell>
                   <TableCell align="right">{t('common.actions', 'Actions')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {templates.map((template) => (
-                  <TableRow key={template.id} sx={{ opacity: template.is_active ? 1 : 0.5 }}>
+                  <TableRow key={template.id} {...drag.rowProps(template.id)} style={{ opacity: template.is_active ? 1 : 0.5 }}>
+                    <DragHandleCell show={drag.canDrag} />
                     <TableCell>
                       <Chip
                         label={
@@ -217,7 +227,6 @@ export function NoteTemplatesPage() {
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell align="center">{template.sort_order}</TableCell>
                     <TableCell align="center">
                       <Switch
                         checked={template.is_active}
@@ -299,15 +308,6 @@ export function NoteTemplatesPage() {
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 helperText={t('settings.notesPage.categoryHelp', 'Optional, e.g. Allergies or Delivery.')}
-              />
-
-              <TextField
-                label={t('settings.notesPage.colOrder', 'Order')}
-                type="number"
-                fullWidth
-                value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value)}
-                helperText={t('settings.notesPage.orderHelp', 'Lower numbers appear first on the register.')}
               />
 
               <Button

@@ -5,7 +5,6 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import LockIcon from '@mui/icons-material/Lock';
-import LockOpenIcon from '@mui/icons-material/LockOpen';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
 import {
   Card,
@@ -20,7 +19,7 @@ import {
 import { fTime, fDateTime } from 'src/utils/format-time';
 
 import { RegisterNotice } from './register-notice';
-import { OpenShiftDialog } from './open-shift-dialog';
+import { OpenShiftInline } from './open-shift-dialog';
 import { useAccountShift } from './account-shift-store';
 import { DeviceTerminalDialog } from './device-terminal-dialog';
 import { BusinessDayEndedAlert } from './business-day-ended-alert';
@@ -128,7 +127,6 @@ export function PosShiftAccountLink({ register }: { register: RegisterShiftState
 export function PosShiftGate({ register }: { register: RegisterShiftState }) {
   const { t } = useTranslation();
   const [setupOpen, setSetupOpen] = useState(false);
-  const [openOpen, setOpenOpen] = useState(false);
   const { terminal, mismatch, ready } = register;
 
   if (!register.checked) {
@@ -163,22 +161,9 @@ export function PosShiftGate({ register }: { register: RegisterShiftState }) {
                 register: terminal?.name ?? '',
               })}
             </Typography>
-            <Button size="large" variant="contained" color="success" startIcon={<LockOpenIcon />} onClick={() => setOpenOpen(true)}>
-              {t('shift.open.title', 'Open shift')}
-            </Button>
+            {terminal && <OpenShiftInline terminal={terminal} defaultFloat={register.defaultFloat} onOpened={register.refresh} />}
           </Stack>
         </Card>
-      )}
-
-      {terminal && ready && (
-        <OpenShiftDialog
-          open={openOpen}
-          onClose={() => setOpenOpen(false)}
-          terminal={terminal}
-          branchName={register.terminalBranchName}
-          defaultFloat={register.defaultFloat}
-          onOpened={register.refresh}
-        />
       )}
 
       <DeviceTerminalDialog

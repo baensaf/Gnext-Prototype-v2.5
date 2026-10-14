@@ -62,7 +62,6 @@ export function ReasonCodesPage() {
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingReason, setEditingReason] = useState<ReasonCode | null>(null);
-  const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [appliesTo, setAppliesTo] = useState<string[]>(['ORDER_CANCEL']);
   const [requiresNote, setRequiresNote] = useState(false);
@@ -86,7 +85,6 @@ export function ReasonCodesPage() {
 
   const handleOpenCreate = () => {
     setEditingReason(null);
-    setCode('');
     setName('');
     setAppliesTo(['ORDER_CANCEL']);
     setRequiresNote(false);
@@ -95,7 +93,6 @@ export function ReasonCodesPage() {
 
   const handleOpenEdit = (r: ReasonCode) => {
     setEditingReason(r);
-    setCode(r.code);
     setName(r.name);
     setAppliesTo(r.applies_to || []);
     setRequiresNote(r.requires_note);
@@ -112,7 +109,7 @@ export function ReasonCodesPage() {
           requires_note: requiresNote,
         });
       } else {
-        await settingsApi.createReasonCode({ code, name, applies_to: appliesTo, requires_note: requiresNote });
+        await settingsApi.createReasonCode({ name, applies_to: appliesTo, requires_note: requiresNote });
       }
       setSuccess(t('settings.reasonsPage.saveSuccess', 'Reason code saved successfully'));
       setDrawerOpen(false);
@@ -179,7 +176,6 @@ export function ReasonCodesPage() {
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>{t('settings.reasonsPage.colCode', 'Code')}</TableCell>
                   <TableCell>{t('settings.reasonsPage.colName', 'Reason Name')}</TableCell>
                   <TableCell>{t('settings.reasonsPage.colAppliesTo', 'Applies To')}</TableCell>
                   <TableCell align="center">{t('settings.reasonsPage.colRequiresNote', 'Requires Note')}</TableCell>
@@ -192,7 +188,6 @@ export function ReasonCodesPage() {
               <TableBody>
                 {reasons.map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell><code>{r.code}</code></TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }}>{r.name}</TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
@@ -248,16 +243,6 @@ export function ReasonCodesPage() {
 
           <form onSubmit={handleSave}>
             <Stack spacing={2.5}>
-              <TextField
-                label={t('settings.reasonsPage.formCode', 'Reason Code')}
-                placeholder={t('settings.reasonsPage.formCodePlaceholder', 'e.g. CUSTOMER_CANCEL')}
-                required
-                fullWidth
-                disabled={Boolean(editingReason)}
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-              />
-
               <TextField
                 label={t('settings.reasonsPage.formName', 'Reason Display Name')}
                 placeholder={t('settings.reasonsPage.formNamePlaceholder', 'e.g. Customer Requested Cancellation')}

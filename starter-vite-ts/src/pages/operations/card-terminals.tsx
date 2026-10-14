@@ -49,7 +49,6 @@ export function CardTerminalsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [devCode, setDevCode] = useState('');
   const [devName, setDevName] = useState('');
   const [devSerial, setDevSerial] = useState('');
   const [devType, setDevType] = useState('POS_TERMINAL');
@@ -83,7 +82,6 @@ export function CardTerminalsPage() {
     e.preventDefault();
     try {
       await paymentApi.createDevice({
-        code: devCode,
         name: devName,
         serial_number: devSerial || undefined,
         device_type: devType as any,
@@ -91,7 +89,6 @@ export function CardTerminalsPage() {
         settlement_account_id: devAccountId || undefined,
       });
       setDrawerOpen(false);
-      setDevCode('');
       setDevName('');
       setDevSerial('');
       loadData();
@@ -131,7 +128,6 @@ export function CardTerminalsPage() {
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Device Code</TableCell>
               <TableCell>Device Name</TableCell>
               <TableCell>Type</TableCell>
               <TableCell>Serial Number</TableCell>
@@ -149,7 +145,7 @@ export function CardTerminalsPage() {
           <TableBody>
             {devices.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} align="center">
+                <TableCell colSpan={7} align="center">
                   <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
                     No payment devices registered yet. Click &quot;Register Device&quot; to add your physical or mobile POS.
                   </Typography>
@@ -162,12 +158,7 @@ export function CardTerminalsPage() {
 
                 return (
                   <TableRow key={d.id}>
-                    <TableCell>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                        {d.code}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{d.name}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{d.name}</TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                         <Chip
@@ -208,7 +199,6 @@ export function CardTerminalsPage() {
           </Typography>
           <Box component="form" onSubmit={handleCreateDevice}>
             <Stack spacing={2.5}>
-              <TextField label="Device Code" value={devCode} onChange={(e) => setDevCode(e.target.value)} required fullWidth placeholder="e.g. POS-MAIN-01" />
               <TextField label="Device Name" value={devName} onChange={(e) => setDevName(e.target.value)} required fullWidth placeholder="e.g. Counter Card POS Terminal" />
               <TextField select label="Device Type" value={devType} onChange={(e) => setDevType(e.target.value)} fullWidth>
                 <MenuItem value="POS_TERMINAL">Physical POS Terminal</MenuItem>

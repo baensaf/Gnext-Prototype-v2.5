@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { NoteTemplate } from '../../entities/NoteTemplate.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 
@@ -42,6 +42,21 @@ export class NoteTemplateService {
     return qb.getMany();
   }
 
+  /** Puts the phrases in the order of `ids`, the order the register offers them in. */
+  async reorder(tenantId: string, ids: string[], actorId?: string, correlationId?: string) {
+    const unique = [...new Set(ids || [])];
+    if (!unique.length) throw new BadRequestException('No phrases to order');
+    const rows = await this.repo.find({ where: { tenant_id: tenantId, id: In(unique) } });
+    if (rows.length !== unique.length) throw new NotFoundException('Note template not found');
+    await this.repo.manager.transaction(async (em) => {
+      for (const [index, id] of unique.entries()) {
+        await em.update(NoteTemplate, { id, tenant_id: tenantId }, { sort_order: index + 1 });
+      }
+    });
+    await this.auditWriter.write({ tenantId, actorType: 'ADMIN', actorId, action: 'NOTE_TEMPLATES_REORDERED', entityType: 'NoteTemplate', entityId: unique[0], correlationId, details: { ids: unique } });
+    return this.list(tenantId, { includeInactive: true });
+  }
+
   async create(tenantId: string, input: NoteTemplateInput, actorId?: string, correlationId?: string) {
     const text = (input.text || '').trim();
     if (!text) throw new BadRequestException('Note template text is required');
@@ -50,13 +65,15 @@ export class NoteTemplateService {
     const duplicate = await this.repo.findOne({ where: { tenant_id: tenantId, scope, text } });
     if (duplicate) throw new ConflictException(`A ${scope.toLowerCase()} note with this text already exists`);
 
+    // A new phrase goes to the end of the list; the settings screen drags it from there.
+    const last = await this.repo.maximum('sort_order', { tenant_id: tenantId });
     const saved = await this.repo.save(
       this.repo.create({
         tenant_id: tenantId,
         scope,
         text,
         category: this.normalizeCategory(input.category),
-        sort_order: Number.isInteger(input.sort_order) ? input.sort_order : 0,
+        sort_order: Number.isInteger(input.sort_order) ? input.sort_order : (last ?? 0) + 1,
         is_active: input.is_active !== false,
         created_by: actorId || null,
         updated_by: actorId || null,

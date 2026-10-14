@@ -15,6 +15,7 @@ import {
 import { canActOnBranch, isHeadOfficeUser, UserScope } from '../../common/utils/user-scope.util';
 import { BUSINESS_DAY_SETTING_KEY, businessDaySettingProblem } from '../../common/utils/business-day';
 import { CATALOG_SETTING_KEY, catalogSettingProblem } from '../../common/utils/default-tax';
+import { nextCode, typedCode } from '../../common/utils/next-code.util';
 
 @Injectable()
 export class SettingsService {
@@ -332,12 +333,17 @@ export class SettingsService {
   }
 
   async createPaymentMethod(tenantId: string, data: Partial<PaymentMethod>, correlationId: string) {
-    const existing = await this.methodRepo.findOne({ where: { tenant_id: tenantId, code: data.code } });
-    if (existing) throw new ConflictException(`Payment method ${data.code} already exists`);
+    let code = typedCode(data.code);
+    if (code) {
+      const existing = await this.methodRepo.findOne({ where: { tenant_id: tenantId, code } });
+      if (existing) throw new ConflictException(`Payment method ${code} already exists`);
+    } else {
+      code = await nextCode(this.methodRepo, { tenant_id: tenantId }, 'PAY');
+    }
 
     const method = this.methodRepo.create({
       tenant_id: tenantId,
-      code: data.code ? data.code.toUpperCase() : 'UNKNOWN',
+      code,
       name: data.name,
       kind: data.kind || 'CASH',
       currency_code: data.currency_code || 'IRR',
@@ -387,13 +393,18 @@ export class SettingsService {
     return await this.reasonRepo.find({ where: { tenant_id: tenantId }, order: { code: 'ASC' } });
   }
 
-  async createReasonCode(tenantId: string, data: { code: string; name: string; applies_to?: string[]; requires_note?: boolean }, correlationId: string) {
-    const existing = await this.reasonRepo.findOne({ where: { tenant_id: tenantId, code: data.code } });
-    if (existing) throw new ConflictException(`Reason code ${data.code} already exists`);
+  async createReasonCode(tenantId: string, data: { code?: string; name: string; applies_to?: string[]; requires_note?: boolean }, correlationId: string) {
+    let code = typedCode(data.code);
+    if (code) {
+      const existing = await this.reasonRepo.findOne({ where: { tenant_id: tenantId, code } });
+      if (existing) throw new ConflictException(`Reason code ${code} already exists`);
+    } else {
+      code = await nextCode(this.reasonRepo, { tenant_id: tenantId }, 'RSN');
+    }
 
     const reason = this.reasonRepo.create({
       tenant_id: tenantId,
-      code: data.code.toUpperCase(),
+      code,
       name: data.name,
       applies_to: data.applies_to || ['OTHER'],
       requires_note: data.requires_note ?? false,

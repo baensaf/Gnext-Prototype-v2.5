@@ -127,12 +127,6 @@ export function GeneralSettingsPage() {
               <form onSubmit={handleSaveTenant}>
                 <Stack spacing={2.5}>
                   <TextField
-                    label={t('settings.generalPage.tenantCode', 'Tenant Code')}
-                    value={tenant?.code || 'GNEXT'}
-                    disabled
-                    fullWidth
-                  />
-                  <TextField
                     label={t('settings.generalPage.tenantName', 'Tenant Name')}
                     value={tenantName}
                     onChange={(e) => setTenantName(e.target.value)}

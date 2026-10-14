@@ -121,8 +121,8 @@ export function CustomerRegisterDialog({ open, onClose, onCreated, createCustome
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !mobile.trim()) {
-      setError(t('customers.register.errors.nameAndMobile'));
+    if (!mobile.trim()) {
+      setError(t('customers.register.errors.mobileRequired'));
       return;
     }
     // A row left completely empty is dropped; one with a pin or title but no text is an error.
@@ -177,26 +177,25 @@ export function CustomerRegisterDialog({ open, onClose, onCreated, createCustome
           <Grid container spacing={2}>
             <Grid size={{ xs: 12, sm: 6 }}>
               <TextField
-                label={t('customers.register.name')}
-                required
-                fullWidth
-                autoFocus
-                size="small"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6 }}>
-              <TextField
                 label={t('customers.register.mobile')}
                 required
                 fullWidth
+                autoFocus
                 size="small"
                 value={mobile}
                 placeholder="0912…"
                 helperText={t('customers.register.mobileHelper')}
                 onChange={(e) => setMobile(e.target.value)}
                 slotProps={{ htmlInput: { dir: 'ltr', inputMode: 'tel' } }}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                label={t('customers.register.nameOptional')}
+                fullWidth
+                size="small"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
               />
             </Grid>
             <Grid size={{ xs: 12, sm: 6 }}>

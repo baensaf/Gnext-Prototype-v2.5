@@ -36,8 +36,6 @@ import {
   CircularProgress,
 } from '@mui/material';
 
-import { useCurrencyCode } from 'src/utils/currency';
-
 import { paymentApi } from 'src/api/paymentApi';
 import { settingsApi } from 'src/api/settingsApi';
 import { useIsHeadOffice } from 'src/store/useAuthStore';
@@ -48,7 +46,6 @@ import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 export function PaymentSettingsPage() {
-  const currency = useCurrencyCode();
   const { t } = useTranslation();
   // Tender types have no branch dimension: one set for the chain, written at head office.
   const isHeadOffice = useIsHeadOffice();
@@ -62,10 +59,8 @@ export function PaymentSettingsPage() {
   // Drawer modal state for create/edit
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingMethod, setEditingMethod] = useState<PaymentMethod | null>(null);
-  const [formCode, setFormCode] = useState('');
   const [formName, setFormName] = useState('');
   const [formKind, setFormKind] = useState('CARD');
-  const [formCurrency, setFormCurrency] = useState(currency);
   const [formRequiresRef, setFormRequiresRef] = useState(false);
   const [formRequiresDevice, setFormRequiresDevice] = useState(true);
   const [formActive, setFormActive] = useState(true);
@@ -74,7 +69,6 @@ export function PaymentSettingsPage() {
   // The bank accounts the card terminals settle into: the chain's, like the tender types.
   const [accounts, setAccounts] = useState<SettlementAccount[]>([]);
   const [accDrawerOpen, setAccDrawerOpen] = useState(false);
-  const [accCode, setAccCode] = useState('');
   const [accName, setAccName] = useState('');
   const [bankName, setBankName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
@@ -103,10 +97,8 @@ export function PaymentSettingsPage() {
 
   const handleOpenCreate = () => {
     setEditingMethod(null);
-    setFormCode('');
     setFormName('');
     setFormKind('CARD');
-    setFormCurrency(currency);
     setFormRequiresRef(false);
     setFormRequiresDevice(true);
     setFormActive(true);
@@ -115,10 +107,8 @@ export function PaymentSettingsPage() {
 
   const handleOpenEdit = (m: PaymentMethod) => {
     setEditingMethod(m);
-    setFormCode(m.code);
     setFormName(m.name);
     setFormKind(m.kind);
-    setFormCurrency(m.currency_code || currency);
     setFormRequiresRef(m.requires_reference);
     setFormRequiresDevice(m.requires_device);
     setFormActive(m.is_active);
@@ -139,15 +129,24 @@ export function PaymentSettingsPage() {
     setSavingMethod(true);
     setError(null);
 
-    const payload = {
-      code: formCode.toUpperCase().trim(),
-      name: formName.trim(),
-      kind: formKind,
-      currency_code: formCurrency,
-      requires_reference: formRequiresRef,
-      requires_device: formRequiresDevice,
-      is_active: formActive,
-    };
+    // A new method's code is made on the server, it is in Rials and in use, and what it needs at
+    // the till follows from its kind: a card goes through the terminal, a transfer needs its
+    // reference. Editing shows the switches for the odd method that differs.
+    const payload = editingMethod
+      ? {
+          name: formName.trim(),
+          kind: formKind,
+          requires_reference: formRequiresRef,
+          requires_device: formRequiresDevice,
+          is_active: formActive,
+        }
+      : {
+          name: formName.trim(),
+          kind: formKind,
+          requires_device: formKind === 'CARD',
+          requires_reference: formKind === 'BANK_TRANSFER',
+          is_active: true,
+        };
 
     try {
       if (editingMethod) {
@@ -170,14 +169,12 @@ export function PaymentSettingsPage() {
     e.preventDefault();
     try {
       await paymentApi.createAccount({
-        code: accCode,
         name: accName,
         bank_name: bankName || undefined,
         account_number: accountNumber || undefined,
         iban: iban || undefined,
       });
       setAccDrawerOpen(false);
-      setAccCode('');
       setAccName('');
       setBankName('');
       setAccountNumber('');
@@ -236,10 +233,8 @@ export function PaymentSettingsPage() {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colCode', 'Code')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colName', 'Name')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colKind', 'Kind')}</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colCurrency', 'Currency')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colDevice', 'Device / Reference')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colStatus', 'Status')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }} align="right">
@@ -250,12 +245,7 @@ export function PaymentSettingsPage() {
             <TableBody>
               {methods.map((m) => (
                 <TableRow key={m.id} hover>
-                  <TableCell>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                      {m.code}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{m.name}</TableCell>
+                  <TableCell sx={{ fontWeight: 700 }}>{m.name}</TableCell>
                   <TableCell>
                     <Chip
                       size="small"
@@ -271,7 +261,6 @@ export function PaymentSettingsPage() {
                       }
                     />
                   </TableCell>
-                  <TableCell>{m.currency_code || currency}</TableCell>
                   <TableCell>
                     <Stack direction="row" spacing={0.5}>
                       {m.requires_device && (
@@ -303,7 +292,7 @@ export function PaymentSettingsPage() {
               ))}
               {methods.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} sx={{ textAlign: 'center', py: 4 }}>
+                  <TableCell colSpan={5} sx={{ textAlign: 'center', py: 4 }}>
                     <Typography color="text.secondary">
                       {t('settings.paymentsPage.noMethods', 'No payment methods configured.')}
                     </Typography>
@@ -330,7 +319,6 @@ export function PaymentSettingsPage() {
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Account Code</TableCell>
                 <TableCell>Account Name</TableCell>
                 <TableCell>Bank</TableCell>
                 <TableCell>Account Number</TableCell>
@@ -341,7 +329,7 @@ export function PaymentSettingsPage() {
             <TableBody>
               {accounts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
+                  <TableCell colSpan={5} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
                       No settlement accounts created yet.
                     </Typography>
@@ -350,12 +338,7 @@ export function PaymentSettingsPage() {
               ) : (
                 accounts.map((acc) => (
                   <TableRow key={acc.id}>
-                    <TableCell>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
-                        {acc.code}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{acc.name}</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{acc.name}</TableCell>
                     <TableCell>{acc.bank_name || '-'}</TableCell>
                     <TableCell>{acc.account_number || '-'}</TableCell>
                     <TableCell>{acc.iban || '-'}</TableCell>
@@ -377,7 +360,6 @@ export function PaymentSettingsPage() {
           </Typography>
           <Box component="form" onSubmit={handleCreateAccount}>
             <Stack spacing={2.5}>
-              <TextField label="Account Code" value={accCode} onChange={(e) => setAccCode(e.target.value)} required fullWidth placeholder="e.g. ACC-MELLAT-MAIN" />
               <TextField label="Account Name" value={accName} onChange={(e) => setAccName(e.target.value)} required fullWidth placeholder="e.g. Mellat Corporate Account" />
               <TextField label="Bank Name" value={bankName} onChange={(e) => setBankName(e.target.value)} fullWidth placeholder="e.g. Bank Mellat" />
               <TextField label="Account Number" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} fullWidth />
@@ -411,16 +393,6 @@ export function PaymentSettingsPage() {
             <TextField
               required
               fullWidth
-              label={t('settings.paymentsPage.formCode', 'Method Code')}
-              value={formCode}
-              onChange={(e) => setFormCode(e.target.value)}
-              disabled={Boolean(editingMethod)}
-              placeholder={t('settings.paymentsPage.formCodePlaceholder', 'e.g. CARD_POS, CASH')}
-            />
-
-            <TextField
-              required
-              fullWidth
               label={t('settings.paymentsPage.formName', 'Display Name')}
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
@@ -447,29 +419,28 @@ export function PaymentSettingsPage() {
               </Select>
             </FormControl>
 
-            <TextField
-              fullWidth
-              label={t('settings.paymentsPage.formCurrency', 'Currency Code')}
-              value={formCurrency}
-              onChange={(e) => setFormCurrency(e.target.value.toUpperCase())}
-            />
+            {editingMethod && <Divider />}
 
-            <Divider />
-
+            {editingMethod && (
             <FormControlLabel
               control={<Switch checked={formRequiresDevice} onChange={(e) => setFormRequiresDevice(e.target.checked)} />}
               label={t('settings.paymentsPage.reqDevice', 'Requires Hardware EFT POS Terminal')}
             />
+            )}
 
+            {editingMethod && (
             <FormControlLabel
               control={<Switch checked={formRequiresRef} onChange={(e) => setFormRequiresRef(e.target.checked)} />}
               label={t('settings.paymentsPage.reqRef', 'Requires Transaction Reference / RRN')}
             />
+            )}
 
+            {editingMethod && (
             <FormControlLabel
               control={<Switch checked={formActive} onChange={(e) => setFormActive(e.target.checked)} />}
               label={t('settings.paymentsPage.formActive', 'Active & Available at POS')}
             />
+            )}
 
             <Button
               type="submit"

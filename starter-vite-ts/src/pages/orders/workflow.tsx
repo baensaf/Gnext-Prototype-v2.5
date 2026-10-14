@@ -830,11 +830,9 @@ export function OrdersWorkflowPage() {
   }, [reprintDialogOpen, reprintDocumentType, selectedOrder, loadReprintPrinters]);
 
   const handleConfirmReprint = async () => {
-    const reason = reprintReason.trim();
-    if (!selectedOrder || !reason) {
-      setReprintError(t('orders.reprintDialog.reasonRequired'));
-      return;
-    }
+    // The reason is optional: who reprinted what, and when, is logged either way.
+    const reason = reprintReason.trim() || undefined;
+    if (!selectedOrder) return;
 
     try {
       setReprintSubmitting(true);
@@ -1608,16 +1606,20 @@ export function OrdersWorkflowPage() {
               </FormControl>
             )}
 
-            <TextField
-              autoFocus
-              fullWidth
-              label={t('orders.reprintDialog.reason')}
-              minRows={2}
-              multiline
-              onChange={(e) => setReprintReason(e.target.value)}
-              placeholder={t('orders.reprintDialog.reasonPlaceholder')}
-              value={reprintReason}
-            />
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
+              {(['customerAsked', 'paperJam', 'lostChit'] as const).map((key) => {
+                const text = t(`orders.reprintDialog.quickReasons.${key}`);
+                return (
+                  <Chip
+                    key={key}
+                    label={text}
+                    color={reprintReason === text ? 'primary' : 'default'}
+                    variant={reprintReason === text ? 'filled' : 'outlined'}
+                    onClick={() => setReprintReason(reprintReason === text ? '' : text)}
+                  />
+                );
+              })}
+            </Stack>
 
             {reprintError && <Alert severity="error">{reprintError}</Alert>}
           </Stack>
@@ -1627,7 +1629,8 @@ export function OrdersWorkflowPage() {
             {t('orders.reprintDialog.cancel')}
           </Button>
           <Button
-            disabled={reprintSubmitting || !reprintReason.trim()}
+            autoFocus
+            disabled={reprintSubmitting}
             onClick={handleConfirmReprint}
             startIcon={reprintSubmitting ? <CircularProgress size={16} /> : <PrintIcon />}
             variant="contained"

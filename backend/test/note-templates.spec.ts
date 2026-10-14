@@ -29,6 +29,7 @@ describe('NoteTemplateService', () => {
     repo = {
       createQueryBuilder: jest.fn(() => queryBuilder),
       findOne: jest.fn().mockResolvedValue(null),
+      maximum: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockImplementation((dto: any) => ({ id: 'n-1', ...dto })),
       save: jest.fn().mockImplementation((row: any) => Promise.resolve(row)),
     };

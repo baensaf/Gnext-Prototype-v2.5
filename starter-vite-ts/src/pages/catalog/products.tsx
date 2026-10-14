@@ -11,9 +11,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import FastfoodIcon from '@mui/icons-material/Fastfood';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ImportExportIcon from '@mui/icons-material/ImportExport';
-import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import {
   Box,
   Card,
@@ -48,6 +46,9 @@ import { useCurrencyLabel } from 'src/utils/currency';
 import { catalogApi } from 'src/api/catalogApi';
 import { useAuthStore } from 'src/store/useAuthStore';
 
+import { useDragSort, DragHandleCell } from 'src/components/drag-sort';
+import { useConfirm } from 'src/components/confirm-dialog/use-confirm';
+
 /** A product's price, or the range of its sizes' prices when it is sold in sizes. */
 const priceLabel = (p: Product, currency: string) => {
   const sizes = p.variants || [];
@@ -63,6 +64,7 @@ export function ProductsPage() {
   const currency = useCurrencyLabel();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { confirm, dialog: confirmDialog } = useConfirm();
 
   // Products belong to the chain. A branch reads this screen to know what it may serve,
   // and goes to Availability to say whether it can serve it today. The API refuses these
@@ -123,11 +125,7 @@ export function ProductsPage() {
   // category at a time, with the whole list showing (no search or status filter).
   const canReorder = canAuthor && !!selectedCategoryId && !search.trim() && statusFilter === 'ALL';
 
-  const handleMove = async (index: number, by: number) => {
-    const to = index + by;
-    if (to < 0 || to >= products.length) return;
-    const list = [...products];
-    [list[index], list[to]] = [list[to], list[index]];
+  const handleDrop = async (list: Product[]) => {
     setProducts(list);
     try {
       await catalogApi.reorderProducts(selectedCategoryId, list.map((p) => p.id));
@@ -137,8 +135,10 @@ export function ProductsPage() {
     }
   };
 
+  const drag = useDragSort(products, handleDrop, canReorder);
+
   const handleArchive = async (id: string, prodName: string) => {
-    if (window.confirm(t('catalog.productsPage.archiveConfirm', { name: prodName }))) {
+    if (await confirm(t('catalog.productsPage.archiveConfirm', { name: prodName }))) {
       try {
         await catalogApi.archiveProduct(id);
         loadData();
@@ -150,6 +150,7 @@ export function ProductsPage() {
 
   return (
     <Box>
+      {confirmDialog}
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
@@ -258,7 +259,7 @@ export function ProductsPage() {
             <Table>
               <TableHead>
                 <TableRow>
-                  {canReorder && <TableCell sx={{ width: 64 }}>{t('catalog.productsPage.order')}</TableCell>}
+                  {canReorder && <TableCell sx={{ width: 40 }} />}
                   <TableCell>{t('catalog.productsPage.name')}</TableCell>
                   <TableCell>{t('catalog.productsPage.category')}</TableCell>
                   <TableCell align="right">{t('catalog.productsPage.basePrice')}</TableCell>
@@ -271,25 +272,11 @@ export function ProductsPage() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {visibleProducts.map((p, index) => {
+                {visibleProducts.map((p) => {
                   const catObj = categories.find((c) => c.id === p.category_id);
                   return (
-                    <TableRow key={p.id}>
-                      {canReorder && (
-                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                          <IconButton size="small" disabled={index === 0} onClick={() => handleMove(index, -1)} aria-label={t('catalog.productsPage.moveUp')}>
-                            <ArrowUpwardIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton
-                            size="small"
-                            disabled={index === visibleProducts.length - 1}
-                            onClick={() => handleMove(index, 1)}
-                            aria-label={t('catalog.productsPage.moveDown')}
-                          >
-                            <ArrowDownwardIcon fontSize="small" />
-                          </IconButton>
-                        </TableCell>
-                      )}
+                    <TableRow key={p.id} {...drag.rowProps(p.id)}>
+                      {canReorder && <DragHandleCell show={drag.canDrag} />}
                       <TableCell>
                         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                           <Avatar variant="rounded" src={p.image_url || undefined} alt="" sx={{ width: 44, height: 44, bgcolor: 'action.hover' }}>

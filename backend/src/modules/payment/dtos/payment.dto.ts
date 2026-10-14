@@ -85,8 +85,9 @@ export class PaymentCorrectionDto {
 }
 
 export class PaymentDeviceCreateDto {
+  @IsOptional()
   @IsString()
-  code: string;
+  code?: string;
 
   @IsString()
   name: string;
@@ -141,8 +142,9 @@ export class TerminalResolutionDto {
 }
 
 export class SettlementAccountCreateDto {
+  @IsOptional()
   @IsString()
-  code: string;
+  code?: string;
 
   @IsString()
   name: string;
