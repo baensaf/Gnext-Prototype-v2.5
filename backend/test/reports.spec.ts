@@ -71,7 +71,7 @@ describe('ReportsService (Unit)', () => {
 
   it('should return report catalog definitions', async () => {
     const catalog = await service.getCatalog();
-    expect(catalog).toHaveLength(10);
+    expect(catalog).toHaveLength(15);
     expect(catalog.some((r) => r.code === 'sales-summary')).toBe(true);
   });
 

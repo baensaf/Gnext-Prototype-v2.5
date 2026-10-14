@@ -18,10 +18,14 @@ import { CashierShift } from '../../entities/CashierShift.entity';
 import { CourierSettlement } from '../../entities/CourierSettlement.entity';
 import { CreditEntry } from '../../entities/CreditEntry.entity';
 import { OrderAdjustment } from '../../entities/OrderAdjustment.entity';
+import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
+import { AdminUser } from '../../entities/AdminUser.entity';
+import { Branch } from '../../entities/Branch.entity';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { MoneyUtil } from '../../common/utils/money.util';
 import {
   BusinessDateUtil,
+  BUSINESS_TIME_ZONE,
   ORDER_BUSINESS_DATE_EXPR,
   REFUND_BUSINESS_DATE_EXPR,
   NON_REVENUE_ORDER_STATES,
@@ -34,6 +38,14 @@ import {
  */
 function storedDate(row: { business_date?: string | null }, at?: Date | string | null): string {
   return row?.business_date || BusinessDateUtil.fromDate(at) || '—';
+}
+
+/** What every report returns: its rows, and the totals row keyed by column. */
+export interface ReportResult {
+  report_code: string;
+  filter_basis?: string;
+  rows: any[];
+  summary_totals: Record<string, any>;
 }
 
 @Injectable()
@@ -67,6 +79,11 @@ export class ReportsService {
       { code: 'snappfood-reconciliation', name: 'Snappfood Webhook Reconciliation', category: 'INTEGRATION' },
       { code: 'courier-settlements', name: 'Courier Cash & POS Settlements', category: 'DELIVERY' },
       { code: 'tax', name: 'Tax', category: 'TAX' },
+      { code: 'sales-by-day', name: 'Sales by Day', category: 'FINANCIAL' },
+      { code: 'sales-by-hour', name: 'Sales by Hour', category: 'FINANCIAL' },
+      { code: 'sales-by-channel', name: 'Sales by Channel & Order Type', category: 'FINANCIAL' },
+      { code: 'sales-by-employee', name: 'Sales by Employee', category: 'STAFF' },
+      { code: 'voids-cancellations', name: 'Voids & Cancellations', category: 'LOSS' },
     ];
     if (actor && !isHeadOfficeUser(actor)) {
       return catalog.filter((report) => !CHAIN_ONLY_REPORTS.includes(report.code));
@@ -133,7 +150,169 @@ export class ReportsService {
     if (endDate) query.andWhere(`${dateExpr} <= :sdEnd`, { sdEnd: endDate });
   }
 
-  async queryReport(tenantId: string, reportCode: string, filters: any = {}, actor?: UserScope) {
+  /**
+   * Refunds given in a period, on the business day each was given, whatever day its order was
+   * sold on. A refund takes its share of tax back with it, so net sales falls by the refund less
+   * that tax. A paid order that was cancelled is not revenue at all, so its refund is left out.
+   */
+  private async refundsInPeriod(
+    tenantId: string,
+    filters: { startDate?: string; endDate?: string; branchId?: string; channel?: string },
+  ) {
+    const qb = this.refundRepo
+      .createQueryBuilder('r')
+      .innerJoin(OrderHeader, 'o', 'o.id = r.order_id AND o.tenant_id = r.tenant_id')
+      .select([
+        'r.refund_number AS refund_number',
+        'r.amount AS amount',
+        `${REFUND_BUSINESS_DATE_EXPR('r')} AS business_date`,
+        'o.order_number AS order_number',
+        'o.branch_id AS branch_id',
+        'o.channel AS channel',
+        'o.order_type AS order_type',
+        'o.total_amount AS order_total',
+        'o.tax_amount AS order_tax',
+      ])
+      .where('r.tenant_id = :tenantId', { tenantId })
+      .andWhere('r.status IN (:...refundDone)', { refundDone: ['SUCCEEDED', 'COMPLETED'] })
+      .andWhere(REVENUE_ORDER_PREDICATE('o'), { nonRevenueStates: NON_REVENUE_ORDER_STATES });
+    if (filters.branchId) qb.andWhere('o.branch_id = :branchId', { branchId: filters.branchId });
+    if (filters.channel) qb.andWhere('(o.channel = :channel OR o.order_type = :channel)', { channel: filters.channel });
+    this.applyStoredDateFilter(qb, REFUND_BUSINESS_DATE_EXPR('r'), filters.startDate, filters.endDate);
+    return (await qb.getRawMany()).map((r: any) => {
+      const amount = MoneyUtil.format(r.amount || '0', 2);
+      const orderTotal = MoneyUtil.format(r.order_total || '0', 2);
+      const tax = MoneyUtil.greaterThan(orderTotal, '0')
+        ? MoneyUtil.format(MoneyUtil.divide(MoneyUtil.multiply(amount, r.order_tax || '0'), orderTotal, 6), 2)
+        : '0.00';
+      return {
+        refund_number: r.refund_number as string,
+        amount,
+        tax,
+        net: MoneyUtil.subtract(amount, tax, 2),
+        business_date: (r.business_date as string) || '—',
+        order_number: r.order_number as string,
+        branch_id: r.branch_id as string,
+        channel: (r.channel as string) || 'POS',
+        order_type: (r.order_type as string) || 'TAKEAWAY',
+      };
+    });
+  }
+
+  /** The orders that count as revenue in a period, read as Sales Summary reads them. */
+  private revenueOrdersQuery(tenantId: string, filters: { startDate?: string; endDate?: string; channel?: string }) {
+    const qb = this.orderRepo.createQueryBuilder('o').where('o.tenant_id = :tenantId', { tenantId });
+    if (filters.channel) qb.andWhere('(o.channel = :channel OR o.order_type = :channel)', { channel: filters.channel });
+    this.applyBusinessDateFilter(qb, 'o', filters.startDate, filters.endDate);
+    qb.andWhere(REVENUE_ORDER_PREDICATE('o'), { nonRevenueStates: NON_REVENUE_ORDER_STATES });
+    return qb;
+  }
+
+  /** What an order sold for, net of tax. */
+  private orderNet(o: OrderHeader): string {
+    return MoneyUtil.subtract(MoneyUtil.format(o.total_amount || '0', 2), MoneyUtil.format(o.tax_amount || '0', 2), 2);
+  }
+
+  /** Net sales over orders, or zero with no orders. */
+  private averageCheck(net: string, orders: number): string {
+    return orders > 0 ? MoneyUtil.divide(net, String(orders), 2) : '0.00';
+  }
+
+  /** A part's share of a whole, in percent to one decimal. */
+  private sharePercent(part: string, whole: string): string {
+    return MoneyUtil.greaterThan(whole, '0') ? MoneyUtil.format(MoneyUtil.divide(MoneyUtil.multiply(part, '100'), whole, 4), 1) : '0.0';
+  }
+
+  /** The account names behind a set of user ids, for the employee columns. */
+  private async userNames(tenantId: string, ids: Array<string | null | undefined>): Promise<Map<string, string>> {
+    const wanted = [...new Set(ids.filter((id): id is string => !!id))];
+    if (wanted.length === 0) return new Map();
+    const users = await this.orderRepo.manager.find(AdminUser, { where: { tenant_id: tenantId, id: In(wanted) } });
+    return new Map(users.map((u) => [u.id, u.display_name || u.username]));
+  }
+
+  /**
+   * Lines struck off sent orders, and sent orders cancelled or turned down, on the business day
+   * of their order. A cart cleared before it was sent was never a sale and is not listed.
+   */
+  private async voidsInPeriod(tenantId: string, filters: { startDate?: string; endDate?: string; branchId?: string }) {
+    const qb = this.orderRepo.manager
+      .createQueryBuilder(OrderStateEvent, 'e')
+      .innerJoin(OrderHeader, 'o', 'o.id = e.order_id AND o.tenant_id = e.tenant_id')
+      .select([
+        'e.action AS action',
+        'e.to_state AS to_state',
+        'e.reason_text AS reason_text',
+        'e.occurred_at AS occurred_at',
+        'e.occurred_by AS occurred_by',
+        'e.snapshot AS snapshot',
+        'o.order_number AS order_number',
+        'o.total_amount AS order_total',
+        `${ORDER_BUSINESS_DATE_EXPR('o')} AS business_date`,
+      ])
+      .where('e.tenant_id = :tenantId', { tenantId })
+      .andWhere(
+        `(e.action IN ('EDIT_ORDER', 'REPLACE_ITEM') OR (e.to_state IN ('CANCELLED', 'REJECTED') AND e.from_state IS DISTINCT FROM e.to_state AND COALESCE(e.from_state, '') <> 'DRAFT'))`,
+      );
+    if (filters.branchId) qb.andWhere('o.branch_id = :branchId', { branchId: filters.branchId });
+    this.applyStoredDateFilter(qb, ORDER_BUSINESS_DATE_EXPR('o'), filters.startDate, filters.endDate);
+    const events = await qb.orderBy('e.occurred_at', 'DESC').getRawMany();
+
+    const struck = ['VOID', 'VOIDED', 'REPLACED'];
+    const out: Array<{
+      business_date: string;
+      occurred_at: Date | null;
+      order_number: string;
+      kind: 'LINE_VOID' | 'LINE_REPLACED' | 'ORDER_CANCELLED' | 'ORDER_REJECTED';
+      item: string;
+      quantity: string;
+      amount: string;
+      reason: string;
+      by: string | null;
+    }> = [];
+    for (const e of events) {
+      const common = {
+        business_date: e.business_date || '—',
+        occurred_at: e.occurred_at || null,
+        order_number: e.order_number,
+        reason: e.reason_text || '',
+        by: e.occurred_by || null,
+      };
+      if (e.action === 'EDIT_ORDER' || e.action === 'REPLACE_ITEM') {
+        // A line struck off in this edit: live before it, struck after.
+        const before = new Map<string, any>((e.snapshot?.before || []).map((line: any) => [line.id, line]));
+        for (const line of e.snapshot?.after || []) {
+          const was = before.get(line.id);
+          if (!was || struck.includes(String(was.state)) || !struck.includes(String(line.state))) continue;
+          out.push({
+            ...common,
+            kind: line.state === 'REPLACED' ? 'LINE_REPLACED' : 'LINE_VOID',
+            item: line.productName || '',
+            quantity: String(Number(line.quantity || 0)),
+            amount: MoneyUtil.format(line.lineTotal || '0', 2),
+          });
+        }
+      } else {
+        out.push({
+          ...common,
+          kind: e.to_state === 'REJECTED' ? 'ORDER_REJECTED' : 'ORDER_CANCELLED',
+          item: '',
+          quantity: '',
+          amount: MoneyUtil.format(e.order_total || '0', 2),
+        });
+      }
+    }
+    return out;
+  }
+
+  /** The hour an order was placed, on its branch's clock. */
+  private hourAt(at: Date | string | null | undefined, timeZone: string): string {
+    if (!at) return '—';
+    const hour = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hourCycle: 'h23', timeZone }).format(new Date(at));
+    return `${hour}:00`;
+  }
+
+  async queryReport(tenantId: string, reportCode: string, filters: any = {}, actor?: UserScope): Promise<ReportResult> {
     // A report code cannot carry a decorator, so the rule lives with the report. Refusing
     // here also covers the export route, which runs every report through this method.
     if (actor && CHAIN_ONLY_REPORTS.includes(reportCode) && !isHeadOfficeUser(actor)) {
@@ -222,42 +401,19 @@ export class ReportsService {
           };
         });
 
-        // Refunds given in the period, whatever day the order was sold on. A refund takes its
-        // share of tax back with it, so net sales falls by the refund less that tax. A paid order
-        // that was cancelled is not revenue at all, so its refund is not taken off either.
-        const refundQb = this.refundRepo
-          .createQueryBuilder('r')
-          .innerJoin(OrderHeader, 'o', 'o.id = r.order_id AND o.tenant_id = r.tenant_id')
-          .select([
-            'r.refund_number AS refund_number',
-            'r.amount AS amount',
-            `${REFUND_BUSINESS_DATE_EXPR('r')} AS business_date`,
-            'o.order_number AS order_number',
-            'o.branch_id AS branch_id',
-            'o.channel AS channel',
-            'o.total_amount AS order_total',
-            'o.tax_amount AS order_tax',
-          ])
-          .where('r.tenant_id = :tenantId', { tenantId })
-          .andWhere('r.status IN (:...refundDone)', { refundDone: ['SUCCEEDED', 'COMPLETED'] })
-          .andWhere(REVENUE_ORDER_PREDICATE('o'), { nonRevenueStates: NON_REVENUE_ORDER_STATES });
-        if (branchId) refundQb.andWhere('o.branch_id = :branchId', { branchId });
-        if (channel) refundQb.andWhere('(o.channel = :channel OR o.order_type = :channel)', { channel });
-        this.applyStoredDateFilter(refundQb, REFUND_BUSINESS_DATE_EXPR('r'), startDate, endDate);
-        const refundRows = (await refundQb.getRawMany()).map((r: any) => {
-          const amount = MoneyUtil.format(r.amount || '0', 2);
-          const orderTotal = MoneyUtil.format(r.order_total || '0', 2);
-          const refundTax = MoneyUtil.greaterThan(orderTotal, '0')
-            ? MoneyUtil.format(MoneyUtil.divide(MoneyUtil.multiply(amount, r.order_tax || '0'), orderTotal, 6), 2)
-            : '0.00';
-          const refundNet = MoneyUtil.subtract(amount, refundTax, 2);
+        // Refunds given in the period, whatever day the order was sold on (see refundsInPeriod).
+        const refunds = await this.refundsInPeriod(tenantId, { startDate, endDate, branchId, channel });
+        const refundRows = refunds.map((r) => {
+          const refundTax = r.tax;
+          const refundNet = r.net;
+          const amount = r.amount;
           taxTotal = MoneyUtil.subtract(taxTotal, refundTax, 2);
           netSalesTotal = MoneyUtil.subtract(netSalesTotal, refundNet, 2);
           refundedTotal = MoneyUtil.add(refundedTotal, amount, 2);
           return {
-            business_date: r.business_date || '—',
+            business_date: r.business_date,
             branch_id: r.branch_id,
-            channel: r.channel || 'POS',
+            channel: r.channel,
             type: 'REFUND',
             order_number: `${r.order_number} (${r.refund_number})`,
             status: 'REFUNDED',
@@ -708,6 +864,210 @@ export class ReportsService {
             order_count: orders.length,
             taxable_amount: totalTaxable,
             tax_amount: totalTax,
+          },
+        };
+      }
+
+      case 'sales-by-day': {
+        // One row per business day: what was sold that day, less what was given back that day.
+        const qb = this.revenueOrdersQuery(tenantId, { startDate, endDate, channel });
+        if (branchId) qb.andWhere('o.branch_id = :branchId', { branchId });
+        const orders = await qb.getMany();
+        const refunds = await this.refundsInPeriod(tenantId, { startDate, endDate, branchId, channel });
+
+        const blank = () => ({ orders: 0, gross_subtotal: '0.00', discounts: '0.00', tax: '0.00', refunded: '0.00', net_sales: '0.00', average_check: '0.00' });
+        const days = new Map<string, ReturnType<typeof blank> & { business_date: string }>();
+        const day = (date: string) => {
+          if (!days.has(date)) days.set(date, { business_date: date, ...blank() });
+          return days.get(date)!;
+        };
+        for (const o of orders) {
+          const row = day(storedDate(o, o.placed_at));
+          row.orders += 1;
+          row.gross_subtotal = MoneyUtil.add(row.gross_subtotal, MoneyUtil.format(o.subtotal_amount || '0', 2), 2);
+          row.discounts = MoneyUtil.add(row.discounts, MoneyUtil.format(o.discount_amount || '0', 2), 2);
+          row.tax = MoneyUtil.add(row.tax, MoneyUtil.format(o.tax_amount || '0', 2), 2);
+          row.net_sales = MoneyUtil.add(row.net_sales, this.orderNet(o), 2);
+        }
+        for (const r of refunds) {
+          const row = day(r.business_date);
+          row.refunded = MoneyUtil.add(row.refunded, r.amount, 2);
+          row.tax = MoneyUtil.subtract(row.tax, r.tax, 2);
+          row.net_sales = MoneyUtil.subtract(row.net_sales, r.net, 2);
+        }
+
+        const rows = [...days.values()].sort((a, b) => b.business_date.localeCompare(a.business_date));
+        const totals = blank();
+        for (const row of rows) {
+          row.average_check = this.averageCheck(row.net_sales, row.orders);
+          totals.orders += row.orders;
+          for (const key of ['gross_subtotal', 'discounts', 'tax', 'refunded', 'net_sales'] as const) {
+            totals[key] = MoneyUtil.add(totals[key], row[key], 2);
+          }
+        }
+        totals.average_check = this.averageCheck(totals.net_sales, totals.orders);
+        return { report_code: reportCode, filter_basis: 'business_date', rows, summary_totals: totals };
+      }
+
+      case 'sales-by-hour': {
+        // When the orders come in, on each branch's own clock: for staffing the busy hours.
+        const qb = this.revenueOrdersQuery(tenantId, { startDate, endDate, channel });
+        if (branchId) qb.andWhere('o.branch_id = :branchId', { branchId });
+        const orders = await qb.getMany();
+        const branches = await this.orderRepo.manager.find(Branch, { where: { tenant_id: tenantId }, withDeleted: true });
+        const zoneOf = new Map(branches.map((b) => [b.id, b.time_zone || BUSINESS_TIME_ZONE]));
+
+        const hours = new Map<string, { hour: string; orders: number; net_sales: string }>();
+        let netTotal = '0.00';
+        for (const o of orders) {
+          const hour = this.hourAt(o.placed_at, zoneOf.get(o.branch_id) || BUSINESS_TIME_ZONE);
+          const row = hours.get(hour) || { hour, orders: 0, net_sales: '0.00' };
+          row.orders += 1;
+          row.net_sales = MoneyUtil.add(row.net_sales, this.orderNet(o), 2);
+          hours.set(hour, row);
+          netTotal = MoneyUtil.add(netTotal, this.orderNet(o), 2);
+        }
+        const rows = [...hours.values()]
+          .sort((a, b) => a.hour.localeCompare(b.hour))
+          .map((row) => ({
+            ...row,
+            average_check: this.averageCheck(row.net_sales, row.orders),
+            share_percent: this.sharePercent(row.net_sales, netTotal),
+          }));
+        return {
+          report_code: reportCode,
+          filter_basis: 'business_date',
+          rows,
+          summary_totals: {
+            orders: orders.length,
+            net_sales: netTotal,
+            average_check: this.averageCheck(netTotal, orders.length),
+            share_percent: orders.length > 0 ? '100.0' : '0.0',
+          },
+        };
+      }
+
+      case 'sales-by-channel': {
+        // Where the orders came from (till, kiosk, Snappfood…) and how they were served.
+        const qb = this.revenueOrdersQuery(tenantId, { startDate, endDate, channel });
+        if (branchId) qb.andWhere('o.branch_id = :branchId', { branchId });
+        const orders = await qb.getMany();
+        const refunds = await this.refundsInPeriod(tenantId, { startDate, endDate, branchId, channel });
+
+        const groups = new Map<string, { channel: string; order_type: string; orders: number; refunded: string; net_sales: string; average_check: string; share_percent: string }>();
+        const group = (ch: string, type: string) => {
+          const key = `${ch}|${type}`;
+          if (!groups.has(key)) {
+            groups.set(key, { channel: ch, order_type: type, orders: 0, refunded: '0.00', net_sales: '0.00', average_check: '0.00', share_percent: '0.0' });
+          }
+          return groups.get(key)!;
+        };
+        for (const o of orders) {
+          const row = group(o.channel || 'POS', o.order_type || 'TAKEAWAY');
+          row.orders += 1;
+          row.net_sales = MoneyUtil.add(row.net_sales, this.orderNet(o), 2);
+        }
+        for (const r of refunds) {
+          const row = group(r.channel, r.order_type);
+          row.refunded = MoneyUtil.add(row.refunded, r.amount, 2);
+          row.net_sales = MoneyUtil.subtract(row.net_sales, r.net, 2);
+        }
+
+        const rows = [...groups.values()];
+        const totals = { orders: 0, refunded: '0.00', net_sales: '0.00', average_check: '0.00', share_percent: '100.0' };
+        for (const row of rows) {
+          totals.orders += row.orders;
+          totals.refunded = MoneyUtil.add(totals.refunded, row.refunded, 2);
+          totals.net_sales = MoneyUtil.add(totals.net_sales, row.net_sales, 2);
+        }
+        for (const row of rows) {
+          row.average_check = this.averageCheck(row.net_sales, row.orders);
+          row.share_percent = this.sharePercent(row.net_sales, totals.net_sales);
+        }
+        rows.sort((a, b) => Number(b.net_sales) - Number(a.net_sales));
+        totals.average_check = this.averageCheck(totals.net_sales, totals.orders);
+        return { report_code: reportCode, filter_basis: 'business_date', rows, summary_totals: totals };
+      }
+
+      case 'sales-by-employee': {
+        // Who rang the orders up, what they sold and discounted, and what they struck off.
+        // Orders nobody rang up (Snappfood, the kiosk) are listed together.
+        const qb = this.revenueOrdersQuery(tenantId, { startDate, endDate, channel });
+        if (branchId) qb.andWhere('o.branch_id = :branchId', { branchId });
+        const orders = await qb.getMany();
+        const voids = await this.voidsInPeriod(tenantId, { startDate, endDate, branchId });
+
+        type PersonRow = { userId: string | null; orders: number; net_sales: string; discounts: string; voided_lines: number; cancelled_orders: number };
+        const people = new Map<string, PersonRow>();
+        const person = (id: string | null) => {
+          const key = id || '';
+          if (!people.has(key)) people.set(key, { userId: id, orders: 0, net_sales: '0.00', discounts: '0.00', voided_lines: 0, cancelled_orders: 0 });
+          return people.get(key)!;
+        };
+        for (const o of orders) {
+          const row = person(o.created_by || null);
+          row.orders += 1;
+          row.net_sales = MoneyUtil.add(row.net_sales, this.orderNet(o), 2);
+          row.discounts = MoneyUtil.add(row.discounts, MoneyUtil.format(o.discount_amount || '0', 2), 2);
+        }
+        for (const v of voids) {
+          const row = person(v.by);
+          if (v.kind === 'LINE_VOID' || v.kind === 'LINE_REPLACED') row.voided_lines += 1;
+          else row.cancelled_orders += 1;
+        }
+
+        const names = await this.userNames(tenantId, [...people.values()].map((p) => p.userId));
+        const totals = { orders: 0, net_sales: '0.00', average_check: '0.00', discounts: '0.00', voided_lines: 0, cancelled_orders: 0 };
+        const rows = [...people.values()].map((p) => {
+          totals.orders += p.orders;
+          totals.net_sales = MoneyUtil.add(totals.net_sales, p.net_sales, 2);
+          totals.discounts = MoneyUtil.add(totals.discounts, p.discounts, 2);
+          totals.voided_lines += p.voided_lines;
+          totals.cancelled_orders += p.cancelled_orders;
+          return {
+            employee: (p.userId && names.get(p.userId)) || (p.userId ? p.userId : 'Online / kiosk'),
+            orders: p.orders,
+            net_sales: p.net_sales,
+            average_check: this.averageCheck(p.net_sales, p.orders),
+            discounts: p.discounts,
+            voided_lines: p.voided_lines,
+            cancelled_orders: p.cancelled_orders,
+          };
+        });
+        rows.sort((a, b) => Number(b.net_sales) - Number(a.net_sales));
+        totals.average_check = this.averageCheck(totals.net_sales, totals.orders);
+        return { report_code: reportCode, filter_basis: 'business_date', rows, summary_totals: totals };
+      }
+
+      case 'voids-cancellations': {
+        // Every line struck off a sent order and every sent order cancelled or turned down,
+        // with who did it and why: where shrinkage hides. voidsInPeriod confines it with
+        // andWhere('o.branch_id = :branchId') when the caller has a branch.
+        const voids = await this.voidsInPeriod(tenantId, { startDate, endDate, branchId });
+        const names = await this.userNames(tenantId, voids.map((v) => v.by));
+        let amountTotal = '0.00';
+        const rows = voids.map((v) => {
+          amountTotal = MoneyUtil.add(amountTotal, v.amount, 2);
+          return {
+            business_date: v.business_date,
+            order_number: v.order_number,
+            kind: v.kind,
+            item: v.item,
+            quantity: v.quantity,
+            amount: v.amount,
+            reason: v.reason,
+            by: (v.by && names.get(v.by)) || '',
+            at: v.occurred_at ? new Date(v.occurred_at).toISOString() : '',
+          };
+        });
+        const lines = rows.filter((r) => r.kind === 'LINE_VOID' || r.kind === 'LINE_REPLACED').length;
+        return {
+          report_code: reportCode,
+          filter_basis: 'business_date',
+          rows,
+          summary_totals: {
+            order_number: `${lines} lines, ${rows.length - lines} orders`,
+            amount: amountTotal,
           },
         };
       }

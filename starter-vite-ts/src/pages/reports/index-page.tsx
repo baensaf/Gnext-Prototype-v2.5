@@ -39,6 +39,8 @@ interface CatalogEntry {
  */
 const CATEGORY_ORDER = [
   'FINANCIAL',
+  'STAFF',
+  'LOSS',
   'CATALOG',
   'PAYMENT',
   'PROMOTION',
@@ -51,6 +53,8 @@ const CATEGORY_ORDER = [
 
 const CATEGORY_LABELS: Record<string, string> = {
   FINANCIAL: 'Sales & Performance',
+  STAFF: 'Staff',
+  LOSS: 'Voids & Losses',
   CATALOG: 'Menu & Product',
   PAYMENT: 'Payments',
   PROMOTION: 'Discounts',
