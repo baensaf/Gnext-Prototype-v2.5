@@ -576,7 +576,7 @@ export class OrderService {
   async createDraft(tenantId: string, dto: OrderCreateDto, userId?: string, correlationId?: string) {
     return await this.dataSource.transaction(async (em) => {
       await this.assertBranchSells(em, tenantId, dto.branch_id);
-      const orderNumber = await this.sequenceService.generateOrderNumber(tenantId, em);
+      const orderNumber = await this.sequenceService.generateOrderNumber(tenantId, em, dto.branch_id);
       const currencyCode = dto.currency_code || 'IRR';
       const channel = dto.channel || 'POS';
       const orderType = dto.order_type || 'DINE_IN';

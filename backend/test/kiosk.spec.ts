@@ -65,11 +65,12 @@ describe('KioskService (Unit)', () => {
     orderRepo = { create: jest.fn(), save: jest.fn(), findOne: jest.fn() };
     orderItemRepo = { create: jest.fn(), save: jest.fn() };
     orderItemOptionRepo = { create: jest.fn(), save: jest.fn() };
-    paymentRepo = { create: jest.fn(), save: jest.fn() };
+    paymentRepo = { create: jest.fn(), save: jest.fn(), manager: { query: async () => [{ last_value: 1 }] } };
     customerRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
     // The order is saved in one transaction; its repositories are these same fakes.
     const txRepos = new Map<any, any>([[OrderHeader, orderRepo], [OrderItem, orderItemRepo], [OrderItemOption, orderItemOptionRepo], [Customer, customerRepo]]);
-    orderRepo.manager = { transaction: async (fn: any) => fn({ getRepository: (entity: any) => txRepos.get(entity) }) };
+    // `query` answers the order number counter.
+    orderRepo.manager = { transaction: async (fn: any) => fn({ getRepository: (entity: any) => txRepos.get(entity), query: async () => [{ last_value: 1 }] }) };
     auditWriter = { write: jest.fn() };
     printQueueService = { enqueueOrderPrintJobs: jest.fn().mockResolvedValue([]) };
     variantRepo = { find: jest.fn().mockResolvedValue([]) };
@@ -241,7 +242,7 @@ describe('KioskService (Unit)', () => {
     const unpaidOrder = (overrides: Record<string, any> = {}) => ({
       id: 'ord-kiosk-1',
       tenant_id: 't-1',
-      order_number: 'KOS-1001',
+      order_number: 'ORD-20261014-0001',
       order_type: 'TAKEAWAY',
       state: 'SUBMITTED',
       status: 'SUBMITTED',
@@ -354,7 +355,7 @@ describe('KioskService (Unit)', () => {
 
     it('returns the existing payment when a paid order is paid again', async () => {
       orderRepo.findOne.mockResolvedValue(unpaidOrder({ state: 'CONFIRMED', paid_total: '163500.0000', outstanding_total: '0.0000', due_amount: '0.0000' }));
-      paymentRepo.findOne = jest.fn().mockResolvedValue({ id: 'pay-1', reference: 'POS-KOS-1' });
+      paymentRepo.findOne = jest.fn().mockResolvedValue({ id: 'pay-1', reference: 'POS-KIOSK-1' });
 
       const res = await service.processKioskPayment('t-1', { order_id: 'ord-kiosk-1' });
 
@@ -415,7 +416,7 @@ describe('KioskService selling rules', () => {
       isCategoryOff: jest.fn().mockResolvedValue(false),
     };
     const passthrough: any = { create: jest.fn((dto: any) => dto), save: jest.fn((dto: any) => Promise.resolve({ ...dto, id: 'x' })), findOne: jest.fn(), find: jest.fn().mockResolvedValue([]) };
-    passthrough.manager = { transaction: async (fn: any) => fn({ getRepository: () => passthrough }) };
+    passthrough.manager = { transaction: async (fn: any) => fn({ getRepository: () => passthrough, query: async () => [{ last_value: 1 }] }), query: async () => [{ last_value: 1 }] };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         KioskService,

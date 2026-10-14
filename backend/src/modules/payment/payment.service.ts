@@ -15,7 +15,6 @@ import { PaymentAttempt } from '../../entities/PaymentAttempt.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { SettlementAccount } from '../../entities/SettlementAccount.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
-import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { isAggregatorOrder } from '../../common/utils/snappfood-order.util';
 import { channelFor } from '../order/channels';
@@ -34,7 +33,7 @@ import { AgentPaymentsService, AGENT_TERMINAL_DRIVERS } from './agent-payments.s
 import { bookSucceededPayment } from './payment-settlement';
 import { AgentConfigService } from '../agent-gateway/agent-config.service';
 import { parseDeviceConnection } from '../../common/utils/device-connection.util';
-import { nextNumber } from '../../common/utils/sequence.util';
+import { nextBranchNumber } from '../../common/utils/sequence.util';
 
 @Injectable()
 export class PaymentService {
@@ -54,9 +53,8 @@ export class PaymentService {
     private readonly agentConfig: AgentConfigService,
   ) {}
 
-  private async generatePaymentNumber(tenantId: string, em: EntityManager): Promise<string> {
-    const todayStr = BusinessDateUtil.today(new Date()).replace(/-/g, ''); // the till's day, not UTC's
-    return await nextNumber(em, tenantId, `PAY-${todayStr}`);
+  private async generatePaymentNumber(tenantId: string, em: EntityManager, branchId?: string | null): Promise<string> {
+    return await nextBranchNumber(em, tenantId, branchId, 'PAY');
   }
 
   /**
@@ -207,7 +205,7 @@ export class PaymentService {
         if (!device) throw new NotFoundException(`Payment device ${dto.deviceId} not found`);
       }
 
-      const paymentNumber = await this.generatePaymentNumber(tenantId, em);
+      const paymentNumber = await this.generatePaymentNumber(tenantId, em, order.branch_id);
       // The drawer at the register taking the money, which is not always the one the order
       // was rung up on. Cash is refused here, before the intent exists, when there is no
       // such drawer — a PENDING cash intent that can never capture blocks every other
