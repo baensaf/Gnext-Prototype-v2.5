@@ -45,6 +45,7 @@ const DOMAIN_OPTIONS = [
   'REPRINT',
   'PRICE_OVERRIDE',
   'ITEM_VOID',
+  'DISCOUNT',
   'OTHER',
 ];
 

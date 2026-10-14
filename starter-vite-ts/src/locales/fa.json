@@ -369,12 +369,7 @@
       "needsPin": "هنگام اعمال، رمز مدیر لازم است",
       "withinLimit": "در محدوده مجاز شما",
       "reason": {
-        "label": "دلیل تخفیف",
-        "CUSTOMER_SATISFACTION": "رضایت مشتری / مهمان‌نوازی",
-        "STAFF_DISCOUNT": "تخفیف کارکنان",
-        "DAMAGED_ITEM": "ایراد جزئی / مشکل بسته‌بندی",
-        "VIP_COURTESY": "عضو ویژه باشگاه",
-        "FRIENDS_FAMILY": "دوستان و آشنایان"
+        "label": "دلیل تخفیف"
       },
       "remove": "حذف تخفیف",
       "apply": "اعمال",
@@ -2536,6 +2531,7 @@
         "REPRINT": "چاپ مجدد فیش",
         "PRICE_OVERRIDE": "تغییر دستی قیمت",
         "ITEM_VOID": "حذف قلم از سفارش",
+        "DISCOUNT": "تخفیف",
         "OTHER": "سایر موارد"
       }
     },

@@ -1,5 +1,6 @@
 import type { Theme } from '@mui/material/styles';
 import type { HeldCart } from './held-carts';
+import type { ReasonCode } from 'src/api/settingsApi';
 import type { DeliveryZone } from 'src/api/deliveryApi';
 import type { LineQuote, OrderHeader } from 'src/api/orderApi';
 import type { Customer, CustomerAddress } from 'src/api/customerApi';
@@ -161,8 +162,6 @@ const HELD_TYPE_KEYS: Record<string, string> = {
   PICKUP: 'orders.types.pickup',
 };
 
-/** The reasons a cashier gives for a discount; the label is `pos.discount.reason.<code>`. */
-const DISCOUNT_REASONS = ['CUSTOMER_SATISFACTION', 'FRIENDS_FAMILY', 'STAFF_DISCOUNT', 'DAMAGED_ITEM', 'VIP_COURTESY'];
 
 const CATALOG_LOAD_FAILED = 'Failed to load POS catalog data';
 
@@ -323,7 +322,20 @@ export function PosOrderPage() {
       .catch(() => undefined);
   }, []);
 
-  const [manualReasonCode, setManualReasonCode] = useState<string>('CUSTOMER_SATISFACTION');
+  // A discount's reasons are the chain's reason codes scoped to DISCOUNT (Settings → Reason codes).
+  // Only codes that name DISCOUNT are offered: an unscoped code is a cancel or void reason.
+  const [discountReasons, setDiscountReasons] = useState<ReasonCode[]>([]);
+  const [manualReasonCode, setManualReasonCode] = useState<string>('');
+  useEffect(() => {
+    settingsApi
+      .getReasonCodes()
+      .then((codes) => {
+        const offered = codes.filter((r) => r.is_active !== false && (r.applies_to || []).includes('DISCOUNT'));
+        setDiscountReasons(offered);
+        setManualReasonCode((current) => current || offered[0]?.code || '');
+      })
+      .catch(() => setDiscountReasons([]));
+  }, []);
   const [manualApprovalRequestId, setManualApprovalRequestId] = useState<string | undefined>(undefined);
   const [appliedManualDiscount, setAppliedManualDiscount] = useState<ManualDiscount | null>(null);
 
@@ -2494,9 +2506,9 @@ export function PosOrderPage() {
                 label={t('pos.discount.reason.label')}
                 onChange={(e) => setManualReasonCode(e.target.value)}
               >
-                {DISCOUNT_REASONS.map((code) => (
-                  <MenuItem key={code} value={code}>
-                    {t(`pos.discount.reason.${code}`)}
+                {discountReasons.map((reason) => (
+                  <MenuItem key={reason.code} value={reason.code}>
+                    {reason.name}
                   </MenuItem>
                 ))}
               </Select>
