@@ -34,6 +34,7 @@ import { IsNull, Not } from 'typeorm';
 import { OrderService } from '../order/order.service';
 import { PaymentService } from '../payment/payment.service';
 import { isAgentTerminal } from '../payment/agent-payments.service';
+import { nextBranchNumber } from '../../common/utils/sequence.util';
 
 /** Tenders a kiosk's card terminal can take. The seeded card method is CARD_POS. */
 const KIOSK_CARD_KINDS = ['CARD_POS', 'NETWORK_POS', 'CARD', 'MOBILE_POS'];
@@ -343,7 +344,8 @@ export class KioskService {
       const incomingPolicy = resolveIncomingOrderPolicy(pickSettingValue(workflowRows, data.branch_id));
       const initialState = acceptanceFor(incomingPolicy, 'KIOSK') === 'MANUAL' ? 'PENDING_ACCEPTANCE' : 'SUBMITTED';
 
-      const orderNum = `KOS-${Date.now().toString().slice(-6)}`;
+      // Numbered like every other order, from the branch's counter.
+      const orderNum = await nextBranchNumber(em, tenantId, data.branch_id, 'ORD');
       let subtotal = 0;
 
       const orderHeader = orderRepo.create({
@@ -548,11 +550,11 @@ export class KioskService {
     }
 
     // No terminal the agent drives here: the kiosk's own simulator takes the card.
-    const refNum = `SIM-KOS-${Date.now()}`;
+    const refNum = `SIM-KIOSK-${Date.now()}`;
     const payment = this.paymentRepo.create({
       tenant_id: tenantId,
       order_id: order.id,
-      payment_number: `PAY-KOS-${Date.now()}`,
+      payment_number: await nextBranchNumber(this.paymentRepo.manager, tenantId, order.branch_id, 'PAY'),
       method_id: paymentMethod.id,
       method_kind: paymentMethod.kind,
       amount: MoneyUtil.format(amount, 4),

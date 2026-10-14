@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { BusinessDateUtil } from '../../common/utils/business-date.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { Repository, DataSource, EntityManager, In } from 'typeorm';
 import { Refund } from '../../entities/Refund.entity';
@@ -17,7 +16,7 @@ import { ShiftService } from '../cashier/shift.service';
 import { CreditService } from '../customer/credit.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { RefundCreateDto, PaidOrderCancelDto } from './dtos/refund.dto';
-import { nextNumber } from '../../common/utils/sequence.util';
+import { nextBranchNumber } from '../../common/utils/sequence.util';
 
 /** What is left to give back of one payment, and the method it was taken by. */
 interface PaymentShare {
@@ -47,9 +46,8 @@ export class RefundService {
     private readonly dataSource: DataSource,
   ) {}
 
-  private async generateRefundNumber(tenantId: string, em: EntityManager): Promise<string> {
-    const todayStr = BusinessDateUtil.today(new Date()).replace(/-/g, ''); // the till's day, not UTC's
-    return await nextNumber(em, tenantId, `REF-${todayStr}`);
+  private async generateRefundNumber(tenantId: string, em: EntityManager, branchId?: string | null): Promise<string> {
+    return await nextBranchNumber(em, tenantId, branchId, 'REF');
   }
 
   /**
@@ -253,7 +251,7 @@ export class RefundService {
         em.create(Refund, {
           tenant_id: tenantId,
           order_id: order.id,
-          refund_number: await this.generateRefundNumber(tenantId, em),
+          refund_number: await this.generateRefundNumber(tenantId, em, order.branch_id),
           status: 'SUCCEEDED',
           method_id: share.payment.method_id,
           method_kind: kind,

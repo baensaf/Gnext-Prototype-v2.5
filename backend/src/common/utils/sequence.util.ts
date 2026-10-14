@@ -1,4 +1,5 @@
 import { EntityManager } from 'typeorm';
+import { loadBusinessClock } from './business-clock';
 
 /**
  * The next number in a tenant's counter for `prefix` (e.g. `PAY-20261014`), taken in one
@@ -22,4 +23,19 @@ export async function nextSequenceValue(em: EntityManager, tenantId: string, pre
 export async function nextNumber(em: EntityManager, tenantId: string, prefix: string): Promise<string> {
   const value = await nextSequenceValue(em, tenantId, prefix);
   return `${prefix}-${String(value).padStart(4, '0')}`;
+}
+
+/**
+ * `TAG-YYYYMMDD-0001` dated by the branch's business day: its own time zone and the chain's
+ * cutoff, so a sale at 01:30 is numbered with the night it belongs to, and a branch in another
+ * time zone numbers by its own day rather than Tehran's.
+ */
+export async function nextBranchNumber(
+  em: EntityManager,
+  tenantId: string,
+  branchId: string | null | undefined,
+  tag: string,
+): Promise<string> {
+  const day = (await loadBusinessClock(em, tenantId, branchId)).today().replace(/-/g, '');
+  return nextNumber(em, tenantId, `${tag}-${day}`);
 }
