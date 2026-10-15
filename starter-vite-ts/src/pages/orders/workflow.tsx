@@ -790,9 +790,9 @@ export function OrdersWorkflowPage() {
     }
   }, []);
 
-  // What did not print for the open order: "check printer" first, then failed or expired, then
-  // still waiting. Each document and printer counts once, by its newest job.
-  const [printTrouble, setPrintTrouble] = useState<'UNCERTAIN' | 'FAILED' | 'WAITING' | null>(null);
+  // What did not print for the open order: failed first, then still waiting (K-20). Each
+  // document and printer counts once, by its newest job.
+  const [printTrouble, setPrintTrouble] = useState<'FAILED' | 'WAITING' | null>(null);
   useEffect(() => {
     if (!drawerOrderId) {
       setPrintTrouble(null);
@@ -808,13 +808,11 @@ export function OrdersWorkflowPage() {
           if (!newest.has(key)) newest.set(key, job.status);
         }
         const states = [...newest.values()];
-        const trouble = states.includes('UNCERTAIN')
-          ? 'UNCERTAIN'
-          : states.some((s) => s === 'FAILED' || s === 'EXPIRED')
-            ? 'FAILED'
-            : states.some((s) => s === 'QUEUED' || s === 'PROCESSING')
-              ? 'WAITING'
-              : null;
+        const trouble = states.includes('FAILED')
+          ? 'FAILED'
+          : states.some((s) => s === 'QUEUED' || s === 'PROCESSING')
+            ? 'WAITING'
+            : null;
         if (live) setPrintTrouble(trouble);
       })
       .catch(() => live && setPrintTrouble(null));
@@ -1707,7 +1705,7 @@ export function OrdersWorkflowPage() {
               )}
               {printTrouble && (
                 <Alert
-                  severity={printTrouble === 'WAITING' ? 'info' : printTrouble === 'UNCERTAIN' ? 'warning' : 'error'}
+                  severity={printTrouble === 'WAITING' ? 'info' : 'error'}
                   sx={{ mt: 1.5, py: 0 }}
                   action={
                     <Button size="small" color="inherit" onClick={() => navigate('/app/operations/print-queue')}>

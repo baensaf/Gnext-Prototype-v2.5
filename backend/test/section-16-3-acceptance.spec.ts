@@ -471,7 +471,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     expect(MoneyUtil.format(refreshedOrder?.paid_amount || '0')).toBe(MoneyUtil.format(submittedOrder.grand_total));
     expect(MoneyUtil.format(refreshedOrder?.outstanding_total || '0')).toBe('0.0000');
 
-    // Step 6: Print Failure & Retry Simulation
+    // Step 6: Print Failure & Reprint
     const [printJob] = await printQueueService.enqueueOrderPrintJobs(tenantId, submittedOrder.id);
     expect(printJob).toBeDefined();
 
@@ -482,11 +482,9 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     });
     expect(failOutcome.attempt.status).toBe('FAILED');
 
-    // A retry goes only through the branch agent. These printers are the simulator's, so it is
-    // refused with the reason rather than reported printed.
-    await expect(printQueueService.retryJob(tenantId, printJob.id, {})).rejects.toThrow(
-      /not connected to the branch agent/,
-    );
+    // A failed job is reprinted by a person; nothing is sent again by itself (K-20).
+    const [copy] = await printQueueService.reprintJob(tenantId, printJob.id, 'Reprint after failure');
+    expect(copy.is_reprint).toBe(true);
 
     // Step 7: Close Cashier Shift
     const closedShift = await shiftService.closeShift(
@@ -1093,7 +1091,7 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     const createdCustomer = await custRepo.findOne({ where: { id: identifiedOrder.customer_id! } });
     expect(createdCustomer?.first_name).toBe('حمیدرضا رضایی');
 
-    // Step 3: Simulated POS & Receipt Failure & Retry
+    // Step 3: Simulated POS & Receipt Failure & Reprint
     const [printJob] = await printQueueService.enqueueOrderPrintJobs(tenantId, identifiedOrder.id);
     expect(printJob).toBeDefined();
 
@@ -1104,11 +1102,9 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     });
     expect(failOutcome.attempt.status).toBe('FAILED');
 
-    // A retry goes only through the branch agent. These printers are the simulator's, so it is
-    // refused with the reason rather than reported printed.
-    await expect(printQueueService.retryJob(tenantId, printJob.id, {})).rejects.toThrow(
-      /not connected to the branch agent/,
-    );
+    // A failed job is reprinted by a person; nothing is sent again by itself (K-20).
+    const [copy] = await printQueueService.reprintJob(tenantId, printJob.id, 'Reprint after failure');
+    expect(copy.is_reprint).toBe(true);
 
     // Revert identity policy to OPTIONAL
     identitySetting.value = 'OPTIONAL' as any;

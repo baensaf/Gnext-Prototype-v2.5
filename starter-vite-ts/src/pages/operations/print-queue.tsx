@@ -3,10 +3,7 @@ import type { PrintJob, PrinterDevice } from 'src/api/printingApi';
 import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
-import DoneIcon from '@mui/icons-material/Done';
 import PrintIcon from '@mui/icons-material/Print';
-import ClearIcon from '@mui/icons-material/Clear';
-import ReplayIcon from '@mui/icons-material/Replay';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -47,7 +44,8 @@ import { useScopedBranchId } from 'src/contexts/branch-context';
 import { VersionTag } from 'src/components/version-tag';
 
 const DOC_TYPES = ['CUSTOMER_RECEIPT', 'KITCHEN_TICKET', 'COURIER_SLIP', 'GUEST_BILL', 'TEST_PRINT'];
-const STATUSES = ['QUEUED', 'PROCESSING', 'SUCCESS', 'FAILED', 'UNCERTAIN', 'EXPIRED', 'REPLACED', 'DISMISSED'];
+// Waiting, printed or failed, as in Toast and Square (K-20). A failed job is reprinted by a person.
+const STATUSES = ['PROCESSING', 'SUCCESS', 'FAILED'];
 
 export function PrintQueuePage() {
   const { t } = useTranslation();
@@ -117,37 +115,6 @@ export function PrintQueuePage() {
     }
   };
 
-  const handleRetryJob = async (id: string) => {
-    try {
-      // The same printer, now fixed. Sending it somewhere else is "reprint on another printer".
-      await printingApi.retryPrintJob(id);
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || 'Failed to retry print job');
-    }
-  };
-
-  // "Check printer": the cashier looked and the paper is there.
-  const handleConfirmJob = async (id: string) => {
-    try {
-      await printingApi.confirmPrintJob(id);
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || 'Failed to confirm the job');
-    }
-  };
-
-  const handleDismissJob = async (id: string) => {
-    const reason = window.prompt(t('printQueue.dismissReason', 'Why is this job set aside?'));
-    if (!reason || !reason.trim()) return;
-    try {
-      await printingApi.dismissPrintJob(id, reason.trim());
-      loadData();
-    } catch (err: any) {
-      setError(err.detail || 'Failed to dismiss the job');
-    }
-  };
-
   const handleReprintJob = async (id: string) => {
     try {
       await printingApi.reprintJob(id, 'Manual Reprint Request');
@@ -187,9 +154,7 @@ export function PrintQueuePage() {
       case 'SUCCESS': return 'success';
       case 'FAILED': return 'error';
       case 'QUEUED': return 'info';
-      case 'PROCESSING': return 'warning';
-      case 'UNCERTAIN': return 'warning';
-      case 'EXPIRED': return 'error';
+      case 'PROCESSING': return 'info';
       default: return 'default';
     }
   };
@@ -204,7 +169,7 @@ export function PrintQueuePage() {
           <Typography variant="body2" color="text.secondary">
             {t(
               'printQueue.subtitle',
-              'Every document the branch printed or tried to print. Retry a failed job once its printer is fixed, or reprint it on another printer.'
+              'Every document the branch printed or tried to print. Reprint a failed job on its printer or on another one.'
             )}
           </Typography>
         </Box>
@@ -309,31 +274,6 @@ export function PrintQueuePage() {
                         <Tooltip title={t('printQueue.simulateOutcome', 'Simulate Outcome')}>
                           <IconButton color="info" onClick={() => { setOutcomeJob(job); setOutcomeVal('SUCCESS'); }}>
                             <PlayArrowIcon />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-
-                      {job.status === 'FAILED' && (
-                        <Tooltip title={t('printQueue.retryJob', 'Retry on the same printer')}>
-                          <IconButton color="warning" onClick={() => handleRetryJob(job.id)}>
-                            <ReplayIcon />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-
-                      {/* It may have printed: never sent again by itself, the cashier checks. */}
-                      {(job.status === 'UNCERTAIN' || job.status === 'EXPIRED') && (
-                        <Tooltip title={t('printQueue.confirmPrinted', 'It printed')}>
-                          <IconButton color="success" onClick={() => handleConfirmJob(job.id)}>
-                            <DoneIcon />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-
-                      {['EXPIRED', 'FAILED', 'UNCERTAIN'].includes(job.status) && (
-                        <Tooltip title={t('printQueue.dismiss', 'Dismiss, with a reason')}>
-                          <IconButton onClick={() => handleDismissJob(job.id)}>
-                            <ClearIcon />
                           </IconButton>
                         </Tooltip>
                       )}
