@@ -277,6 +277,17 @@ export class PrintersController {
     return printer;
   }
 
+  /** The branch's default receipt printer, for tills with no receipt printer of their own (K-23). */
+  @BranchOwned(Printer)
+  @Roles(...MANAGER_AND_ABOVE)
+  @Post('printers/:id/receipt-default')
+  async setReceiptDefault(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const printer = await this.routingService.setReceiptDefault(tenantId, id);
+    await this.pushConfig(tenantId, printer.branch_id);
+    return printer;
+  }
+
   // Marking a job printed or failed by hand is a manager's call, and only on their own
   // branch's jobs. The job id rides in the body, where the branch guard would not look unless told.
   @BranchOwned(PrintJob, { body: 'printJobId' })

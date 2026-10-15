@@ -25,6 +25,9 @@ export const RESEND_AFTER_MS = 15_000;
 const LOOP_INTERVAL_MS = 5_000;
 
 const PENDING: AgentCommandStatus[] = ['QUEUED', 'SENT'];
+
+/** Why a job that waited for a revoked agent failed (K-22). */
+export const AGENT_REVOKED_MESSAGE = 'The branch agent was revoked. Reprint the job if it is still needed.';
 /** A result is applied to a command in these states; the work happened even if the ack was lost. */
 const ACCEPTS_RESULT: AgentCommandStatus[] = ['QUEUED', 'SENT', 'ACKED', 'EXPIRED'];
 
@@ -191,6 +194,26 @@ export class AgentCommandsService implements OnApplicationBootstrap, OnApplicati
       { status: 'EXPIRED', completed_at: new Date(), error_code: 'WITHDRAWN', error_message: reason },
     );
     return !!res.affected;
+  }
+
+  /**
+   * Ends the branch's open commands of `type` without an answer, as when its agent is revoked
+   * (K-22): each settles FAILED with `code`, and the settled listeners fail what waited on it.
+   */
+  async failOpenForBranch(tenantId: string, branchId: string, type: string, code: string, message: string): Promise<number> {
+    const open = await this.repo.find({ where: { tenant_id: tenantId, branch_id: branchId, type, status: In(['QUEUED', 'SENT', 'ACKED']) } });
+    const now = new Date();
+    let failed = 0;
+    for (const command of open) {
+      const res = await this.repo.update(
+        { id: command.id, status: In(['QUEUED', 'SENT', 'ACKED']) },
+        { status: 'FAILED', completed_at: now, error_code: code, error_message: message },
+      );
+      if (!res.affected) continue;
+      failed++;
+      await this.notify({ ...command, status: 'FAILED', completed_at: now, error_code: code, error_message: message });
+    }
+    return failed;
   }
 
   /** Whether a command of `type` about `entityId` is still waiting for the agent's answer. */

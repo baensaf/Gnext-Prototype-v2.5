@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useCloudBack } from 'src/utils/cloud-back';
 
 import { shiftApi } from 'src/api/shiftApi';
+import { tenantApi } from 'src/api/tenantApi';
 import { businessDayApi } from 'src/api/businessDayApi';
 import { useBranchContext } from 'src/contexts/branch-context';
 
@@ -50,12 +51,18 @@ export function useRegisterShift() {
     }
     setLoading(true);
     try {
-      const [current, rules, day, float] = await Promise.all([
+      const [current, rules, day, float, registers] = await Promise.all([
         shiftApi.getCurrentShift(terminal.id, terminal.branch_id),
         shiftApi.getPolicy(terminal.branch_id).catch(() => null),
         businessDayApi.getCurrent(terminal.branch_id).catch(() => null),
         shiftApi.getNextFloat(terminal.id).catch(() => null),
+        tenantApi.getTerminals(terminal.branch_id).catch(() => null),
       ]);
+      // The register was archived (P-14): this device asks a manager to pick another one.
+      if (registers && !current && !registers.some((r) => r.id === terminal.id)) {
+        setTerminal(null);
+        return;
+      }
       setShift(current);
       setPolicy(rules);
       setBusinessDay(day);
@@ -67,7 +74,7 @@ export function useRegisterShift() {
       setLoading(false);
       setChecked(true);
     }
-  }, [terminal, mismatch, isHeadOffice]);
+  }, [terminal, mismatch, isHeadOffice, setTerminal]);
 
   useEffect(() => {
     refresh();

@@ -163,6 +163,18 @@ export function TerminalsPage() {
     }
   };
 
+  // Tills with no receipt printer of their own print at the branch's default one (K-23).
+  const receiptDefault = printers.find((p) => p.branch_id === selectedBranchId && p.receipt_default);
+  const handleReceiptDefault = async (printerId: string) => {
+    try {
+      const printer = await printingApi.setReceiptDefault(printerId);
+      setSuccess(t('operations.terminals.receiptDefaultSaved', { name: printer.name }));
+      loadData();
+    } catch (err: any) {
+      setError(err.detail || err.message || t('operations.terminals.receiptDefaultError'));
+    }
+  };
+
   const handleConfirmArchive = async () => {
     try {
       await tenantApi.archiveTerminal(archiveConfirm.id);
@@ -218,6 +230,35 @@ export function TerminalsPage() {
         <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>
           {success}
         </Alert>
+      )}
+
+      {selectedBranchId && (
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, alignItems: { sm: 'center' } }}>
+          <Select
+            size="small"
+            displayEmpty
+            value={receiptDefault?.id || ''}
+            onChange={(e) => e.target.value && handleReceiptDefault(e.target.value)}
+            sx={{ minWidth: 240 }}
+            inputProps={{ 'aria-label': t('operations.terminals.receiptDefault') }}
+            renderValue={(id) =>
+              `${t('operations.terminals.receiptDefault')}: ${
+                printers.find((p) => p.id === id)?.name || t('operations.terminals.receiptDefaultNone')
+              }`
+            }
+          >
+            {printers
+              .filter((p) => p.branch_id === selectedBranchId)
+              .map((p) => (
+                <MenuItem key={p.id} value={p.id}>
+                  {p.name}
+                </MenuItem>
+              ))}
+          </Select>
+          <Typography variant="body2" color="text.secondary">
+            {t('operations.terminals.receiptDefaultHelp')}
+          </Typography>
+        </Stack>
       )}
 
       <Card sx={{ borderRadius: 3, boxShadow: 2 }}>

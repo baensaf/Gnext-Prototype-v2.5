@@ -152,7 +152,7 @@ describe('PrintingModule (Unit & Integration)', () => {
    * anything nothing routes; and a counter printer at the till.
    */
   const burgerShop = () => {
-    printer('prn-counter', { printer_type: 'THERMAL_RECEIPT' });
+    printer('prn-counter', { printer_type: 'THERMAL_RECEIPT', receipt_default: true });
     printer('prn-grill', { name: 'Grill' });
     printer('prn-fryer', { name: 'Fryer' });
     printer('prn-bar', { name: 'Bar' });
@@ -311,14 +311,28 @@ describe('PrintingModule (Unit & Integration)', () => {
       expect(routed.printers.map((r) => r.printer.id)).toEqual(['prn-kiosk']);
     });
 
-    it("prints on the branch's receipt printer for an order from no till, or a till with no printer working", async () => {
+    it("prints on the branch's default receipt printer for an order from no till, or a till with no printer", async () => {
       printer('prn-kitchen', { kitchen_default: true, printer_type: 'KITCHEN_IMPACT' });
       printer('prn-counter', { printer_type: 'THERMAL_RECEIPT' });
+      printer('prn-front', { printer_type: 'THERMAL_RECEIPT', receipt_default: true });
+      till('till-1');
+
+      expect((await routingService.printersForDocument(T, BR, null)).printers.map((r) => r.printer.id)).toEqual(['prn-front']);
+      expect((await routingService.printersForDocument(T, BR, 'till-1')).printers.map((r) => r.printer.id)).toEqual(['prn-front']);
+    });
+
+    it('never guesses a receipt printer: with no default chosen there is none, and the job fails', async () => {
+      printer('prn-counter', { printer_type: 'THERMAL_RECEIPT' });
+
+      expect((await routingService.printersForDocument(T, BR, null)).printers).toEqual([]);
+    });
+
+    it("keeps a till's own printer taken out of service, so its receipt fails where it can be seen", async () => {
+      printer('prn-counter', { printer_type: 'THERMAL_RECEIPT', receipt_default: true });
       printer('prn-dead', { printer_type: 'THERMAL_RECEIPT', is_active: false });
       till('till-1', { receipt_printer_id: 'prn-dead' });
 
-      expect((await routingService.printersForDocument(T, BR, null)).printers.map((r) => r.printer.id)).toEqual(['prn-counter']);
-      expect((await routingService.printersForDocument(T, BR, 'till-1')).printers.map((r) => r.printer.id)).toEqual(['prn-counter']);
+      expect((await routingService.printersForDocument(T, BR, 'till-1')).printers.map((r) => r.printer.id)).toEqual(['prn-dead']);
     });
   });
 
@@ -679,7 +693,7 @@ describe('PrintingModule (Unit & Integration)', () => {
     });
 
     it('refuses a printer the branch agent does not drive, and leaves the job failed', async () => {
-      printer('prn-sim');
+      printer('prn-sim', { receipt_default: true });
       const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-500');
       job.status = 'FAILED';
       const attempts = attemptRepo.rows.length;
@@ -690,7 +704,7 @@ describe('PrintingModule (Unit & Integration)', () => {
     });
 
     it('refuses a job whose printer has been removed', async () => {
-      printer('prn-gone', { agent_connection: TCP });
+      printer('prn-gone', { agent_connection: TCP, receipt_default: true });
       const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-500');
       job.status = 'FAILED';
       printerRepo.rows.splice(printerRepo.rows.findIndex((p) => p.id === 'prn-gone'), 1);

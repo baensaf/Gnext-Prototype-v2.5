@@ -28,6 +28,7 @@ const COMMAND_FAILURE_MESSAGES: Record<string, string> = {
   DEVICE_NOT_CONFIGURED: 'The branch agent does not know this printer. Check its connection settings.',
   WITHDRAWN: 'The job was withdrawn before it reached the branch agent.',
   SUPERSEDED: 'The job was replaced before it reached the branch agent.',
+  AGENT_REVOKED: 'The branch agent was revoked. Reprint the job if it is still needed.',
 };
 
 /**

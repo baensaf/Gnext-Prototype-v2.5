@@ -87,6 +87,7 @@ import { fTime } from 'src/utils/format-time';
 import { MoneyUtil } from 'src/utils/money.util';
 import { useCloudBack } from 'src/utils/cloud-back';
 import { newIdempotencyKey } from 'src/utils/idempotency';
+import { useLiveRefresh } from 'src/utils/use-live-refresh';
 import { isNotSentMessage } from 'src/utils/connection-problem';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 import { addonMin, isPickOne, addonRuleLabel } from 'src/utils/addon-rule';
@@ -435,8 +436,8 @@ export function PosOrderPage() {
       .catch(() => setItemNoteTemplates([]));
   }, []);
 
-  // Items get 86'd from other screens while the register sits open, so the grid checks each
-  // minute. Stops are this branch's plus chain-wide ones.
+  // Stops are this branch's plus chain-wide ones. They, and head office's menu edits, are pushed
+  // live (C-27: on every open till within 5 seconds); the hook's slow timer is the backup.
   useEffect(() => {
     const refresh = () => {
       catalogApi
@@ -451,13 +452,18 @@ export function PosOrderPage() {
         .catch(() => undefined);
     };
     refresh();
-    // The cloud came back: read the stops again now, not at the next minute.
+    // The cloud came back, or the menu changed: read the stops again now.
     sellingRefreshRef.current = refresh;
-    const timer = window.setInterval(refresh, 60_000);
-    return () => {
-      window.clearInterval(timer);
-    };
   }, [selectedBranchId]);
+
+  useLiveRefresh(
+    ['catalog'],
+    () => {
+      loadInitialData(true);
+      sellingRefreshRef.current?.();
+    },
+    selectedBranchId
+  );
 
   useEffect(() => {
     if (orderType !== 'DELIVERY' || !selectedCustomerId) {

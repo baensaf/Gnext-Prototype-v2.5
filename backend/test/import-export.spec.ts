@@ -31,6 +31,8 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
       create: jest.fn((dto) => ({ id: 'row-uuid-1', ...dto })),
       save: jest.fn((entities) => Promise.resolve(entities)),
       find: jest.fn(),
+      // No bad rows unless a test says so.
+      count: jest.fn().mockResolvedValue(0),
     };
 
     customerRepo = { findOne: jest.fn(), create: jest.fn(), save: jest.fn() };
@@ -39,7 +41,7 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
     dataSource = {
       transaction: jest.fn((cb) => cb({ findOne: jest.fn(), create: jest.fn(), save: jest.fn(), query: jest.fn() })),
       // The chain's categories, for checking the category code of each product row.
-      getRepository: jest.fn(() => ({ find: jest.fn().mockResolvedValue([{ code: 'CAT-A' }]) })),
+      getRepository: jest.fn(() => ({ find: jest.fn().mockResolvedValue([{ code: 'CAT-A' }, { code: 'OLD', deleted_at: new Date() }]) })),
     };
     auditWriter = { write: jest.fn().mockResolvedValue(true) };
 
@@ -191,6 +193,27 @@ describe('ImportExportService (Slice 22 Unit & Logic)', () => {
         'No category has the code CAT-X',
         'Category Code is required',
       ]);
+    });
+  });
+
+  describe('Archived categories and bad rows', () => {
+    it('refuses an archived category code, on a category row and on a product row', async () => {
+      jobRepo.findOne.mockResolvedValue({ id: 'job-1', entity_type: 'CATEGORIES', status: 'STAGED' });
+      rowRepo.find.mockResolvedValue([{ row_number: 1, raw_data: { Code: 'old', Name: 'Old' } }]);
+      const cats = await service.validateJob('job-1', { Code: 'code', Name: 'name_fa' });
+      expect(cats.error_summary.map((e: any) => e.message)).toEqual(['Code OLD belongs to an archived category and is not used again']);
+
+      jobRepo.findOne.mockResolvedValue({ id: 'job-2', entity_type: 'PRODUCTS', status: 'STAGED' });
+      rowRepo.find.mockResolvedValue([{ row_number: 1, raw_data: { Name: 'Tea', Price: '1', Cat: 'OLD' } }]);
+      const prods = await service.validateJob('job-2', { Name: 'name_fa', Price: 'base_price', Cat: 'category_code' });
+      expect(prods.error_summary.map((e: any) => e.message)).toEqual(['Category OLD is archived']);
+    });
+
+    it('imports nothing while any row is bad', async () => {
+      jobRepo.findOne.mockResolvedValue({ id: 'job-3', tenant_id: 't-1', entity_type: 'PRODUCTS' });
+      rowRepo.count.mockResolvedValue(2);
+      await expect(service.executeJob('job-3', 'u-1')).rejects.toThrow('2 rows are bad. Nothing was imported');
+      expect(dataSource.transaction).not.toHaveBeenCalled();
     });
   });
 

@@ -33,22 +33,14 @@ export interface ProductRouting {
   source: RouteSource;
 }
 
-const isKitchenPrinter = (p: Printer) => String(p.printer_type || '').toUpperCase().startsWith('KITCHEN');
-
 /**
- * The branch printer a document prints on when nothing more specific is set up. A kitchen chit
- * goes only to the printer the branch chose as its default kitchen printer; with none chosen it
- * gets none, so it fails where the till shows it rather than come out at the counter or on a
- * printer nobody picked. Anything else prints on a receipt printer, else on any printer that is
- * not the kitchen's, else on any at all.
+ * The branch printer a document prints on when nothing more specific is set up: the printer the
+ * branch chose as its default kitchen printer (K-17), or as its default receipt printer (K-23).
+ * With none chosen it gets none, so the job fails where the till shows it rather than come out
+ * on a printer nobody picked.
  */
 export function branchFallback(branchPrinters: Printer[], kitchen: boolean): Printer | undefined {
-  if (kitchen) return branchPrinters.find((p) => p.kitchen_default);
-  return (
-    branchPrinters.find((p) => String(p.printer_type || '').toUpperCase().includes('RECEIPT')) ??
-    branchPrinters.find((p) => !isKitchenPrinter(p)) ??
-    branchPrinters[0]
-  );
+  return branchPrinters.find((p) => (kitchen ? p.kitchen_default : p.receipt_default));
 }
 
 /** A retired printer leaves its routes and tills, so they no longer name a device that is gone. */
@@ -211,21 +203,31 @@ export class PrintRoutingService {
 
   /** Make one printer the branch's default kitchen printer. */
   async setKitchenDefault(tenantId: string, printerId: string): Promise<Printer> {
+    return this.setBranchDefault(tenantId, printerId, 'kitchen_default');
+  }
+
+  /** Make one printer the branch's default receipt printer (K-23). */
+  async setReceiptDefault(tenantId: string, printerId: string): Promise<Printer> {
+    return this.setBranchDefault(tenantId, printerId, 'receipt_default');
+  }
+
+  private async setBranchDefault(tenantId: string, printerId: string, flag: 'kitchen_default' | 'receipt_default'): Promise<Printer> {
     const printer = await this.printerRepo.findOne({ where: { id: printerId, tenant_id: tenantId } });
     if (!printer) throw new NotFoundException(`Printer ${printerId} not found`);
     await this.printerRepo.manager.transaction(async (em) => {
-      await em.update(Printer, { tenant_id: tenantId, branch_id: printer.branch_id, kitchen_default: true }, { kitchen_default: false });
-      await em.update(Printer, { id: printer.id, tenant_id: tenantId }, { kitchen_default: true });
+      await em.update(Printer, { tenant_id: tenantId, branch_id: printer.branch_id, [flag]: true }, { [flag]: false });
+      await em.update(Printer, { id: printer.id, tenant_id: tenantId }, { [flag]: true });
     });
-    printer.kitchen_default = true;
+    printer[flag] = true;
     return printer;
   }
 
   /**
    * Where a whole-order document prints: the till's receipt printer, one copy (copies per printer
    * are F), on the till's paper. A kiosk is a till here: its guests' receipts come out of the kiosk's own printer. An
-   * order from no till (online, an aggregator), or from a till with no printer of its own in
-   * service, prints on the branch's receipt printer.
+   * order from no till (online, an aggregator), or from a till with no printer of its own, prints
+   * on the branch's default receipt printer (K-23). A printer out of service is still returned, so
+   * its job fails where it can be seen; with no printer at all the job fails too.
    */
   async printersForDocument(
     tenantId: string,
@@ -237,10 +239,10 @@ export class PrintRoutingService {
     const template = till?.receipt_template ?? null;
 
     if (till?.receipt_printer_id) {
-      const own = await this.printerRepo.findOne({ where: { id: till.receipt_printer_id, tenant_id: tenantId, is_active: true } });
+      const own = await this.printerRepo.findOne({ where: { id: till.receipt_printer_id, tenant_id: tenantId } });
       if (own) return { printers: [{ printer: own, copies }], template };
     }
-    const fallback = branchFallback(await this.branchPrinters(tenantId, branchId), false);
+    const fallback = branchFallback(await this.allBranchPrinters(tenantId, branchId), false);
     return { printers: fallback ? [{ printer: fallback, copies }] : [], template };
   }
 }

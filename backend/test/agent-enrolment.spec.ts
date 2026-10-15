@@ -73,13 +73,15 @@ const body = {
 describe('Agent enrolment and auth', () => {
   describe('POST /agent/enrol', () => {
     let sessions: AgentSessionsService;
+    let commands: { failOpenForBranch: jest.Mock };
     beforeEach(() => {
       sessions = new AgentSessionsService();
+      commands = { failOpenForBranch: jest.fn().mockResolvedValue(0) };
     });
 
     it('trades a pending code for a device key and keeps only its hash', async () => {
       const db = fakeDb({ code: codeRow(), branch: activeBranch });
-      const service = new AgentEnrolmentService(db.dataSource as any, sessions, db.auditWriter as any);
+      const service = new AgentEnrolmentService(db.dataSource as any, sessions, db.auditWriter as any, commands as any);
 
       const res = await service.enrol(body, { clientKey: '5.6.7.8', wsUrl: WS });
 
@@ -119,7 +121,7 @@ describe('Agent enrolment and auth', () => {
         expect(close).not.toHaveBeenCalled();
         return out;
       });
-      const service = new AgentEnrolmentService(db.dataSource as any, sessions, db.auditWriter as any);
+      const service = new AgentEnrolmentService(db.dataSource as any, sessions, db.auditWriter as any, commands as any);
 
       const res = await service.enrol(body, { clientKey: '5.6.7.8', wsUrl: WS });
 
@@ -127,6 +129,8 @@ describe('Agent enrolment and auth', () => {
       expect(old).toMatchObject({ status: 'REVOKED', revoked_by: hqUserId });
       expect(old.revoked_at).toBeInstanceOf(Date);
       expect(close).toHaveBeenCalledWith(4003, 'AGENT_REVOKED');
+      // The old PC's waiting print jobs fail rather than print later on the new one (K-22).
+      expect(commands.failOpenForBranch).toHaveBeenCalledWith(tenantId, branchId, 'print.job', 'AGENT_REVOKED', expect.any(String));
       expect(db.audit.map((a) => a.action)).toEqual(['AGENT_REVOKED', 'AGENT_ENROLLED']);
       expect(db.audit[1].details.replacedAgentId).toBe(oldAgentId);
       expect(res.agent_id).not.toBe(oldAgentId);
@@ -139,7 +143,7 @@ describe('Agent enrolment and auth', () => {
       ['a cancelled code', codeRow({ cancelled_at: new Date() }), 'ENROLMENT_CODE_EXPIRED'],
     ])('refuses %s', async (_label, code, expected) => {
       const db = fakeDb({ code, branch: activeBranch });
-      const service = new AgentEnrolmentService(db.dataSource as any, sessions, db.auditWriter as any);
+      const service = new AgentEnrolmentService(db.dataSource as any, sessions, db.auditWriter as any, commands as any);
 
       await expect(service.enrol(body, { clientKey: '5.6.7.8', wsUrl: WS })).rejects.toMatchObject({
         response: expect.objectContaining({ code: expected }),
@@ -150,7 +154,7 @@ describe('Agent enrolment and auth', () => {
 
     it('refuses a code whose branch has closed', async () => {
       const db = fakeDb({ code: codeRow(), branch: { ...activeBranch, is_active: false } });
-      const service = new AgentEnrolmentService(db.dataSource as any, sessions, db.auditWriter as any);
+      const service = new AgentEnrolmentService(db.dataSource as any, sessions, db.auditWriter as any, commands as any);
       await expect(service.enrol(body, { clientKey: 'x', wsUrl: WS })).rejects.toMatchObject({
         response: expect.objectContaining({ code: 'ENROLMENT_CODE_INVALID' }),
       });
@@ -158,7 +162,7 @@ describe('Agent enrolment and auth', () => {
 
     it('refuses a protocol version it does not speak, before touching the database', async () => {
       const db = fakeDb({ code: codeRow(), branch: activeBranch });
-      const service = new AgentEnrolmentService(db.dataSource as any, sessions, db.auditWriter as any);
+      const service = new AgentEnrolmentService(db.dataSource as any, sessions, db.auditWriter as any, commands as any);
       await expect(service.enrol({ ...body, protocol_version: 2 }, { clientKey: 'x', wsUrl: WS })).rejects.toMatchObject({
         response: expect.objectContaining({ code: 'PROTOCOL_UNSUPPORTED' }),
       });
@@ -167,7 +171,7 @@ describe('Agent enrolment and auth', () => {
 
     it('stops an address after five bad codes, and only that address', async () => {
       const db = fakeDb({ code: null, branch: activeBranch });
-      const service = new AgentEnrolmentService(db.dataSource as any, sessions, db.auditWriter as any);
+      const service = new AgentEnrolmentService(db.dataSource as any, sessions, db.auditWriter as any, commands as any);
       for (let i = 0; i < 5; i++) {
         await expect(service.enrol(body, { clientKey: '9.9.9.9', wsUrl: WS })).rejects.toMatchObject({ status: 400 });
       }

@@ -13,6 +13,7 @@ import {
 } from './agent-credentials';
 import { AGENT_CLOSE } from './agent-protocol';
 import { AgentSessionsService } from './agent-sessions.service';
+import { AGENT_REVOKED_MESSAGE, AgentCommandsService } from './agent-commands.service';
 
 export interface AgentActor {
   userId?: string;
@@ -36,6 +37,7 @@ export class AgentRegistryService {
     @InjectRepository(Branch) private readonly branchRepo: Repository<Branch>,
     private readonly auditWriter: AuditWriter,
     private readonly sessions: AgentSessionsService,
+    private readonly commands: AgentCommandsService,
   ) {}
 
   async listAgents(tenantId: string, filter: { branchId?: string; includeRevoked?: boolean } = {}): Promise<AgentView[]> {
@@ -142,6 +144,8 @@ export class AgentRegistryService {
     const saved = await this.agentRepo.save(agent);
     // Cut the PC off now, not at its next heartbeat (protocol §3.4).
     this.sessions.closeAgent(saved.id, AGENT_CLOSE.REVOKED, 'AGENT_REVOKED');
+    // Its waiting print jobs fail now, for the cashier to reprint what is still needed (K-22).
+    await this.commands.failOpenForBranch(tenantId, saved.branch_id, 'print.job', 'AGENT_REVOKED', AGENT_REVOKED_MESSAGE);
 
     await this.auditWriter.write({
       tenantId,
