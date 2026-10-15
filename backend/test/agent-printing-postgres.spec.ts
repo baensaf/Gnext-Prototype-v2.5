@@ -181,10 +181,11 @@ describe('printing via the branch agent (PostgreSQL)', () => {
     expect(agent.frames.some((m) => m.type === 'print.job')).toBe(false);
   });
 
-  it('fails the job when the kitchen printer is out of paper, then retries for real', async () => {
+  it('fails the job when the kitchen printer is out of paper, and a reprint prints it for real', async () => {
     const { agent } = await connect();
     const printed = await reprint(agentPrinterId);
-    const first = await agent.next((m) => m.type === 'print.job' && m.payload.job_id === printed.id);
+    await agent.next((m) => m.type === 'print.job' && m.payload.job_id === printed.id);
+    const first = agent.frames.find((m) => m.type === 'print.job' && m.payload.job_id === printed.id)!;
 
     const resultId = answer(agent, first, 'FAILED', { code: 'PAPER_OUT', message: 'Paper end' });
     await agent.next((m) => m.ref === resultId);
@@ -192,40 +193,33 @@ describe('printing via the branch agent (PostgreSQL)', () => {
     expect(await job(printed.id)).toMatchObject({ status: 'FAILED' });
     expect((await attemptsOf(printed.id))[0]).toMatchObject({ status: 'FAILED', error_code: 'PAPER_OUT', error_message: 'Paper end' });
 
-    await queue.retryJob(tenantId, printed.id, { reason: 'paper loaded' });
-    const second = await agent.next((m) => m.type === 'print.job' && m.payload.job_id === printed.id && m.payload.attempt_no === 2);
-    expect(second.id).not.toBe(first.id);
-    expect(await job(printed.id)).toMatchObject({ status: 'PROCESSING' });
+    // Nothing is sent again by itself; a person reprints (K-20).
+    const [copy] = await queue.reprintJob(tenantId, printed.id, 'paper loaded');
+    const second = await agent.next((m) => m.type === 'print.job' && m.payload.job_id === copy.id);
+    expect(copy).toMatchObject({ is_reprint: true, status: 'PROCESSING' });
     answer(agent, second, 'SUCCESS');
-    await until(async () => (await job(printed.id)).status === 'SUCCESS');
+    await until(async () => (await job(copy.id)).status === 'SUCCESS');
   });
 
-  it('keeps a job for an offline agent, and a retry takes back what never left', async () => {
+  it('keeps a job for an offline agent and prints it when the agent comes back', async () => {
     const printed = await reprint(agentPrinterId);
     const [waiting] = await attemptsOf(printed.id);
     expect(waiting.status).toBe('PENDING');
     expect(await commands.get(waiting.agent_command_id!)).toMatchObject({ status: 'QUEUED' });
 
-    await queue.retryJob(tenantId, printed.id, {});
-    const [withdrawn, resent] = await attemptsOf(printed.id);
-    expect(withdrawn).toMatchObject({ status: 'FAILED', error_code: 'WITHDRAWN' });
-    expect(resent).toMatchObject({ status: 'PENDING', attempt_no: 2 });
-
     const { agent } = await connect();
     const delivered = await agent.next((m) => m.type === 'print.job' && m.payload.job_id === printed.id);
-    expect(delivered).toMatchObject({ id: resent.agent_command_id, payload: { attempt_no: 2 } });
-    await new Promise((r) => setTimeout(r, 150));
-    expect(agent.frames.filter((m) => m.type === 'print.job' && m.payload.job_id === printed.id)).toHaveLength(1);
+    expect(delivered).toMatchObject({ id: waiting.agent_command_id, payload: { attempt_no: 1 } });
   });
 
-  it('refuses a retry while the agent may be printing the job', async () => {
-    const { agent } = await connect();
+  it("fails a revoked agent's waiting jobs (K-22)", async () => {
     const printed = await reprint(agentPrinterId);
-    await agent.next((m) => m.type === 'print.job' && m.payload.job_id === printed.id);
-    await until(async () => (await commands.get((await attemptsOf(printed.id))[0].agent_command_id!))!.status === 'SENT');
+    expect(await job(printed.id)).toMatchObject({ status: 'PROCESSING' });
 
-    await expect(queue.retryJob(tenantId, printed.id, {})).rejects.toBeInstanceOf(BadRequestException);
-    expect(await attemptsOf(printed.id)).toHaveLength(1);
+    await commands.failOpenForBranch(tenantId, branchId, 'print.job', 'AGENT_REVOKED', 'revoked');
+
+    await until(async () => (await job(printed.id)).status === 'FAILED');
+    expect((await attemptsOf(printed.id))[0]).toMatchObject({ status: 'FAILED', error_code: 'AGENT_REVOKED' });
   });
 
   it('fails the attempt when the agent refuses the job or never takes it', async () => {
@@ -245,20 +239,19 @@ describe('printing via the branch agent (PostgreSQL)', () => {
     expect((await attemptsOf(stale.id))[0]).toMatchObject({ status: 'FAILED', error_code: 'EXPIRED' });
   });
 
-  it('marks a job "check printer" when it may have printed, never resends it, and lets the cashier confirm it', async () => {
+  it('fails a job that may have printed, and never sends it again by itself (K-20)', async () => {
     const { agent } = await connect();
     const printed = await reprint(agentPrinterId);
     const command = await agent.next((m) => m.type === 'print.job' && m.payload.job_id === printed.id);
     const resultId = answer(agent, command, 'FAILED', { code: 'TIMEOUT', message: 'no answer mid-job' });
     await agent.next((m) => m.ref === resultId);
 
-    expect(await job(printed.id)).toMatchObject({ status: 'UNCERTAIN' });
-    await expect(queue.retryJob(tenantId, printed.id, {})).rejects.toThrow('may have printed');
-    await queue.confirmPrinted(tenantId, printed.id);
-    expect(await job(printed.id)).toMatchObject({ status: 'SUCCESS' });
+    expect(await job(printed.id)).toMatchObject({ status: 'FAILED' });
+    await new Promise((r) => setTimeout(r, 150));
+    expect(agent.frames.filter((m) => m.type === 'print.job' && m.payload.job_id === printed.id)).toHaveLength(1);
   });
 
-  it('treats a job sent but never acknowledged as "check printer", and an unsent kitchen chit as expired at the cutoff', async () => {
+  it('fails a job sent but never acknowledged, and a kitchen chit that never left, after a day', async () => {
     const { agent } = await connect();
     const sent = await reprint(agentPrinterId, 'CUSTOMER_RECEIPT');
     await agent.next((m) => m.type === 'print.job' && m.payload.job_id === sent.id);
@@ -267,12 +260,7 @@ describe('printing via the branch agent (PostgreSQL)', () => {
     const unsent = await reprint(agentPrinterId, 'KITCHEN_TICKET');
 
     await commands.tick(new Date(Date.now() + 25 * 3600_000), tenantId);
-    await until(async () => (await job(sent.id)).status === 'UNCERTAIN' && (await job(unsent.id)).status === 'EXPIRED');
-
-    await expect(queue.retryJob(tenantId, unsent.id, {})).rejects.toThrow('expired');
-    await expect(queue.dismissJob(tenantId, unsent.id, '')).rejects.toThrow('Say why');
-    await queue.dismissJob(tenantId, unsent.id, 'Cooked from the reprint');
-    expect(await job(unsent.id)).toMatchObject({ status: 'DISMISSED' });
+    await until(async () => (await job(sent.id)).status === 'FAILED' && (await job(unsent.id)).status === 'FAILED');
   });
 
   it('shows a changed printer as waiting for the agent until the agent takes its settings', async () => {

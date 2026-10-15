@@ -61,8 +61,8 @@ export interface PrintJob {
   printer_id?: string;
   /** The printer a kitchen chit is for, e.g. "Grill (1/3)" when the order was split. */
   label?: string;
-  /** PROCESSING: not printed yet; UNCERTAIN: check printer; EXPIRED: a kitchen chit unsent at the cutoff. */
-  status: 'QUEUED' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'UNCERTAIN' | 'EXPIRED' | 'REPLACED' | 'DISMISSED' | 'CANCELLED';
+  /** Waiting (QUEUED, PROCESSING), printed or failed (K-20). */
+  status: 'QUEUED' | 'PROCESSING' | 'SUCCESS' | 'FAILED';
   copies: number;
   rendered_html: string;
   is_reprint: boolean;
@@ -155,20 +155,6 @@ export const printingApi = {
   },
   simulatePrintOutcome: async (data: { printJobId: string; scenarioId?: string; outcome: 'SUCCESS' | 'FAILED' }): Promise<any> => {
     const res = await httpClient.post('/api/v1/simulation/printers/outcome', data);
-    return res.data;
-  },
-  retryPrintJob: async (id: string, data?: { scenarioId?: string }): Promise<any> => {
-    const res = await httpClient.post(`/api/v1/print-jobs/${id}/retry`, data || {});
-    return res.data;
-  },
-  /** The cashier saw the paper of a "check printer" or expired job. */
-  confirmPrintJob: async (id: string): Promise<any> => {
-    const res = await httpClient.post(`/api/v1/print-jobs/${id}/confirm`, {});
-    return res.data;
-  },
-  /** Set an expired (or failed, or unsure) job aside, with the reason. */
-  dismissPrintJob: async (id: string, reason: string): Promise<any> => {
-    const res = await httpClient.post(`/api/v1/print-jobs/${id}/dismiss`, { reason });
     return res.data;
   },
   /** `printerId` redirects the copy to another device — the usual one has died. */

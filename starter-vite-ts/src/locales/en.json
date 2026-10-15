@@ -622,8 +622,7 @@
     },
     "drawer": {
       "printTrouble": {
-        "UNCERTAIN": "A chit may not have printed. Check the printer, then confirm or reprint it.",
-        "FAILED": "Something did not print. Retry or reprint it from the print queue.",
+        "FAILED": "Something did not print. Reprint it from the print queue.",
         "WAITING": "Not printed yet: waiting for the branch agent or the printer.",
         "open": "Print queue"
       },
@@ -2905,9 +2904,6 @@
     "headOffice": "Head office"
   },
   "printQueue": {
-    "confirmPrinted": "It printed",
-    "dismiss": "Dismiss, with a reason",
-    "dismissReason": "Why is this job set aside?",
     "title": "Print Queue & Spooler",
     "columnJobId": "Job ID",
     "columnType": "Document Type",
@@ -2929,7 +2925,7 @@
     "printer": "Printer",
     "reprintElsewhere": "Reprint on another printer",
     "reprintElsewhereHelp": "Sends this document to a printer you choose instead of the one it was routed to. Use it when the usual printer is out of service.",
-    "subtitle": "Every document the branch printed or tried to print. Retry a failed job once its printer is fixed, or reprint it on another printer.",
+    "subtitle": "Every document the branch printed or tried to print. Reprint a failed job on its printer or on another one.",
     "columnOrder": "Order",
     "viaAgent": "Real printer",
     "simulated": "Simulated",
@@ -2941,17 +2937,12 @@
       "TEST_PRINT": "Test page"
     },
     "statuses": {
-      "QUEUED": "Queued",
-      "PROCESSING": "Not printed yet",
+      "QUEUED": "Waiting",
+      "PROCESSING": "Waiting",
       "SUCCESS": "Printed",
-      "FAILED": "Failed",
-      "UNCERTAIN": "Check printer",
-      "EXPIRED": "Expired",
-      "REPLACED": "Replaced",
-      "DISMISSED": "Dismissed"
+      "FAILED": "Failed"
     },
     "original": "Original",
-    "retryJob": "Retry on the same printer",
     "previewJob": "Preview",
     "lastError": "Last error",
     "chit": "Chit"

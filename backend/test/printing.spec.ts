@@ -65,7 +65,7 @@ describe('PrintingModule (Unit & Integration)', () => {
   let productRepo: ReturnType<typeof fakeRepo>;
   let routeRepo: ReturnType<typeof fakeRepo>;
   let auditWriter: { write: jest.Mock };
-  let agentPrinting: { send: jest.Mock; pendingAttempt: jest.Mock; withdraw: jest.Mock };
+  let agentPrinting: { send: jest.Mock };
 
   const T = 't-1';
   const BR = 'br-1';
@@ -86,8 +86,6 @@ describe('PrintingModule (Unit & Integration)', () => {
         job.status = 'PROCESSING';
         return { job, attempt: { job_id: job.id, printer_id: printer.id, attempt_no: attemptNo, status: 'PENDING' } };
       }),
-      pendingAttempt: jest.fn().mockResolvedValue(null),
-      withdraw: jest.fn().mockResolvedValue(false),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -617,15 +615,16 @@ describe('PrintingModule (Unit & Integration)', () => {
       printer('prn-counter');
     });
 
-    // A kitchen chit retried after the kitchen printer was fixed prints in the kitchen.
-    it('retries a failed job on its own printer', async () => {
+    // A failed kitchen chit is reprinted by a person, on its own printer once fixed (K-20).
+    it('reprints a failed job on its own printer', async () => {
       const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-400', 'KITCHEN_TICKET');
       expect(job.printer_id).toBe('prn-kitchen');
       job.status = 'FAILED';
 
-      await queueService.retryJob(T, job.id, {});
+      const [copy] = await queueService.reprintJob(T, job.id, 'Printer fixed', 'user-1');
 
-      expect(agentPrinting.send).toHaveBeenLastCalledWith(T, expect.objectContaining({ id: job.id }), expect.objectContaining({ id: 'prn-kitchen' }), expect.any(Number));
+      expect(copy).toMatchObject({ printer_id: 'prn-kitchen', is_reprint: true });
+      expect(agentPrinting.send).toHaveBeenLastCalledWith(T, expect.objectContaining({ id: copy.id }), expect.objectContaining({ id: 'prn-kitchen' }), expect.any(Number));
     });
 
     it('refuses to simulate the outcome of a job a real printer is handling', async () => {
@@ -654,63 +653,14 @@ describe('PrintingModule (Unit & Integration)', () => {
       expect(auditWriter.write).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'PRINT_JOB_ENQUEUED' }));
     });
 
-    it('says what is missing when retried before a printer exists', async () => {
-      const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-300', 'KITCHEN_TICKET');
-
-      await expect(queueService.retryJob(T, job.id, {})).rejects.toThrow(/No printer is in service for KITCHEN_TICKET/);
-    });
-
-    it('prints on retry once the branch has a printer', async () => {
-      const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-300', 'KITCHEN_TICKET');
-      printer('prn-kitchen', { kitchen_default: true, printer_type: 'KITCHEN_IMPACT', agent_connection: TCP });
-
-      const res = await queueService.retryJob(T, job.id, {});
-
-      expect(res.job.printer_id).toBe('prn-kitchen');
-      expect(res.attempt.printer_id).toBe('prn-kitchen');
-      expect(res.job.status).toBe('PROCESSING');
-    });
-
-    it('sends a failed kitchen chit, retried, to the default kitchen printer the branch has now', async () => {
+    it('prints on a reprint once the branch has a default kitchen printer', async () => {
       const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-300', 'KITCHEN_TICKET');
       expect(job.status).toBe('FAILED');
-
-      printer('prn-bar', { code: 'A', printer_type: 'KITCHEN_IMPACT', agent_connection: TCP });
       printer('prn-pass', { code: 'B', printer_type: 'KITCHEN_IMPACT', agent_connection: TCP, kitchen_default: true });
 
-      const res = await queueService.retryJob(T, job.id, {});
+      const [copy] = await queueService.reprintJob(T, job.id, 'Printer added', 'user-1');
 
-      expect(res.jobs.map((j) => j.printer_id)).toEqual(['prn-pass']);
-      expect(res.jobs[0].id).toBe(job.id);
-    });
-  });
-
-  // A retry used to fall through to the simulator for any printer the agent does not drive,
-  // and mark the job printed: a chit nobody saw, reported as on the rail.
-  describe('retrying where nothing can print', () => {
-    beforeEach(() => {
-      order('ord-500', [line('l-1', 'p-burger', 'Burger')]);
-    });
-
-    it('refuses a printer the branch agent does not drive, and leaves the job failed', async () => {
-      printer('prn-sim', { receipt_default: true });
-      const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-500');
-      job.status = 'FAILED';
-      const attempts = attemptRepo.rows.length;
-
-      await expect(queueService.retryJob(T, job.id, {})).rejects.toThrow(/not connected to the branch agent/);
-      expect(job.status).toBe('FAILED');
-      expect(attemptRepo.rows).toHaveLength(attempts);
-    });
-
-    it('refuses a job whose printer has been removed', async () => {
-      printer('prn-gone', { agent_connection: TCP, receipt_default: true });
-      const [job] = await queueService.enqueueOrderPrintJobs(T, 'ord-500');
-      job.status = 'FAILED';
-      printerRepo.rows.splice(printerRepo.rows.findIndex((p) => p.id === 'prn-gone'), 1);
-
-      await expect(queueService.retryJob(T, job.id, {})).rejects.toThrow(/has been removed/);
-      expect(job.status).toBe('FAILED');
+      expect(copy.printer_id).toBe('prn-pass');
     });
   });
 

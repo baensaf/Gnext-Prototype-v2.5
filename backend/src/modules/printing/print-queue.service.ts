@@ -172,27 +172,6 @@ export class PrintQueueService {
     }
   }
 
-  /**
-   * Takes back the order's kitchen chits the branch agent has not received yet. Answers the
-   * printers they were for: those get the order as it now stands instead of a change chit (an
-   * edit), or nothing at all (a cancel).
-   */
-  private async withdrawUnsentKitchenChits(tenantId: string, orderId: string, why: string): Promise<Set<string>> {
-    const jobs = await this.jobRepo.find({
-      where: { tenant_id: tenantId, entity_type: 'Order', entity_id: orderId, document_type: 'KITCHEN_TICKET', status: In(['QUEUED', 'PROCESSING']) },
-    });
-    const replaced = new Set<string>();
-    for (const job of jobs) {
-      if (!job.printer_id) continue;
-      const pending = await this.agentPrinting.pendingAttempt(tenantId, job.id);
-      if (!pending || !(await this.agentPrinting.withdraw(pending, why))) continue;
-      job.status = 'REPLACED';
-      await this.jobRepo.save(job);
-      replaced.add(job.printer_id);
-    }
-    return replaced;
-  }
-
   /** Whether this document has already been printed for the order, reprints aside. */
   async hasPrinted(tenantId: string, orderId: string, documentType: string): Promise<boolean> {
     const count = await this.jobRepo.count({
@@ -227,13 +206,10 @@ export class PrintQueueService {
       const label = change.kind === 'CANCELLED' ? 'Order cancelled' : 'Order amended';
       const opts = { isReprint: false, reason: change.reason ? `${label}: ${change.reason}` : label, userId };
 
-      // A kitchen that has not been sent its chit yet gets the order as it now stands (an edit)
-      // or nothing (a cancel), never the old chit followed by a change.
-      const replaced = await this.withdrawUnsentKitchenChits(tenantId, orderId, `Replaced: ${label.toLowerCase()} before it printed`);
-
+      // A chit still waiting for the agent is not taken back: the change chit follows it (K-20).
       const heading = await this.orderHeading(order);
       const jobs: PrintJob[] = [];
-      const changeBatches = (await this.splitByPrinter(tenantId, order, lines)).filter((b) => !b.printer || !replaced.has(b.printer.id));
+      const changeBatches = await this.splitByPrinter(tenantId, order, lines);
       for (const batch of changeBatches) {
         const html = this.renderKitchenChit(heading, batch, {
           kitchenChange: change.kind,
@@ -244,15 +220,6 @@ export class PrintQueueService {
       }
       if (change.kind === 'AMENDED') {
         await this.rememberDestinations(changeBatches.map((b) => ({ ...b, lines: b.lines.filter((l) => l.change === 'ADD') })));
-        if (replaced.size) {
-          const current = (order.items || []).filter(isActiveLine).map((item) => ({ item }));
-          const fresh = (await this.splitByPrinter(tenantId, order, current)).filter((b) => b.printer && replaced.has(b.printer.id));
-          for (const batch of fresh) {
-            const html = this.renderKitchenChit(heading, batch, { changeReason: change.reason });
-            jobs.push(...(await this.recordBatchJobs(tenantId, order, html, batch, { ...opts, reason: `${opts.reason} (replaces the unsent chit)` })));
-          }
-          await this.rememberDestinations(fresh);
-        }
       }
       return jobs;
     } catch (err: any) {
@@ -789,176 +756,6 @@ export class PrintQueueService {
     });
 
     return { job: savedJob, attempt };
-  }
-
-  /**
-   * Send a failed job to its printer again, for real.
-   *
-   * A retry only ever goes through the branch agent. A printer that is gone or has no agent
-   * connection is refused with the reason, never marked printed: the queue saying "printed"
-   * for a chit that never came out is the one outcome worse than a failure.
-   */
-  async retryJob(tenantId: string, jobId: string, data: { reason?: string }) {
-    const job = await this.jobRepo.findOne({ where: { id: jobId, tenant_id: tenantId } });
-    if (!job) throw new NotFoundException(`Print job ${jobId} not found`);
-    // Sending it again by itself could put a second chit on the rail.
-    if (job.status === 'UNCERTAIN') {
-      throw new BadRequestException('This job may have printed. Check the printer: confirm it printed, or reprint it.');
-    }
-    if (job.status === 'EXPIRED') {
-      throw new BadRequestException('This kitchen chit expired at the end of the business day. Reprint it or dismiss it.');
-    }
-
-    const targets = await this.retryTargets(tenantId, job);
-    const offline = targets.find((t) => !t.printer.agent_connection);
-    if (offline) {
-      throw new BadRequestException(
-        `Printer ${offline.printer.name} is not connected to the branch agent, so a retry cannot print on it. Set up its connection, or reprint the job to a connected printer.`,
-      );
-    }
-
-    const pending = await this.agentPrinting.pendingAttempt(tenantId, job.id);
-    if (pending) {
-      // Still waiting. Only a job that never reached the agent can be taken back and resent;
-      // otherwise a retry could print the chit twice.
-      const withdrawn = pending.agent_command_id
-        ? await this.agentPrinting.withdraw(pending, 'Retried from the print queue')
-        : false;
-      if (!withdrawn) {
-        throw new BadRequestException('This job is still with the branch agent. Wait for it to finish or fail, then retry.');
-      }
-    }
-
-    // A job routed afresh takes the first printer; any other gets a job of its own, as it
-    // would have had those printers been working at the time.
-    const [first, ...others] = targets;
-    if (!job.printer_id) {
-      job.printer_id = first.printer.id;
-      job.copies = first.copies;
-      await this.jobRepo.save(job);
-    }
-
-    const attemptNo = (await this.attemptRepo.count({ where: { job_id: job.id } })) + 1;
-    const { job: sent, attempt } = await this.agentPrinting.send(tenantId, job, first.printer, attemptNo);
-    await this.auditRetry(tenantId, sent, attemptNo, first.printer, data.reason);
-
-    const jobs = [sent];
-    for (const target of others) {
-      const extra = await this.jobRepo.save(
-        this.jobRepo.create({
-          tenant_id: job.tenant_id,
-          branch_id: job.branch_id,
-          document_type: job.document_type,
-          entity_type: job.entity_type,
-          entity_id: job.entity_id,
-          printer_id: target.printer.id,
-          label: job.label,
-          status: 'QUEUED',
-          copies: target.copies,
-          rendered_html: job.rendered_html,
-          is_reprint: job.is_reprint,
-          reason: job.reason,
-          created_by: job.created_by,
-        }),
-      );
-      const { job: sentExtra } = await this.agentPrinting.send(tenantId, extra, target.printer, 1);
-      await this.auditRetry(tenantId, sentExtra, 1, target.printer, data.reason);
-      jobs.push(sentExtra);
-    }
-    return { job: sent, attempt, jobs };
-  }
-
-  /**
-   * Where a retry prints. A job with a printer goes back to that printer. A job with none — nothing was reachable when it was made — is routed again: a
-   * kitchen chit, whose lines had no printer, to the branch's default kitchen printer; any other
-   * document to the printer of the till its order was taken on.
-   */
-  private async retryTargets(tenantId: string, job: PrintJob): Promise<RoutedPrinter[]> {
-    if (job.printer_id) {
-      const current = await this.printerRepo.findOne({ where: { id: job.printer_id, tenant_id: tenantId } });
-      if (!current) {
-        throw new BadRequestException('The printer this job went to has been removed. Reprint the job to another printer.');
-      }
-      const printer = current;
-      if (!printer.is_active) throw new BadRequestException(`Printer ${printer.name} is not in service`);
-      return [{ printer, copies: job.copies || 1 }];
-    }
-
-    let routed: RoutedPrinter[];
-    if (job.document_type === 'KITCHEN_TICKET') {
-      const fallback = await this.routingService.kitchenDefault(tenantId, job.branch_id);
-      routed = fallback ? [{ printer: fallback, copies: job.copies || 1 }] : [];
-    } else {
-      const order =
-        job.entity_type === 'Order' ? await this.orderRepo.findOne({ where: { id: job.entity_id, tenant_id: tenantId } }) : null;
-      routed = (await this.routingService.printersForDocument(tenantId, job.branch_id, order?.terminal_id)).printers;
-    }
-    if (routed.length === 0) {
-      throw new BadRequestException(`No printer is in service for ${job.document_type} at this branch. Add a printer, then retry.`);
-    }
-    return routed;
-  }
-
-  private async auditRetry(tenantId: string, job: PrintJob, attemptNo: number, printer: Printer, reason?: string) {
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'PRINT_JOB_RETRIED',
-      entityType: 'PrintJob',
-      entityId: job.id,
-      correlationId: 'corr-print-retry',
-      details: { attemptNo, printerId: printer.id, via: 'AGENT', reason },
-    });
-  }
-
-  /** The cashier saw the paper: a "check printer" or expired job is recorded as printed. */
-  async confirmPrinted(tenantId: string, jobId: string, userId?: string) {
-    const job = await this.jobRepo.findOne({ where: { id: jobId, tenant_id: tenantId } });
-    if (!job) throw new NotFoundException(`Print job ${jobId} not found`);
-    if (job.status !== 'UNCERTAIN' && job.status !== 'EXPIRED') {
-      throw new BadRequestException('Only a job that may have printed can be confirmed');
-    }
-    const before = job.status;
-    job.status = 'SUCCESS';
-    job.completed_at = new Date();
-    const saved = await this.jobRepo.save(job);
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      actorId: userId,
-      action: 'PRINT_JOB_CONFIRMED',
-      entityType: 'PrintJob',
-      entityId: job.id,
-      correlationId: 'corr-print-confirm',
-      details: { before },
-    });
-    return saved;
-  }
-
-  /** An expired, failed or unsure job set aside on purpose, with the reason. */
-  async dismissJob(tenantId: string, jobId: string, reason: string, userId?: string) {
-    const job = await this.jobRepo.findOne({ where: { id: jobId, tenant_id: tenantId } });
-    if (!job) throw new NotFoundException(`Print job ${jobId} not found`);
-    if (!['EXPIRED', 'FAILED', 'UNCERTAIN'].includes(job.status)) {
-      throw new BadRequestException('Only a job that did not print, or may not have, can be dismissed');
-    }
-    const text = String(reason || '').trim();
-    if (!text) throw new BadRequestException('Say why the job is dismissed');
-    const before = job.status;
-    job.status = 'DISMISSED';
-    job.reason = text.slice(0, 255);
-    const saved = await this.jobRepo.save(job);
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      actorId: userId,
-      action: 'PRINT_JOB_DISMISSED',
-      entityType: 'PrintJob',
-      entityId: job.id,
-      correlationId: 'corr-print-dismiss',
-      details: { before, reason: text },
-    });
-    return saved;
   }
 
   // List print jobs with filters & paging
