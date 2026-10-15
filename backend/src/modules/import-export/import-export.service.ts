@@ -345,9 +345,10 @@ export class ImportExportService {
     const updatedRows: ImportRow[] = [];
     // Two rows that would land on the same record are both refused, so row order never decides.
     const seen = new Map<string, number>();
-    const knownCategories = new Set(
-      (await this.dataSource.getRepository(Category).find({ where: { tenant_id: job.tenant_id } })).map((c) => c.code.toUpperCase()),
-    );
+    const allCategories = await this.dataSource.getRepository(Category).find({ where: { tenant_id: job.tenant_id }, withDeleted: true });
+    const knownCategories = new Set(allCategories.filter((c) => !c.deleted_at).map((c) => c.code.toUpperCase()));
+    // An archived category's code is never used again, by a category row or by a product row.
+    const archivedCategories = new Set(allCategories.filter((c) => c.deleted_at).map((c) => c.code.toUpperCase()));
 
     for (const r of rows) {
       const errors: string[] = [];
@@ -375,6 +376,7 @@ export class ImportExportService {
         if (!parsedData.name_fa && !parsedData.name) errors.push('Product Name is required');
         const categoryCode = String(parsedData.category_code || '').trim().toUpperCase();
         if (!categoryCode) errors.push('Category Code is required');
+        else if (archivedCategories.has(categoryCode)) errors.push(`Category ${categoryCode} is archived`);
         else if (!knownCategories.has(categoryCode)) errors.push(`No category has the code ${categoryCode}`);
         if (parsedData.tax_rate !== undefined && parsedData.tax_rate !== '') {
           if (!MoneyUtil.isValid(parsedData.tax_rate) || MoneyUtil.lessThan(parsedData.tax_rate, '0') || MoneyUtil.greaterThan(parsedData.tax_rate, '100')) {
@@ -402,6 +404,7 @@ export class ImportExportService {
         if (!parsedData.code) errors.push('Category Code is required');
         if (!parsedData.name_fa && !parsedData.name) errors.push('Category Name is required');
         const key = String(parsedData.code || '').trim().toUpperCase();
+        if (key && archivedCategories.has(key)) errors.push(`Code ${key} belongs to an archived category and is not used again`);
         if (key && seen.has(key)) errors.push(`Same category as row ${seen.get(key)}`);
         else if (key) seen.set(key, r.row_number);
       }
@@ -452,6 +455,11 @@ export class ImportExportService {
     const job = await this.jobRepo.findOne({ where: { id: jobId } });
     if (!job) throw new NotFoundException('Import job not found');
 
+    // All or nothing: one bad row and nothing from the file is saved; head office fixes the file.
+    const badRows = await this.rowRepo.count({ where: { job_id: jobId, status: 'INVALID' } });
+    if (badRows > 0) {
+      throw new BadRequestException(`${badRows} ${badRows === 1 ? 'row is' : 'rows are'} bad. Nothing was imported. Fix the file and import it again.`);
+    }
     const validRows = await this.rowRepo.find({ where: { job_id: jobId, status: 'VALID' } });
 
     let importedCount = 0;

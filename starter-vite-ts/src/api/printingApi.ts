@@ -17,6 +17,8 @@ export interface PrinterDevice {
   is_active: boolean;
   /** The branch's one printer for kitchen lines nothing routes anywhere else. */
   kitchen_default?: boolean;
+  /** The branch's one printer for the receipts of a till with no printer of its own (K-23). */
+  receipt_default?: boolean;
   /** Prints every order whole on one more chit, for the pass. */
   prints_whole_order?: boolean;
   agent_connection?: PrinterConnection | null;
@@ -130,6 +132,10 @@ export const printingApi = {
   },
   setKitchenDefault: async (printerId: string): Promise<PrinterDevice> => {
     const res = await httpClient.post(`/api/v1/printers/${printerId}/kitchen-default`);
+    return res.data;
+  },
+  setReceiptDefault: async (printerId: string): Promise<PrinterDevice> => {
+    const res = await httpClient.post(`/api/v1/printers/${printerId}/receipt-default`);
     return res.data;
   },
 

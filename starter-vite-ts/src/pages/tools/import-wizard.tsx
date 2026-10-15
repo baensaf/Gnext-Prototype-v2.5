@@ -380,6 +380,13 @@ export function ImportWizardPage() {
             </Alert>
           </Stack>
 
+          {/* All or nothing: one bad row and nothing is imported (catalog PRD, Import). */}
+          {activeJob.error_rows > 0 && (
+            <Alert severity="warning" sx={{ mb: 3 }}>
+              {t('tools.importWizard.fixBadRows')}
+            </Alert>
+          )}
+
           <TableContainer component={Paper} variant="outlined">
             <Table size="small">
               <TableHead sx={{ bgcolor: 'action.hover' }}>
@@ -474,7 +481,11 @@ export function ImportWizardPage() {
           <Button disabled={activeStep === 0 || isProcessing} onClick={handleBack} variant="outlined">
             {t('tools.importWizard.prevStep', 'Back')}
           </Button>
-          <Button variant="contained" onClick={handleNext} disabled={isProcessing}>
+          <Button
+            variant="contained"
+            onClick={handleNext}
+            disabled={isProcessing || (activeStep === 3 && (activeJob?.error_rows ?? 0) > 0)}
+          >
             {activeStep === 3
               ? t('tools.importWizard.startImport', 'Execute Import')
               : t('tools.importWizard.nextStep', 'Next Step')}

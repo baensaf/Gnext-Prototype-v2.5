@@ -41,6 +41,13 @@ export class Printer {
   @Column({ type: 'boolean', default: false })
   kitchen_default: boolean;
 
+  /**
+   * The branch's one printer for the receipts, bills and courier slips of a till with no
+   * printer of its own (K-23). The first receipt printer a branch adds gets it (migration 135).
+   */
+  @Column({ type: 'boolean', default: false })
+  receipt_default: boolean;
+
   /** Prints every line of every order on one chit, for the pass: whoever bags the order. */
   @Column({ type: 'boolean', default: false })
   prints_whole_order: boolean;

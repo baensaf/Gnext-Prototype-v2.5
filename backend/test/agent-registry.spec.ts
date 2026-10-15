@@ -81,6 +81,7 @@ describe('Agent registry', () => {
     let audit: { write: jest.Mock };
     let service: AgentRegistryService;
     let sessions: AgentSessionsService;
+    let commands: { failOpenForBranch: jest.Mock };
 
     beforeEach(() => {
       agentRepo = repo();
@@ -88,7 +89,8 @@ describe('Agent registry', () => {
       branchRepo = repo();
       audit = { write: jest.fn() };
       sessions = new AgentSessionsService();
-      service = new AgentRegistryService(agentRepo as any, codeRepo as any, branchRepo as any, audit as any, sessions);
+      commands = { failOpenForBranch: jest.fn().mockResolvedValue(0) };
+      service = new AgentRegistryService(agentRepo as any, codeRepo as any, branchRepo as any, audit as any, sessions, commands as any);
     });
 
     it('hands out a code once and keeps only its hash', async () => {
@@ -167,6 +169,8 @@ describe('Agent registry', () => {
 
       expect(close).toHaveBeenCalledWith(4003, 'AGENT_REVOKED');
       expect(sessions.isConnected(agentId)).toBe(false);
+      // Its waiting print jobs fail now (K-22).
+      expect(commands.failOpenForBranch).toHaveBeenCalledWith(tenantId, branchId, 'print.job', 'AGENT_REVOKED', expect.any(String));
       expect(revoked.connected).toBe(false);
 
       expect(agentRepo.findOne.mock.calls[0][0].where).toEqual({ id: agentId, tenant_id: tenantId });

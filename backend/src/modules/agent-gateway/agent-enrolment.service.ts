@@ -8,6 +8,7 @@ import { generateDeviceKey, hashSecret, normaliseEnrolmentCode } from './agent-c
 import { enrolmentCodeState } from './agent-registry.service';
 import { AGENT_CLOSE, SUPPORTED_PROTOCOL_VERSIONS } from './agent-protocol';
 import { AgentSessionsService } from './agent-sessions.service';
+import { AGENT_REVOKED_MESSAGE, AgentCommandsService } from './agent-commands.service';
 
 /** Failed codes allowed per client address in the window (protocol §3.3). */
 const MAX_FAILED_ENROLMENTS = 5;
@@ -109,6 +110,7 @@ export class AgentEnrolmentService {
     private readonly dataSource: DataSource,
     private readonly sessions: AgentSessionsService,
     private readonly auditWriter: AuditWriter,
+    private readonly commands: AgentCommandsService,
   ) {}
 
   /**
@@ -237,6 +239,8 @@ export class AgentEnrolmentService {
     // After the commit: the old PC's socket closes only once its revocation is on record.
     if (result.replaced) {
       this.sessions.closeAgent(result.replaced.id, AGENT_CLOSE.REVOKED, 'AGENT_REVOKED');
+      // What waited for the old PC fails rather than print later on the new one (K-22).
+      await this.commands.failOpenForBranch(result.replaced.tenant_id, result.replaced.branch_id, 'print.job', 'AGENT_REVOKED', AGENT_REVOKED_MESSAGE);
     }
 
     return {
