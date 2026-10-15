@@ -17,6 +17,8 @@ import { CreditService } from '../customer/credit.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { RefundCreateDto, PaidOrderCancelDto } from './dtos/refund.dto';
 import { nextBranchNumber } from '../../common/utils/sequence.util';
+import { TaraPayService } from '../tara/tara-pay.service';
+import { TARA_KIND } from '../tara/tara.service';
 
 /** What is left to give back of one payment, and the method it was taken by. */
 interface PaymentShare {
@@ -44,6 +46,7 @@ export class RefundService {
     private readonly creditService: CreditService,
     private readonly auditWriter: AuditWriter,
     private readonly dataSource: DataSource,
+    private readonly taraPay: TaraPayService,
   ) {}
 
   private async generateRefundNumber(tenantId: string, em: EntityManager, branchId?: string | null): Promise<string> {
@@ -229,7 +232,16 @@ export class RefundService {
       throw new BadRequestException(`Order ${orderId} has no refundable balance available`);
     }
 
-    const kindOf = (s: PaymentShare) => s.method?.kind || s.payment.method_kind || 'CASH';
+    const businessDate = (await loadBusinessClock(em, tenantId, order.branch_id)).today();
+    // Tara takes a sale back itself (ReversePurchase) on the day it was made. A Tara sale from an
+    // earlier day is paid back in cash from the drawer, like any refund Tara no longer covers.
+    const cashMethod = legs.some((s) => (s.method?.kind || s.payment.method_kind) === TARA_KIND && s.payment.business_date !== businessDate)
+      ? await em.findOne(PaymentMethod, { where: { tenant_id: tenantId, kind: 'CASH', is_active: true } })
+      : null;
+    const kindOf = (s: PaymentShare) => {
+      const kind = s.method?.kind || s.payment.method_kind || 'CASH';
+      return kind === TARA_KIND && s.payment.business_date !== businessDate ? 'CASH' : kind;
+    };
 
     // Checked before any refund row exists, so the drawer is known to be open when the cash
     // goes back out of it.
@@ -240,7 +252,6 @@ export class RefundService {
     // shift: the shift's report lists it with the cash refunds, so the close shows every
     // refund the till made.
     const tillShift = drawer ?? (await this.shiftService.resolveDrawer(tenantId, order.branch_id, order.terminal_id));
-    const businessDate = (await loadBusinessClock(em, tenantId, order.branch_id)).today();
 
     const refunds: Refund[] = [];
     let total = '0.0000';
@@ -253,7 +264,8 @@ export class RefundService {
           order_id: order.id,
           refund_number: await this.generateRefundNumber(tenantId, em, order.branch_id),
           status: 'SUCCEEDED',
-          method_id: share.payment.method_id,
+          // A Tara sale from an earlier day goes back in cash, and is recorded as the cash it is.
+          method_id: kind === 'CASH' && cashMethod && share.method?.kind === TARA_KIND ? cashMethod.id : share.payment.method_id,
           method_kind: kind,
           amount: share.remaining,
           currency_code: order.currency_code || 'IRR',
@@ -279,7 +291,10 @@ export class RefundService {
         }),
       );
 
-      if (kind === 'CASH') {
+      if (kind === TARA_KIND) {
+        // Same day: Tara cancels the sale and the customer's credit comes back.
+        await this.taraPay.reverse(em, share.payment, { userId: ctx.userId, correlationId: ctx.correlationId });
+      } else if (kind === 'CASH') {
         // Handed back from the drawer at the register doing the refund.
         await this.shiftService.recordCashRefundMovement(tenantId, drawer!.id, refund.id, refund.amount, ctx.userId, em);
       } else if (kind === 'CUSTOMER_CREDIT' || kind === 'WALLET') {

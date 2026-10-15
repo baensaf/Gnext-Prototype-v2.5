@@ -11,6 +11,7 @@ import { CustomerModule } from '../customer/customer.module';
 import { CashierModule } from '../cashier/cashier.module';
 import { ApprovalModule } from '../approval/approval.module';
 import { AuditModule } from '../audit/audit.module';
+import { TaraModule } from '../tara/tara.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { AuditModule } from '../audit/audit.module';
     CashierModule,
     ApprovalModule,
     AuditModule,
+    TaraModule,
   ],
   providers: [RefundService],
   controllers: [RefundController],

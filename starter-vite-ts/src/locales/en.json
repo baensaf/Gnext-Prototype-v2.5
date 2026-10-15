@@ -279,8 +279,21 @@
         "agentOffline": "The branch agent is offline, so the card terminal never got the charge. The customer was not charged.",
         "declined": "The card was declined.",
         "cancelled": "The card payment was cancelled on the terminal.",
-        "slipRequired": "Enter the slip reference to record the card."
-      }
+        "slipRequired": "Enter the slip reference to record the card.",
+        "taraBarcode": "Scan or type the barcode on the customer’s Tara app.",
+        "taraNoReply": "Tara did not answer. Try again.",
+        "taraCancelled": "Tara cancelled the hold before it was confirmed. Take the payment again.",
+        "taraUnavailable": "This till cannot take Tara. Head office sets it up under Settings → Tara.",
+        "taraDeclined": "Tara refused:"
+      },
+      "tara": "Tara",
+      "taraHint": "Customer’s Tara credit",
+      "taraBarcode": "Tara barcode",
+      "taraBarcodeHelp": "Scan or type the barcode on the customer’s Tara app.",
+      "taraWaiting": "Waiting for Tara to confirm {{amount}}… Gnext is asking Tara by itself.",
+      "taraStuck": "Tara has not answered about {{amount}}. A manager can check it with Tara from Payments.",
+      "taraCloseWaitingTitle": "Tara still answering",
+      "taraCloseWaiting": "Tara has not confirmed this payment yet. If you close now, Gnext keeps asking Tara and the order is paid once it answers."
     },
     "directTerminalPay": "Direct Terminal Pay (PC-POS)",
     "itemSuspended": "86'd",
@@ -1288,7 +1301,13 @@
     },
     "instrument": "Payment instrument",
     "amount": "Amount",
-    "reference": "Reference"
+    "reference": "Reference",
+    "taraWaiting": "Waiting for Tara",
+    "taraStuck": "Tara did not answer",
+    "taraCheck": "Check with Tara",
+    "taraChecked": "Tara answered; the payment is updated.",
+    "taraStillWaiting": "Tara still has not answered. Gnext keeps asking.",
+    "taraCheckFailed": "Could not check with Tara."
   },
   "refunds": {
     "reason": "Reason",
@@ -2430,7 +2449,8 @@
         "CARD_POS": "EFT POS Terminal",
         "CUSTOMER_CREDIT": "Customer Credit Account",
         "NETWORK_POS": "Network IP-POS",
-        "MOBILE_POS": "Mobile POS (Courier)"
+        "MOBILE_POS": "Mobile POS (Courier)",
+        "TARA": "Tara credit"
       }
     },
     "approvalsPage": {
@@ -2693,6 +2713,10 @@
         "dataReset": {
           "title": "Data reset",
           "description": "Wipe transactions, reload the demo data and reset number sequences."
+        },
+        "tara": {
+          "title": "Tara",
+          "description": "Paying with Tara credit at the till: the Tara login, each branch’s Tara code and terminals, and product groups."
         }
       }
     },
@@ -2798,6 +2822,60 @@
         "NUMBER": "Number",
         "DATE": "Date",
         "CHOICE": "Choice"
+      }
+    },
+    "tara": {
+      "title": "Tara",
+      "loadFailed": "Could not load the Tara setup.",
+      "saveFailed": "Tara refused the change.",
+      "connection": {
+        "title": "Tara account",
+        "subtitle": "The username and password Tara gave the chain. Connecting turns on Tara at the tills.",
+        "connected": "Connected",
+        "notConnected": "Not connected",
+        "username": "Username",
+        "password": "Password",
+        "passwordKept": "Leave empty to keep the saved password.",
+        "connect": "Connect",
+        "reconnect": "Connect again",
+        "disconnect": "Disconnect",
+        "done": "Connected to Tara."
+      },
+      "branches": {
+        "title": "Branches and terminals",
+        "subtitle": "Enter the code Tara gave each branch. Tara sends one terminal per till; each till charges through its own.",
+        "branch": "Branch",
+        "code": "Tara branch code",
+        "codePlaceholder": "e.g. 4417",
+        "terminals": "Tara terminal → till",
+        "refetch": "Fetch again",
+        "noTerminals": "Tara sent no terminals for this code.",
+        "addCodeFirst": "No Tara code yet: this branch’s tills do not offer Tara.",
+        "noTill": "No till"
+      },
+      "groups": {
+        "title": "Product groups",
+        "subtitle": "Tara asks for each item’s product group on the invoice. Pick Tara’s group for each menu category.",
+        "refresh": "Fetch Tara’s groups",
+        "refreshed": "Tara’s product groups are up to date.",
+        "connectFirst": "Connect the Tara account first.",
+        "default": "Any other category",
+        "useDefault": "Same as any other",
+        "saved": "Product groups saved."
+      },
+      "demo": {
+        "title": "Test barcodes",
+        "subtitle": "The Tara in this prototype is simulated. These barcodes are the customers it knows.",
+        "barcode": "Barcode",
+        "outcome": "What happens",
+        "limit": "Credit",
+        "outcomes": {
+          "APPROVED": "Approved",
+          "NOT_ELIGIBLE": "Refused: may not buy at this store",
+          "LOW_LIMIT": "Refused when the amount is over the credit",
+          "REQUEST_NO_REPLY": "Hold answer lost; Gnext finds it with an inquiry",
+          "VERIFY_NO_REPLY": "Confirm answer lost; Gnext finds it with an inquiry"
+        }
       }
     }
   },

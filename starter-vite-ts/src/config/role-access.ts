@@ -74,6 +74,8 @@ const CHAIN_ONLY_PATHS = [
   '/app/settings/discount-authorizations',
   '/app/settings/payments',
   '/app/settings/payments-refunds',
+  // The chain's Tara login, branch codes and product groups
+  '/app/settings/tara',
   '/app/settings/reasons',
   // The customer record is the chain's, so its questions are asked the same at every branch.
   '/app/settings/customer-fields',

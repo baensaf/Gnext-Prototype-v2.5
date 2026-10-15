@@ -199,6 +199,17 @@ export function useSettingsCatalogue(): SettingCategory[] {
           path: '/app/settings/payments-refunds',
           tags: ['payments', 'tender', 'eft', 'cards', 'bank account', 'پرداخت', 'کارتخوان', 'پوز', 'حساب بانکی'],
         },
+        {
+          id: 'tara',
+          scope: 'ORG',
+          title: t('settings.hub.items.tara.title', 'Tara'),
+          description: t(
+            'settings.hub.items.tara.description',
+            'Paying with Tara credit at the till: the Tara login, each branch’s Tara code and terminals, and product groups.'
+          ),
+          path: '/app/settings/tara',
+          tags: ['tara', 'bnpl', 'credit', 'installments', 'تارا', 'اعتبار', 'خرید اعتباری'],
+        },
       ],
     },
     {

@@ -13,6 +13,7 @@ import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { ShiftService } from '../src/modules/cashier/shift.service';
 import { CreditService } from '../src/modules/customer/credit.service';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+import { TaraPayService } from '../src/modules/tara/tara-pay.service';
 
 describe('Refunds & Paid-Order Cancellation Suite (R16, simplified 2026-10-10)', () => {
   let service: RefundService;
@@ -117,6 +118,8 @@ describe('Refunds & Paid-Order Cancellation Suite (R16, simplified 2026-10-10)',
         { provide: CreditService, useValue: creditService },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: DataSource, useValue: dataSource },
+        // Tara is not on these orders; its services are not reached.
+        { provide: TaraPayService, useValue: {} },
       ],
     }).compile();
 
