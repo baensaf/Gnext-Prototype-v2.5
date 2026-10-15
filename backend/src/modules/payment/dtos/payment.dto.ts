@@ -62,6 +62,12 @@ export class PaymentProcessDto {
   @IsOptional()
   @IsBoolean()
   offTerminal?: boolean;
+
+  /** Tara: the barcode on the customer's Tara app, scanned or typed at the till. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  taraBarcode?: string;
 }
 
 export class PaymentCorrectionDto {

@@ -42,6 +42,8 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   // discount limits, payment methods, reason codes, note templates
   '/app/settings': 'V1',
   '/app/settings/data-reset': 'F',
+  // Tara (buy now, pay later) at the till: the chain's Tara login, branch codes and product groups
+  '/app/settings/tara': 'V3',
   '/app/delivery': 'V1',
   // Categories, products with sizes, add-on groups and combos, availability (the 86 stop)
   // and the product and category import
@@ -70,6 +72,8 @@ export const FEATURE_LABELS = {
   'pos.wallet': 'V2',
   'pos.familyDiscount': 'V2',
   'pos.coupon': 'V2',
+  // Paying with Tara: the customer's barcode, held and confirmed with Tara (2026-10-15)
+  'pos.tara': 'V3',
   // Delivery platforms (Snappfood) come with the incoming orders, in V2.
   // The pay panel saying a delivery order's remainder goes with the courier
   'pos.pay.courierCollects': 'V2',
@@ -103,6 +107,8 @@ export const FEATURE_LABELS = {
   'agents.releases': 'V2',
   'printers.simulated': 'F',
   'printQueue.simulate': 'F',
+  // The test barcodes the simulated Tara knows
+  'tara.simulated': 'F',
   // Settings. Money is shown in Toman in V1; the Omani rial and the US dollar come in V7.
   'settings.incomingOrders': 'V2',
   // Kiosk (V3): sizes and add-ons ship with the kiosk.

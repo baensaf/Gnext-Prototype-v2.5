@@ -17,6 +17,7 @@ import { AuditModule } from '../audit/audit.module';
 import { OrderModule } from '../order/order.module';
 import { AgentGatewayModule } from '../agent-gateway/agent-gateway.module';
 import { AgentPaymentsService } from './agent-payments.service';
+import { TaraModule } from '../tara/tara.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { AgentPaymentsService } from './agent-payments.service';
     // A paid takeaway order completes once its payment lands.
     OrderModule,
     AgentGatewayModule,
+    TaraModule,
   ],
   providers: [PaymentService, AgentPaymentsService],
   controllers: [PaymentController],

@@ -35,6 +35,8 @@ import { AgentConfigService } from '../agent-gateway/agent-config.service';
 import { parseDeviceConnection } from '../../common/utils/device-connection.util';
 import { nextBranchNumber } from '../../common/utils/sequence.util';
 import { nextCode, typedCode } from '../../common/utils/next-code.util';
+import { TaraPayService } from '../tara/tara-pay.service';
+import { TARA_KIND, TaraService } from '../tara/tara.service';
 
 @Injectable()
 export class PaymentService {
@@ -52,6 +54,8 @@ export class PaymentService {
     private readonly dataSource: DataSource,
     private readonly agentPayments: AgentPaymentsService,
     private readonly agentConfig: AgentConfigService,
+    private readonly taraPay: TaraPayService,
+    private readonly tara: TaraService,
   ) {}
 
   private async generatePaymentNumber(tenantId: string, em: EntityManager, branchId?: string | null): Promise<string> {
@@ -74,6 +78,7 @@ export class PaymentService {
 
     const total = await qb.getCount();
     const rows = await qb
+      .leftJoin('tara_purchase', 't', 't.payment_id = p.id')
       .select([
         'p.id AS id',
         'p.payment_number AS payment_number',
@@ -88,6 +93,8 @@ export class PaymentService {
         'p.business_date AS business_date',
         'p.initiated_at AS initiated_at',
         'p.posted_at AS posted_at',
+        't.awaiting AS tara_awaiting',
+        't.stuck AS tara_stuck',
       ])
       .orderBy('COALESCE(p.posted_at, p.initiated_at)', 'DESC')
       .addOrderBy('p.payment_number', 'DESC')
@@ -99,10 +106,23 @@ export class PaymentService {
   }
 
   async getOrderPayments(tenantId: string, orderId: string) {
-    return await this.paymentRepo.find({
+    const payments = await this.paymentRepo.find({
       where: { tenant_id: tenantId, order_id: orderId },
       relations: ['allocations', 'attempts'],
       order: { initiated_at: 'ASC' },
+    });
+    // A Tara payment carries where its sale stands with Tara: the pay panel says so while it waits.
+    const tara = await this.taraPay.purchasesFor(
+      tenantId,
+      payments.filter((p) => p.method_kind === TARA_KIND).map((p) => p.id),
+    );
+    return payments.map((p) => {
+      const t = tara.get(p.id);
+      return t
+        ? Object.assign(p, {
+            tara: { step: t.step, awaiting: t.awaiting, stuck: t.stuck, mobile: t.mobile, trace_number: t.trace_number, reference_number: t.reference_number },
+          })
+        : p;
     });
   }
 
@@ -195,6 +215,14 @@ export class PaymentService {
           em,
           method.kind === 'WALLET' ? 'WALLET' : 'CREDIT',
         );
+      }
+
+      // Tara is refused here, before an intent exists, when this till cannot take it.
+      if (method.kind === TARA_KIND) {
+        const found = await this.tara.terminalFor(em, tenantId, order.branch_id, order.terminal_id);
+        if ('block' in found) {
+          throw new BadRequestException({ code: `TARA_${found.block}`, title: 'Tara', detail: 'Tara cannot be taken at this till: see Settings → Tara.' });
+        }
       }
 
       // Mobile POS device metadata validation
@@ -311,6 +339,9 @@ export class PaymentService {
           em,
         );
         payment.status = 'SUCCEEDED';
+      } else if (methodKind === TARA_KIND) {
+        // Trace, hold and verify with Tara; it books the payment itself when Tara confirms.
+        return await this.taraPay.charge(em, payment, order, dto.taraBarcode, { userId, correlationId });
       } else {
         // A card charged by hand is recorded from its slip: without the slip's reference there is
         // nothing to find the charge by later.
@@ -487,6 +518,19 @@ export class PaymentService {
 
       if (payment.status !== 'SUCCEEDED') {
         throw new BadRequestException(`Only SUCCEEDED payments can be reversed. Current status: ${payment.status}`);
+      }
+
+      // Tara gives the money back itself, through ReversePurchase, on the day of the sale only.
+      if (payment.method_kind === TARA_KIND) {
+        const ofOrder = await em.findOneOrFail(OrderHeader, { where: { id: payment.order_id, tenant_id: tenantId } });
+        if (!(await this.taraPay.reversibleToday(em, payment, ofOrder.branch_id))) {
+          throw new BadRequestException({
+            code: 'TARA_REVERSE_SAME_DAY',
+            title: 'Tara',
+            detail: 'Tara takes a sale back only on the day it was made. Refund the order instead.',
+          });
+        }
+        await this.taraPay.reverse(em, payment, { userId, correlationId });
       }
 
       payment.status = 'REVERSED';

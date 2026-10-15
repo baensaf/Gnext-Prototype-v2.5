@@ -256,7 +256,7 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
     it('refuses a payment at the till, since Snappfood collects', async () => {
       const txEm = { findOne: jest.fn().mockResolvedValue(snappfoodOrder()) };
       const dataSource: any = { transaction: jest.fn(async (cb) => await cb(txEm)) };
-      const payments = new PaymentService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, dataSource, {} as any, {} as any);
+      const payments = new PaymentService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, dataSource, {} as any, {} as any, {} as any, {} as any);
 
       const refused = await payments.createPaymentIntent('t-1', { orderId: 'order-1' } as any).catch((e) => e);
 
@@ -266,7 +266,7 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
     it('refuses a refund from the till, since Snappfood refunds its customers', async () => {
       const txEm = { findOne: jest.fn().mockResolvedValue(snappfoodOrder({ state: 'COMPLETED', status: 'COMPLETED' })) };
       const dataSource: any = { transaction: jest.fn(async (cb) => await cb(txEm)) };
-      const refunds = new RefundService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, dataSource);
+      const refunds = new RefundService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any, dataSource, {} as any);
 
       const refused = await refunds.refundOrder('t-1', 'order-1', { reason: 'cold' }).catch((e) => e);
 

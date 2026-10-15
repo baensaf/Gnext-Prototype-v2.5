@@ -31,6 +31,7 @@ import { CouponsPage } from 'src/pages/customers/coupons';
 import { DataResetPage } from 'src/pages/tools/data-reset';
 import { RolesMatrixPage } from 'src/pages/settings/roles';
 import { EndShiftPage } from 'src/pages/cashier/end-shift';
+import { TaraSettingsPage } from 'src/pages/settings/tara';
 import { BranchesPage } from 'src/pages/operations/branches';
 import { DeliveryPage } from 'src/pages/operations/delivery';
 import { PaymentsPage } from 'src/pages/operations/payments';
@@ -282,6 +283,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/roles', element: <RolesMatrixPage /> },
       { path: 'settings/discount-authorizations', element: <DiscountAuthorizationsPage /> },
       { path: 'settings/payments-refunds', element: <PaymentSettingsPage /> },
+      { path: 'settings/tara', element: <TaraSettingsPage /> },
       { path: 'settings/payments', element: <Navigate to="/app/settings/payments-refunds" replace /> },
       { path: 'settings/approvals', element: <ApprovalsSettingsPage /> },
       { path: 'settings/reasons', element: <ReasonCodesPage /> },

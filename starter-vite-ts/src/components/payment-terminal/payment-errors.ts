@@ -18,6 +18,12 @@ const PAYMENT_ERROR_KEYS: Record<string, string> = {
   DECLINED: 'pos.pay.errors.declined',
   CANCELLED: 'pos.pay.errors.cancelled',
   OFF_TERMINAL_REFERENCE_REQUIRED: 'pos.pay.errors.slipRequired',
+  TARA_BARCODE_REQUIRED: 'pos.pay.errors.taraBarcode',
+  TARA_NO_REPLY: 'pos.pay.errors.taraNoReply',
+  TARA_CANCELLED: 'pos.pay.errors.taraCancelled',
+  TARA_NOT_CONNECTED: 'pos.pay.errors.taraUnavailable',
+  TARA_NO_BRANCH_CODE: 'pos.pay.errors.taraUnavailable',
+  TARA_NO_TERMINAL: 'pos.pay.errors.taraUnavailable',
 };
 
 /** The locale key for a known code, or null when the server's code has no words here yet. */
@@ -25,6 +31,8 @@ export const paymentErrorKey = (code?: string | null) => (code ? PAYMENT_ERROR_K
 
 /** What to show for a failed payment call: the words for its code, else the screen's own fallback. */
 export const paymentErrorText = (t: TFunction, err: any, fallback: string) => {
+  // Tara says why in its own words (Persian); they are shown as Tara gave them.
+  if (err?.code === 'TARA_DECLINED' && err?.detail) return `${t('pos.pay.errors.taraDeclined')} ${err.detail}`;
   const key = paymentErrorKey(err?.code);
   return key ? t(key) : fallback;
 };

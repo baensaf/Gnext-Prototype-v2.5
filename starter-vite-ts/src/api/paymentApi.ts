@@ -59,6 +59,8 @@ export interface PaymentRecord {
   failure_message?: string;
   /** The card terminal never confirmed this charge; it stays PROCESSING until someone checks. */
   needs_terminal_check?: boolean;
+  /** A Tara payment: where its sale stands with Tara. */
+  tara?: TaraSale | null;
   initiated_at: string;
   posted_at?: string;
   // Legacy UI aliases
@@ -67,6 +69,17 @@ export interface PaymentRecord {
 }
 
 export type Payment = PaymentRecord;
+
+/** Gnext's side of a Tara sale: the call that got no answer while the server asks Tara about it. */
+export interface TaraSale {
+  step: 'TRACE' | 'REQUEST' | 'VERIFY' | 'DONE' | 'FAILED' | 'REVERSED';
+  awaiting: 'REQUEST' | 'VERIFY' | null;
+  /** Two minutes of asking got nothing: a manager checks with Tara from Payments. */
+  stuck: boolean;
+  mobile?: string | null;
+  trace_number?: string | null;
+  reference_number?: string | null;
+}
 
 /** A row of the Payments page: a payment with the number of the order it was taken against. */
 export interface PaymentListRow {
@@ -83,6 +96,9 @@ export interface PaymentListRow {
   business_date: string;
   initiated_at: string;
   posted_at?: string | null;
+  /** Tara: the call still waiting for an answer, and whether the server gave up asking. */
+  tara_awaiting?: string | null;
+  tara_stuck?: boolean | null;
 }
 
 /** How long the till waits for the customer and the bank at the card terminal. */
@@ -250,7 +266,7 @@ export const paymentApi = {
 
   processPayment: async (
     id: string,
-    data?: { scenarioId?: string; externalReference?: string; receiptNumber?: string; offTerminal?: boolean },
+    data?: { scenarioId?: string; externalReference?: string; receiptNumber?: string; offTerminal?: boolean; taraBarcode?: string },
   ): Promise<PaymentRecord> => {
     const res = await httpClient.post(`/api/v1/payments/${id}/process`, data || {});
     return {
@@ -305,6 +321,8 @@ export const paymentApi = {
     notes?: string;
     /** Charged by hand on another card reader: recorded, not sent to the branch's terminal. */
     off_terminal?: boolean;
+    /** Tara: the barcode on the customer's Tara app. */
+    tara_barcode?: string;
     /** Sent as `Idempotency-Key` on the call that makes the payment's intent (the first of its two calls). */
     idempotency_key?: string;
   }): Promise<{ payment: PaymentRecord; order: any }> => {
@@ -317,12 +335,16 @@ export const paymentApi = {
       },
       { idempotencyKey: data.idempotency_key }
     );
-    const processed = await awaitTerminal(
-      await paymentApi.processPayment(
-        intent.id,
-        data.off_terminal ? { offTerminal: true, externalReference: data.reference_number } : {}
-      )
+    const sent = await paymentApi.processPayment(
+      intent.id,
+      data.tara_barcode !== undefined
+        ? { taraBarcode: data.tara_barcode }
+        : data.off_terminal
+          ? { offTerminal: true, externalReference: data.reference_number }
+          : {}
     );
+    // A Tara sale still waiting on Tara is followed by the pay panel, which says so; only a refusal stops here.
+    const processed = sent.method_kind === 'TARA' && sent.status === 'PROCESSING' ? sent : await awaitTerminal(sent);
     const resOrder = await httpClient.get(`/api/v1/orders/${data.order_id}`);
     const orderData = resOrder.data ? {
       ...resOrder.data,

@@ -15,6 +15,8 @@ import { CreditService } from '../src/modules/customer/credit.service';
 import { AgentPaymentsService } from '../src/modules/payment/agent-payments.service';
 import { AgentConfigService } from '../src/modules/agent-gateway/agent-config.service';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
+import { TaraPayService } from '../src/modules/tara/tara-pay.service';
+import { TaraService } from '../src/modules/tara/tara.service';
 
 describe('Payments & Split Settlement Suite (R15)', () => {
   let service: PaymentService;
@@ -123,6 +125,9 @@ describe('Payments & Split Settlement Suite (R15)', () => {
           useValue: { terminalFor: jest.fn().mockResolvedValue(null), assertNoChargeInFlight: jest.fn(), flush: jest.fn() },
         },
         { provide: AgentConfigService, useValue: { pushToBranch: jest.fn() } },
+        // Tara is not on these orders; its services are not reached.
+        { provide: TaraPayService, useValue: { purchasesFor: jest.fn().mockResolvedValue(new Map()) } },
+        { provide: TaraService, useValue: {} },
       ],
     }).compile();
 

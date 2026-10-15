@@ -25,8 +25,11 @@ import { moneyUnit } from 'src/utils/currency';
 import { MoneyUtil } from 'src/utils/money.util';
 import { fDateTime } from 'src/utils/format-time';
 
+import { taraApi } from 'src/api/taraApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { useScopedBranchId } from 'src/contexts/branch-context';
+
+import { toast } from 'src/components/snackbar';
 
 const PAGE_SIZES = [25, 50, 100];
 
@@ -44,6 +47,7 @@ export function PaymentsPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
   const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -64,6 +68,22 @@ export function PaymentsPage() {
   useEffect(() => {
     setPage(0);
   }, [branchId]);
+
+  /** Tara never answered this sale: ask it again now. */
+  const checkTara = async (id: string) => {
+    setChecking(id);
+    try {
+      const after = await taraApi.check(id);
+      toast[after?.status === 'PROCESSING' ? 'warning' : 'success'](
+        after?.status === 'PROCESSING' ? t('payments.taraStillWaiting') : t('payments.taraChecked')
+      );
+      await loadData();
+    } catch (err: any) {
+      toast.error(err?.detail || err?.message || t('payments.taraCheckFailed'));
+    } finally {
+      setChecking(null);
+    }
+  };
 
   return (
     <Box>
@@ -121,10 +141,20 @@ export function PaymentsPage() {
                   <TableCell><code>{tx.reference || '-'}</code></TableCell>
                   <TableCell>
                     <Chip
-                      label={tx.status}
+                      label={
+                        tx.tara_awaiting
+                          ? t(tx.tara_stuck ? 'payments.taraStuck' : 'payments.taraWaiting')
+                          : tx.status
+                      }
                       color={tx.status === 'SUCCEEDED' ? 'success' : tx.status === 'FAILED' ? 'error' : 'warning'}
                       size="small"
                     />
+                    {/* A Tara sale that never got an answer: a manager asks Tara again. */}
+                    {tx.tara_awaiting && tx.tara_stuck && (
+                      <Button size="small" sx={{ ml: 1 }} disabled={checking === tx.id} onClick={() => checkTara(tx.id)}>
+                        {t('payments.taraCheck')}
+                      </Button>
+                    )}
                   </TableCell>
                   <TableCell dir="ltr">{fDateTime(tx.posted_at || tx.initiated_at)}</TableCell>
                 </TableRow>

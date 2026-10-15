@@ -29,6 +29,7 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { newIdempotencyKey } from 'src/utils/idempotency';
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
+import { taraApi } from 'src/api/taraApi';
 import { orderApi } from 'src/api/orderApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { printingApi } from 'src/api/printingApi';
@@ -74,16 +75,16 @@ const availableCreditOf = (customer?: Customer | null) => {
   return positive(MoneyUtil.add(wholeRials(account.credit_limit), wholeRials(account.current_balance)));
 };
 
-/** What is typed in the four fields, in tomans. Card is the rest until the cashier types in it. */
-type Fields = { cash: string; wallet: string; credit: string; card: string; cardTyped: boolean };
-type FieldName = 'cash' | 'wallet' | 'credit' | 'card';
+/** What is typed in the fields, in tomans. Card is the rest until the cashier types in it. */
+type Fields = { cash: string; wallet: string; credit: string; tara: string; card: string; cardTyped: boolean };
+type FieldName = 'cash' | 'wallet' | 'credit' | 'tara' | 'card';
 
-const EMPTY: Fields = { cash: '', wallet: '', credit: '', card: '', cardTyped: false };
+const EMPTY: Fields = { cash: '', wallet: '', credit: '', tara: '', card: '', cardTyped: false };
 
 /** How often the dialog asks again while a card charge waits on the terminal. */
 const WAITING_POLL_MS = 4000;
 
-/** A card charge the terminal has not answered: the order takes no other payment until it is. */
+/** A card charge the terminal has not answered, or a Tara sale Tara has not: the order takes no other payment until it is. */
 const isWaitingCharge = (p: Payment) => p.status === 'PROCESSING';
 
 interface CheckoutModalProps {
@@ -123,12 +124,18 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   // never sent to this till's terminal.
   const [offTerminal, setOffTerminal] = useState(false);
   const [slipRef, setSlipRef] = useState('');
-  // The four boxes, for moving the cursor to the one a label filled.
+  // Tara (V3): whether this till can take it, and the barcode on the customer's Tara app.
+  const [taraOpen, setTaraOpen] = useState(false);
+  const [taraBarcode, setTaraBarcode] = useState('');
+  // The last Tara payment is still with Tara: the card waits for it.
+  const taraWaitingRef = useRef(false);
+  // The boxes, for moving the cursor to the one a label filled.
   const cashInput = useRef<HTMLInputElement>(null);
   const walletInput = useRef<HTMLInputElement>(null);
   const creditInput = useRef<HTMLInputElement>(null);
+  const taraInput = useRef<HTMLInputElement>(null);
   const cardInput = useRef<HTMLInputElement>(null);
-  const inputs = { cash: cashInput, wallet: walletInput, credit: creditInput, card: cardInput };
+  const inputs = { cash: cashInput, wallet: walletInput, credit: creditInput, tara: taraInput, card: cardInput };
   // Closing while a card charge waits on the terminal asks first.
   const [confirmClose, setConfirmClose] = useState(false);
   // Cash was handed over beyond the bill on this order, and the screen waits for the cashier.
@@ -142,6 +149,8 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const cardMethod = paymentMethods.find((m) => CARD_KINDS.includes(m.kind));
   const creditMethod = paymentMethods.find((m) => m.kind === 'CUSTOMER_CREDIT');
   const walletMethod = paymentMethods.find((m) => m.kind === 'WALLET');
+  const taraMethod = paymentMethods.find((m) => m.kind === 'TARA');
+  const canUseTara = !!taraMethod && taraOpen;
 
   const due = wholeRials(order?.due_amount);
   const isFullyPaid = order ? MoneyUtil.isZero(order.due_amount) : false;
@@ -151,6 +160,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   // A charge on the terminal that nobody has answered: it comes first, and nothing else is paid.
   const waitingCharges = payments.filter(isWaitingCharge);
   const waiting = waitingCharges.length > 0;
+  const taraWaiting = waitingCharges.some((p) => p.method_kind === 'TARA');
 
   /** The fields for what is left: the wallet offered once per order, card for the rest. */
   const fieldsFor = (o: OrderHeader | null, balance: string, paid: Payment[]): Fields => {
@@ -164,6 +174,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       cash: '',
       wallet: MoneyUtil.isZero(wallet) ? '' : toToman(wallet),
       credit: '',
+      tara: '',
       card: MoneyUtil.isZero(rest) ? '' : toToman(rest),
       cardTyped: false,
     };
@@ -179,7 +190,11 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         paymentApi.getOrderPayments(orderId),
       ]);
       const active = pms.filter((m) => m.is_active);
-      const customer = o.customer_id ? await customerApi.getCustomer(o.customer_id).catch(() => null) : null;
+      const [customer, taraTill] = await Promise.all([
+        o.customer_id ? customerApi.getCustomer(o.customer_id).catch(() => null) : null,
+        active.some((m) => m.kind === 'TARA') ? taraApi.till(orderId).catch(() => null) : null,
+      ]);
+      setTaraOpen(!!taraTill?.available);
       const available = availableCreditOf(customer);
       const held = walletOf(customer);
       setOrder(o);
@@ -207,6 +222,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     setChangeDue(null);
     setOffTerminal(false);
     setSlipRef('');
+    setTaraBarcode('');
     setFields(EMPTY);
     changeGiven.current = false;
     finishLater.current = false;
@@ -223,9 +239,10 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   const cash = rialsOf(fields.cash);
   const wallet = rialsOf(fields.wallet);
   const credit = rialsOf(fields.credit);
+  const tara = rialsOf(fields.tara);
   const card = rialsOf(fields.card);
-  // Wallet and credit together: neither can be handed over beyond the bill.
-  const customerFunds = MoneyUtil.add(wallet, credit);
+  // Wallet, credit and Tara together: none can be handed over beyond the bill.
+  const customerFunds = MoneyUtil.add(MoneyUtil.add(wallet, credit), tara);
   // Below zero is cash handed over beyond the bill.
   const remaining = MoneyUtil.subtract(due, MoneyUtil.add(MoneyUtil.add(cash, customerFunds), card));
 
@@ -238,12 +255,13 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     setError(null);
     setFields((prev) => {
       let value = digitsOnly(text);
-      const cap = name === 'credit' ? minOf(creditAvailable, due) : name === 'wallet' ? minOf(walletHeld, due) : null;
+      const cap =
+        name === 'credit' ? minOf(creditAvailable, due) : name === 'wallet' ? minOf(walletHeld, due) : name === 'tara' ? due : null;
       if (cap !== null && MoneyUtil.greaterThan(rialsOf(value), cap)) value = toToman(cap);
       const next = { ...prev, [name]: value };
       if (name === 'card') return { ...next, cardTyped: true };
       if (prev.cardTyped) return next;
-      const typed = MoneyUtil.add(MoneyUtil.add(rialsOf(next.cash), rialsOf(next.wallet)), rialsOf(next.credit));
+      const typed = [next.cash, next.wallet, next.credit, next.tara].reduce((sum, v) => MoneyUtil.add(sum, rialsOf(v)), '0');
       const rest = positive(MoneyUtil.subtract(due, typed));
       return { ...next, card: MoneyUtil.isZero(rest) ? '' : toToman(rest) };
     });
@@ -284,7 +302,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     method: PaymentMethod | undefined,
     amount: string,
     current: OrderHeader,
-    opts: { replaces?: string; slip?: string } = {}
+    opts: { replaces?: string; slip?: string; taraBarcode?: string } = {}
   ): Promise<OrderHeader | null> => {
     if (!orderId) return null;
     if (!method) {
@@ -293,6 +311,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
     }
     const left = wholeRials(current.due_amount);
     const over = MoneyUtil.greaterThan(amount, left);
+    taraWaitingRef.current = false;
     try {
       // A failed charge is cleared before it is taken again, so the list shows one row for it.
       if (opts.replaces) await paymentApi.voidPayment(opts.replaces).catch(() => undefined);
@@ -302,10 +321,12 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
         payment_method_id: method.id,
         amount: over ? left : amount,
         ...(opts.slip ? { off_terminal: true, reference_number: opts.slip } : {}),
+        ...(opts.taraBarcode !== undefined ? { tara_barcode: opts.taraBarcode } : {}),
         // One key for this payment: the branch agent may repeat the call that makes its intent after a
         // lost answer, and the cloud answers the intent the first call made (agent-protocol §19.11).
         idempotency_key: newIdempotencyKey(),
       });
+      taraWaitingRef.current = res.payment.method_kind === 'TARA' && res.payment.status === 'PROCESSING';
       if (over) {
         const change = MoneyUtil.subtract(amount, left);
         setChangeDue(change);
@@ -368,8 +389,8 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
   /** Enter: wallet, customer credit and cash first, as they are instant, then the card on the terminal. */
   const submit = async (override?: { cash?: string; card?: string }) => {
     if (!order || busy || isFullyPaid || waiting) return;
-    const parts = { cash, wallet, credit, card, ...override };
-    const total = MoneyUtil.add(MoneyUtil.add(MoneyUtil.add(parts.cash, parts.wallet), parts.credit), parts.card);
+    const parts = { cash, wallet, credit, tara, card, ...override };
+    const total = [parts.cash, parts.wallet, parts.credit, parts.tara, parts.card].reduce((sum, v) => MoneyUtil.add(sum, v), '0');
     if (!MoneyUtil.greaterThan(total, '0')) {
       setError(t('pos.pay.enterAmount'));
       return;
@@ -383,7 +404,7 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       return;
     }
     // Only cash can be handed over beyond the bill; wallet, credit and card take exactly what is typed.
-    const nonCash = MoneyUtil.add(MoneyUtil.add(parts.wallet, parts.credit), parts.card);
+    const nonCash = [parts.wallet, parts.credit, parts.tara, parts.card].reduce((sum, v) => MoneyUtil.add(sum, v), '0');
     if (MoneyUtil.greaterThan(nonCash, due) || (MoneyUtil.greaterThan(parts.card, '0') && MoneyUtil.greaterThan(total, due))) {
       setError(t('pos.pay.overDue'));
       return;
@@ -394,6 +415,11 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       setError(t('pos.pay.slipRequired'));
       return;
     }
+    // Tara finds the customer by the barcode their Tara app shows.
+    if (MoneyUtil.greaterThan(parts.tara, '0') && !taraBarcode.trim()) {
+      setError(t('pos.pay.errors.taraBarcode'));
+      return;
+    }
 
     setError(null);
     setPaying('other');
@@ -402,6 +428,20 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       if (MoneyUtil.greaterThan(parts.wallet, '0')) current = await pay(walletMethod, parts.wallet, current);
       if (current && MoneyUtil.greaterThan(parts.credit, '0')) current = await pay(creditMethod, parts.credit, current);
       if (current && MoneyUtil.greaterThan(parts.cash, '0')) current = await pay(cashMethod, parts.cash, current);
+      if (current && MoneyUtil.greaterThan(parts.tara, '0')) {
+        // A failed Tara try on this order is cleared before the new one, so the list shows one row.
+        const failedTara = payments.find((p) => p.status === 'FAILED' && p.method_kind === 'TARA');
+        current = await pay(taraMethod, minOf(parts.tara, wholeRials(current.due_amount)), current, {
+          replaces: failedTara?.id,
+          taraBarcode: taraBarcode.trim(),
+        });
+        if (current && !taraWaitingRef.current) setTaraBarcode('');
+        // Tara has not answered yet: the card waits until it does.
+        if (taraWaitingRef.current) {
+          await settle(current);
+          return;
+        }
+      }
       if (current && MoneyUtil.greaterThan(parts.card, '0')) {
         setPaying('card');
         // A card that failed on this order is taken again in its place.
@@ -595,9 +635,21 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
 
         {/* A card charge nobody has answered comes first: nothing else is paid until it is. */}
         {order &&
-          waitingCharges.map((p) => (
-            <UnconfirmedChargeActions key={p.id} payment={p} amountText={money(p.amount)} onChanged={() => settle(null)} />
-          ))}
+          waitingCharges.map((p) =>
+            p.method_kind === 'TARA' ? (
+              // Tara is asked about it by the server; a stuck sale is a manager's, from Payments.
+              <Alert
+                key={p.id}
+                severity={p.tara?.stuck ? 'warning' : 'info'}
+                icon={p.tara?.stuck ? undefined : <CircularProgress size={18} />}
+                sx={{ mb: 2 }}
+              >
+                {t(p.tara?.stuck ? 'pos.pay.taraStuck' : 'pos.pay.taraWaiting', { amount: money(p.amount) })}
+              </Alert>
+            ) : (
+              <UnconfirmedChargeActions key={p.id} payment={p} amountText={money(p.amount)} onChanged={() => settle(null)} />
+            )
+          )}
 
         {order && (
           <Box
@@ -626,6 +678,23 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
                     : t('pos.pay.available', { amount: MoneyUtil.formatCurrency(creditAvailable) })
                   : t('pos.pay.noCustomer'),
               })}
+              {/* Tara only where this till takes it: a chain without Tara keeps the same rows as before. */}
+              {canUseTara &&
+                amountField('tara', <>{t('pos.pay.tara')} <VersionTag feature="pos.tara" /></>, {
+                  hint: t('pos.pay.taraHint'),
+                })}
+              {canUseTara && MoneyUtil.greaterThan(tara, '0') && !isFullyPaid && (
+                <TextField
+                  size="small"
+                  fullWidth
+                  disabled={locked}
+                  label={t('pos.pay.taraBarcode')}
+                  helperText={t('pos.pay.taraBarcodeHelp')}
+                  value={taraBarcode}
+                  onChange={(e) => setTaraBarcode(e.target.value)}
+                  slotProps={{ htmlInput: { dir: 'ltr', maxLength: 64, inputMode: 'numeric', 'data-testid': 'pay-tara-barcode' } }}
+                />
+              )}
               {amountField('card', t('pos.pay.card'))}
               {/* A card already charged on another reader (a standalone terminal, or before the order was
                   rung up): only the slip's reference is recorded, and this till's terminal is not asked. */}
@@ -800,8 +869,8 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
       <ConfirmDialog
         open={confirmClose}
         onClose={() => setConfirmClose(false)}
-        title={t('pos.pay.closeWaitingTitle')}
-        content={t('pos.pay.closeWaiting')}
+        title={t(taraWaiting ? 'pos.pay.taraCloseWaitingTitle' : 'pos.pay.closeWaitingTitle')}
+        content={t(taraWaiting ? 'pos.pay.taraCloseWaiting' : 'pos.pay.closeWaiting')}
         confirmColor="warning"
         confirmLabel={t('pos.pay.closeAnyway')}
         cancelLabel={t('pos.pay.stay')}

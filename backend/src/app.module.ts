@@ -23,6 +23,7 @@ import { DiscountsModule } from './modules/discounts/discounts.module';
 import { CustomerModule } from './modules/customer/customer.module';
 import { OrderModule } from './modules/order/order.module';
 import { PaymentModule } from './modules/payment/payment.module';
+import { TaraModule } from './modules/tara/tara.module';
 import { ApprovalModule } from './modules/approval/approval.module';
 import { RefundModule } from './modules/refund/refund.module';
 import { PrintingModule } from './modules/printing/printing.module';
@@ -119,6 +120,7 @@ import { CashierShift } from './entities/CashierShift.entity';
 import { CashMovement } from './entities/CashMovement.entity';
 import { BusinessDayClose } from './entities/BusinessDayClose.entity';
 import { IntegrationLog } from './entities/IntegrationLog.entity';
+import { TaraConnection, TaraBranch, TaraTerminal, TaraPurchase, TaraSimPurchase } from './entities/Tara.entity';
 
 
 @Module({
@@ -158,6 +160,7 @@ import { IntegrationLog } from './entities/IntegrationLog.entity';
           DeliveryZone, Delivery, DeliveryEvent,
           CashierShift, CashMovement, BusinessDayClose,
           IntegrationLog,
+          TaraConnection, TaraBranch, TaraTerminal, TaraPurchase, TaraSimPurchase,
           ImportJob, ImportRow,
           Agent, AgentEnrolmentCode, AgentCommand, AgentRelease,
           NoteTemplate,
@@ -178,6 +181,7 @@ import { IntegrationLog } from './entities/IntegrationLog.entity';
     CustomerModule,
     OrderModule,
     PaymentModule,
+    TaraModule,
     CashierModule,
     ApprovalModule,
     RefundModule,
