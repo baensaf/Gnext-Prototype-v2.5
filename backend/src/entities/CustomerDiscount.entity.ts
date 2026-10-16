@@ -11,10 +11,13 @@ import {
   Index,
 } from 'typeorm';
 import { Customer } from './Customer.entity';
+import { PersonalDiscountGroup } from './PersonalDiscountGroup.entity';
 
 /**
- * A friend or family member's discount at one branch: a percent off their order there, filled
- * in on the till when they are picked. Each branch keeps its own few people.
+ * A person's personal discount: the group head office set (its percent and monthly limits) and
+ * the branch they work at, which a group for one branch only is held to. One active row per
+ * person; the till fills it in when they are picked. discount_percentage is the group's percent
+ * when it was given, kept for history.
  */
 @Entity('customer_discount')
 @Index(['tenant_id', 'customer_id', 'is_active'])
@@ -30,6 +33,9 @@ export class CustomerDiscount {
 
   @Column({ type: 'uuid', nullable: true })
   branch_id: string | null;
+
+  @Column({ type: 'uuid', nullable: true })
+  group_id: string | null;
 
   @Column({ type: 'numeric', precision: 5, scale: 2 })
   discount_percentage: string;
@@ -67,4 +73,8 @@ export class CustomerDiscount {
   @ManyToOne(() => Customer, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'customer_id' })
   customer: Customer;
+
+  @ManyToOne(() => PersonalDiscountGroup, { nullable: true })
+  @JoinColumn({ name: 'group_id' })
+  group: PersonalDiscountGroup | null;
 }

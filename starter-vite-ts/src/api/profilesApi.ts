@@ -1,3 +1,5 @@
+import type { FamilyDiscount } from './customerApi';
+
 import { httpClient } from './httpClient';
 
 export interface ProfileOrder {
@@ -60,8 +62,8 @@ export interface CustomerProfile {
   credit: ProfileLedger | null;
   /** Cashback the customer earned, kept apart from credit. */
   wallet: ProfileLedger | null;
-  /** Friends-and-family rates, one per branch that gives one. */
-  family_discounts: { id: string; branch_id: string | null; percent: string; note?: string | null }[];
+  /** The person's personal discount group and the branch they work at (one at most). */
+  family_discounts: FamilyDiscount[];
   audit: ProfileAuditEvent[];
 }
 

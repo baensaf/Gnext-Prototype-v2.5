@@ -118,14 +118,14 @@ export class CustomerService {
 
   /**
    * Each customer with their two balances, kept apart: the wallet (cashback, theirs to spend)
-   * and the credit account (what they owe), plus their friends-and-family rates by branch.
+   * and the credit account (what they owe), plus their personal discount group.
    */
   private async enrichCustomersWithCredit(tenantId: string, customers: Customer[]): Promise<any[]> {
     if (!customers || customers.length === 0) return [];
     const customerIds = customers.map((c) => c.id);
     const [accounts, family] = await Promise.all([
       this.accountRepo.find({ where: { tenant_id: tenantId, customer_id: In(customerIds) } }),
-      this.familyRepo ? this.familyRepo.find({ where: { tenant_id: tenantId, customer_id: In(customerIds), is_active: true } }) : [],
+      this.familyRepo ? this.familyRepo.find({ where: { tenant_id: tenantId, customer_id: In(customerIds), is_active: true }, relations: { group: true } }) : [],
     ]);
     return customers.map((c) => this.withAccounts(c, accounts.filter((a) => a.customer_id === c.id), family.filter((f) => f.customer_id === c.id)));
   }
@@ -139,7 +139,16 @@ export class CustomerService {
       wallet_account: wallet,
       wallet_balance: wallet?.current_balance || '0.0000',
       credit_limit: credit?.credit_limit || '0.0000',
-      family_discounts: family.map((f) => ({ id: f.id, branch_id: f.branch_id, percent: f.discount_percentage, note: f.note })),
+      // The person's personal discount group and the branch they work at.
+      family_discounts: family.map((f) => ({
+        id: f.id,
+        branch_id: f.branch_id,
+        group_id: f.group_id,
+        group_name: f.group?.name ?? null,
+        any_branch: !!f.group?.any_branch,
+        percent: f.group?.percent ?? f.discount_percentage,
+        note: f.note,
+      })),
     };
   }
 
@@ -264,7 +273,7 @@ export class CustomerService {
     const phones = await this.phoneRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
     const addresses = await this.addressRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
     const accounts = await this.accountRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
-    const family = this.familyRepo ? await this.familyRepo.find({ where: { tenant_id: tenantId, customer_id: id, is_active: true } }) : [];
+    const family = this.familyRepo ? await this.familyRepo.find({ where: { tenant_id: tenantId, customer_id: id, is_active: true }, relations: { group: true } }) : [];
     return {
       ...this.withAccounts(customer, accounts, family),
       phones,

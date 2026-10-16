@@ -81,8 +81,10 @@ export class DiscountQuoteRequestDto {
     orderType?: string;
     deliveryFee?: string;
     currencyCode?: string;
-    /** The cashier took the customer's friends-and-family rate off this order. */
+    /** The cashier took the customer's personal discount off this order. */
     skipCustomerDiscount?: boolean;
+    /** The order being priced, left out of what the person has used this month. */
+    orderId?: string;
   };
 
   @IsOptional()
@@ -94,57 +96,4 @@ export class DiscountQuoteRequestDto {
   @IsOptional()
   @IsString()
   couponCode?: string;
-}
-
-export class CreateCustomerDiscountDto {
-  @IsUUID()
-  @IsNotEmpty()
-  customer_id: string;
-
-  /** The branch whose friend or family member this is. A branch account always gets its own. */
-  @IsOptional()
-  @IsUUID()
-  branch_id?: string;
-
-  @IsNumberString()
-  @IsNotEmpty()
-  discount_percentage: string;
-
-  @IsOptional()
-  @IsString()
-  effective_from?: string;
-
-  @IsOptional()
-  @IsString()
-  effective_to?: string;
-
-  @IsOptional()
-  @IsString()
-  note?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  is_active?: boolean;
-}
-
-export class UpdateCustomerDiscountDto {
-  @IsOptional()
-  @IsNumberString()
-  discount_percentage?: string;
-
-  @IsOptional()
-  @IsString()
-  effective_from?: string;
-
-  @IsOptional()
-  @IsString()
-  effective_to?: string;
-
-  @IsOptional()
-  @IsString()
-  note?: string;
-
-  @IsOptional()
-  @IsBoolean()
-  is_active?: boolean;
 }

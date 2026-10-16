@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
-import { CustomerDiscount } from '../../entities/CustomerDiscount.entity';
 import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
 import { Product } from '../../entities/Product.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
@@ -11,6 +10,7 @@ import { HEAD_OFFICE_ROLES } from '../../common/utils/user-scope.util';
 import { DiscountQuoteRequestDto, QuoteItemDto, ManualDiscountDto } from './dtos/discounts.dto';
 import { ItemDiscountsService } from './item-discounts.service';
 import { CouponsService, CouponRefusal } from './coupons.service';
+import { PersonalDiscountsService, PersonalRefusal } from './personal-discounts.service';
 import { Coupon } from '../../entities/Coupon.entity';
 import { CouponBatch } from '../../entities/CouponBatch.entity';
 
@@ -27,8 +27,20 @@ export interface ConsideredDiscount {
   itemDiscountId?: string;
   productId?: string;
   percent?: string;
-  /** COUPON: the batch's cap on a percent, so an edit later prices it within the same cap. */
+  /** COUPON and CUSTOMER: the most the percent may take off, so an edit later prices it within the same cap. */
   maxDiscount?: string;
+  /** CUSTOMER: the person's group and what is left of it this month, or why it was not given. */
+  personal?: {
+    groupId: string;
+    groupName: string;
+    refusal?: PersonalRefusal;
+    /** How much of this order it covers; less than the order when a cap stopped it. */
+    covered?: string;
+    partial?: boolean;
+    /** Left after this order; null where the group has no limit. */
+    usesLeft: number | null;
+    monthLeft: string | null;
+  };
   discountType: string;
   status: 'APPLIED' | 'REJECTED';
   rejectionReason?: string;
@@ -71,8 +83,6 @@ export class DiscountEvaluationService {
   constructor(
     @InjectRepository(TenantSetting)
     private readonly settingRepo: Repository<TenantSetting>,
-    @InjectRepository(CustomerDiscount)
-    private readonly customerDiscountRepo: Repository<CustomerDiscount>,
     @InjectRepository(ApprovalRequest)
     private readonly approvalRequestRepo?: Repository<ApprovalRequest>,
     @Optional()
@@ -82,6 +92,8 @@ export class DiscountEvaluationService {
     private readonly itemDiscounts?: ItemDiscountsService,
     @Optional()
     private readonly coupons?: CouponsService,
+    @Optional()
+    private readonly personal?: PersonalDiscountsService,
   ) {}
 
   /**
@@ -415,41 +427,72 @@ export class DiscountEvaluationService {
       }
     }
 
-    // B. The customer's friends-and-family rate at this branch, on till orders, unless the
-    // cashier took it off. A manual discount replaces it.
-    if (!singleDiscountApplied && orderDraft.customerId && orderDraft.branchId && channel === 'POS' && !orderDraft.skipCustomerDiscount) {
-      const customerDiscount = await this.customerDiscountRepo.findOne({
-        where: { tenant_id: tenantId, customer_id: orderDraft.customerId, branch_id: orderDraft.branchId, is_active: true },
-      });
+    // B. The person's personal discount, on till orders, unless the cashier took it off. A
+    // coupon or a manual discount replaces it. Their group sets the percent and holds it to a
+    // month: so many orders, so much of their orders covered, so much of one order (the rest
+    // is full price), and for most groups only the branch the person works at.
+    if (!singleDiscountApplied && orderDraft.customerId && orderDraft.branchId && channel === 'POS' && !orderDraft.skipCustomerDiscount && this.personal) {
+      const found = await this.personal.forCustomer(tenantId, orderDraft.customerId);
+      if (found && MoneyUtil.greaterThan(found.group.percent, '0')) {
+        const { assignment, group } = found;
+        const name = `${group.name} ${Number(group.percent)}%`;
+        const used = await this.personal.usage(tenantId, orderDraft.customerId, orderDraft.orderId);
+        const { usesLeft, monthLeft } = this.personal.left(group, used);
+        const refuse = (refusal: PersonalRefusal) =>
+          consideredDiscounts.push({
+            source: 'CUSTOMER',
+            name,
+            percent: group.percent,
+            discountType: 'CUSTOMER_DISCOUNT',
+            status: 'REJECTED',
+            rejectionReason: refusal,
+            amount: '0.0000',
+            personal: { groupId: group.id, groupName: group.name, refusal, usesLeft, monthLeft },
+          });
 
-      if (customerDiscount) {
-        const fromOk = !customerDiscount.effective_from || new Date(customerDiscount.effective_from) <= now;
-        const toOk = !customerDiscount.effective_to || new Date(customerDiscount.effective_to) >= now;
+        if (!group.any_branch && assignment.branch_id !== orderDraft.branchId) {
+          refuse('OTHER_BRANCH');
+        } else if (usesLeft !== null && usesLeft <= 0) {
+          refuse('USES_SPENT');
+        } else if (monthLeft !== null && !MoneyUtil.greaterThan(monthLeft, '0')) {
+          refuse('MONTH_SPENT');
+        } else {
+          // How much of this order it may cover: the cap per order, and what the month has left.
+          let coverable: string | null = group.per_visit_cap ? MoneyUtil.format(group.per_visit_cap) : null;
+          if (monthLeft !== null && (coverable === null || MoneyUtil.lessThan(monthLeft, coverable))) coverable = monthLeft;
 
-        if (fromOk && toOk && MoneyUtil.greaterThan(customerDiscount.discount_percentage, '0')) {
-          const pctDec = MoneyUtil.divide(customerDiscount.discount_percentage, '100', 6);
-          let custDiscountAmt = '0.0000';
-
-          for (let i = 0; i < lineItems.length; i++) {
-            if (!isDiscountableLine[i] || familyExcludedLine[i]) continue;
-            const lineEligible = remainingBases[i];
-            if (MoneyUtil.lessThanOrEqual(lineEligible, '0')) continue;
-
-            const lineDisc = MoneyUtil.multiply(lineEligible, pctDec);
-            lineItems[i].discountTotal = MoneyUtil.add(lineItems[i].discountTotal, lineDisc);
-            remainingBases[i] = MoneyUtil.subtract(remainingBases[i], lineDisc);
-            custDiscountAmt = MoneyUtil.add(custDiscountAmt, lineDisc);
-          }
+          const eligible = lineItems
+            .map((_, i) => i)
+            .filter((i) => isDiscountableLine[i] && !familyExcludedLine[i] && MoneyUtil.greaterThan(remainingBases[i], '0'));
+          const base = eligible.reduce((sum, i) => MoneyUtil.add(sum, remainingBases[i]), '0.0000');
+          const covered = coverable !== null && MoneyUtil.greaterThan(base, coverable) ? coverable : base;
+          const pctDec = MoneyUtil.divide(group.percent, '100', 6);
+          const custDiscountAmt = MoneyUtil.multiply(covered, pctDec);
 
           if (MoneyUtil.greaterThan(custDiscountAmt, '0')) {
+            const shares = MoneyUtil.allocate(custDiscountAmt, eligible.map((i) => remainingBases[i]));
+            eligible.forEach((lineIndex, k) => {
+              lineItems[lineIndex].discountTotal = MoneyUtil.add(lineItems[lineIndex].discountTotal, shares[k]);
+              remainingBases[lineIndex] = MoneyUtil.subtract(remainingBases[lineIndex], shares[k]);
+            });
             discountTotal = MoneyUtil.add(discountTotal, custDiscountAmt);
+            const monthAfter = monthLeft === null ? null : MoneyUtil.subtract(monthLeft, covered);
             consideredDiscounts.push({
               source: 'CUSTOMER',
-              name: `Personal discount ${Number(customerDiscount.discount_percentage)}%`,
-              percent: customerDiscount.discount_percentage,
+              name,
+              percent: group.percent,
+              maxDiscount: coverable !== null ? MoneyUtil.multiply(coverable, pctDec) : undefined,
               discountType: 'CUSTOMER_DISCOUNT',
               status: 'APPLIED',
               amount: custDiscountAmt,
+              personal: {
+                groupId: group.id,
+                groupName: group.name,
+                covered,
+                partial: MoneyUtil.lessThan(covered, base),
+                usesLeft: usesLeft === null ? null : usesLeft - 1,
+                monthLeft: monthAfter !== null && MoneyUtil.greaterThan(monthAfter, '0') ? monthAfter : monthAfter === null ? null : '0.0000',
+              },
             });
             singleDiscountApplied = true;
           }

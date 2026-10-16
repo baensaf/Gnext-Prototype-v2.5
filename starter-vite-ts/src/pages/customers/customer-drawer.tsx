@@ -1,6 +1,7 @@
 import type { AddressDraftState } from 'src/components/customer-register';
 import type { ProfileLedger, CustomerProfile } from 'src/api/profilesApi';
 import type { Customer, CustomField, CustomerAddress } from 'src/api/customerApi';
+import type { PersonalDiscountGroup, PersonalDiscountSummary } from 'src/api/discountsApi';
 
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
@@ -28,7 +29,6 @@ import {
   TableCell,
   TextField,
   Typography,
-  InputAdornment,
   FormControlLabel,
 } from '@mui/material';
 
@@ -38,6 +38,7 @@ import { MoneyUtil } from 'src/utils/money.util';
 
 import { profilesApi } from 'src/api/profilesApi';
 import { customerApi } from 'src/api/customerApi';
+import { discountsApi } from 'src/api/discountsApi';
 import { isManagerOrAbove } from 'src/config/role-access';
 import { useBranchContext } from 'src/contexts/branch-context';
 import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
@@ -59,9 +60,6 @@ import {
 } from 'src/components/entity-profile';
 
 export type CustomerDrawerTab = 'overview' | 'orders' | 'addresses' | 'wallet' | 'credit';
-
-/** The rates HAMI's data shows: 10% and 20% cover most personal discounts. */
-const DISCOUNT_PRESETS = ['10', '15', '20'];
 
 type Props = {
   /** The customer to show; null closes the drawer. */
@@ -88,7 +86,7 @@ export function CustomerDrawer({
   const { t } = useTranslation();
   const isHeadOffice = useIsHeadOffice();
   const userRole = useAuthStore((state) => state.user?.role);
-  // A personal discount is each branch's own: a manager keeps theirs, head office any branch's.
+  // A manager puts their own branch's people in a group for one branch; head office anyone anywhere.
   const canSetDiscount = isManagerOrAbove(userRole);
   const { branches, selectedBranch, canChangeScope } = useBranchContext();
   const branchName = (id?: string | null) => branches.find((b) => b.id === id)?.name || '—';
@@ -198,44 +196,49 @@ export function CustomerDrawer({
     }
   };
 
-  // ---- Personal discount: one percent per branch ---------------------------------------
+  // ---- Personal discount: the person's group and the branch they work at ----------------
+  const [groups, setGroups] = useState<PersonalDiscountGroup[]>([]);
+  const [personal, setPersonal] = useState<PersonalDiscountSummary | null>(null);
+  const [discountGroupId, setDiscountGroupId] = useState('');
   const [discountBranchId, setDiscountBranchId] = useState('');
-  const [discountPercent, setDiscountPercent] = useState('');
   const [discountNote, setDiscountNote] = useState('');
   const [discountSaving, setDiscountSaving] = useState(false);
-
-  const rates = profile?.family_discounts || [];
-  // The rates this account sees: a branch its own; head office every branch's.
-  const visibleRates = rates.filter((f) => canChangeScope || f.branch_id === selectedBranch?.id);
-
-  const pickDiscountBranch = useCallback(
-    (branchId: string) => {
-      const current = rates.find((f) => f.branch_id === branchId);
-      setDiscountBranchId(branchId);
-      setDiscountPercent(current ? String(Number(current.percent)) : '');
-      setDiscountNote(current?.note || '');
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [profile]
-  );
+  // A group for every branch is head office's to give and to take away.
+  const lockedToHeadOffice = !canChangeScope && !!personal?.group.any_branch;
 
   useEffect(() => {
-    if (profile) pickDiscountBranch(selectedBranch?.id || branches[0]?.id || '');
-  }, [profile, selectedBranch, branches, pickDiscountBranch]);
+    discountsApi
+      .getPersonalGroups()
+      .then(setGroups)
+      .catch(() => setGroups([]));
+  }, []);
 
-  const saveDiscount = async (remove = false) => {
+  useEffect(() => {
+    if (!customerId || !profile) return;
+    discountsApi
+      .getPersonalDiscount(customerId)
+      .then((found) => {
+        setPersonal(found);
+        setDiscountGroupId(found?.group.id || '');
+        setDiscountBranchId(found?.assignment.branch_id || selectedBranch?.id || branches[0]?.id || '');
+        setDiscountNote(found?.assignment.note || '');
+      })
+      .catch(() => setPersonal(null));
+  }, [customerId, profile, selectedBranch, branches]);
+
+  const saveDiscount = async () => {
     if (!customerId) return;
     setDiscountSaving(true);
     try {
-      await customerApi.setFamilyDiscount({
+      await discountsApi.setPersonalDiscount({
         customer_id: customerId,
+        group_id: discountGroupId || null,
         branch_id: discountBranchId || undefined,
-        percent: remove || !discountPercent ? null : discountPercent,
         note: discountNote.trim() || null,
       });
       await changed();
     } catch (err: any) {
-      setError(err?.detail || t('customers.family.saveFailed'));
+      setError(err?.detail || err?.message || t('customers.family.saveFailed'));
     } finally {
       setDiscountSaving(false);
     }
@@ -550,7 +553,7 @@ export function CustomerDrawer({
                 )}
               </InfoCard>
 
-              {/* Personal discount: one person's percent off at one branch, filled in on the till. */}
+              {/* Personal discount: the person's group, at the branch they work at, filled in on the till. */}
               <InfoCard
                 title={t('customers.family.title')}
                 icon={<VolunteerActivismIcon color="secondary" />}
@@ -559,20 +562,38 @@ export function CustomerDrawer({
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                   {t('customers.family.help')}
                 </Typography>
-                {visibleRates.length > 0 ? (
-                  <Stack
-                    direction="row"
-                    sx={{ gap: 1, flexWrap: 'wrap', mb: canSetDiscount ? 2.5 : 0 }}
-                  >
-                    {visibleRates.map((f) => (
+                {personal && (canChangeScope || personal.assignment.branch_id === selectedBranch?.id) ? (
+                  <Stack spacing={0.75} sx={{ mb: canSetDiscount ? 2.5 : 0 }}>
+                    <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
                       <Chip
-                        key={f.id}
                         color="secondary"
                         variant="outlined"
-                        label={`${Number(f.percent)}% · ${branchName(f.branch_id)}${f.note ? ` · ${f.note}` : ''}`}
-                        sx={{ fontWeight: 600 }}
+                        label={`${Number(personal.group.percent)}% · ${personal.group.name}`}
+                        sx={{ fontWeight: 600, maxWidth: '100%' }}
                       />
-                    ))}
+                      <Typography variant="caption" color="text.secondary">
+                        {personal.group.any_branch
+                          ? t('customers.family.anyBranch')
+                          : `${t('customers.family.ownBranch')} · ${branchName(personal.assignment.branch_id)}`}
+                      </Typography>
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary">
+                      {t('customers.family.usage', {
+                        uses: personal.usage.uses,
+                        covered: formatMoney(personal.usage.covered),
+                      })}
+                      {' · '}
+                      {personal.usesLeft === null && personal.monthLeft === null
+                        ? t('customers.family.noLimit')
+                        : [
+                            personal.usesLeft !== null ? t('customers.family.leftUses', { count: personal.usesLeft }) : null,
+                            personal.monthLeft !== null
+                              ? t('customers.family.leftAmount', { amount: formatMoney(personal.monthLeft) })
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                    </Typography>
                   </Stack>
                 ) : (
                   <Typography
@@ -583,16 +604,35 @@ export function CustomerDrawer({
                     {t('customers.family.none')}
                   </Typography>
                 )}
-                {canSetDiscount && (
+                {canSetDiscount && !lockedToHeadOffice && (
                   <Stack spacing={2}>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                      <TextField
+                        select
+                        size="small"
+                        label={t('customers.family.group')}
+                        value={discountGroupId}
+                        onChange={(e) => setDiscountGroupId(e.target.value)}
+                        sx={{ minWidth: 240, flex: 1 }}
+                      >
+                        <MenuItem value="">
+                          <em>{t('customers.family.noGroup')}</em>
+                        </MenuItem>
+                        {groups
+                          .filter((g) => canChangeScope || !g.any_branch)
+                          .map((g) => (
+                            <MenuItem key={g.id} value={g.id}>
+                              {`${Number(g.percent)}% · ${g.name}`}
+                            </MenuItem>
+                          ))}
+                      </TextField>
                       {canChangeScope && (
                         <TextField
                           select
                           size="small"
                           label={t('customers.family.branch')}
                           value={discountBranchId}
-                          onChange={(e) => pickDiscountBranch(e.target.value)}
+                          onChange={(e) => setDiscountBranchId(e.target.value)}
                           sx={{ minWidth: 180 }}
                         >
                           {branches.map((b) => (
@@ -602,64 +642,31 @@ export function CustomerDrawer({
                           ))}
                         </TextField>
                       )}
-                      <TextField
-                        size="small"
-                        label={t('customers.family.percent')}
-                        value={discountPercent}
-                        onChange={(e) => setDiscountPercent(e.target.value.replace(/[^0-9.]/g, ''))}
-                        slotProps={{
-                          input: {
-                            endAdornment: <InputAdornment position="end">%</InputAdornment>,
-                          },
-                        }}
-                        sx={{ width: { sm: 150 }, flexShrink: 0 }}
-                      />
-                      <TextField
-                        size="small"
-                        fullWidth
-                        label={t('customers.family.note')}
-                        placeholder={t('customers.family.notePlaceholder')}
-                        value={discountNote}
-                        onChange={(e) => setDiscountNote(e.target.value)}
-                      />
                     </Stack>
-                    <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                      {DISCOUNT_PRESETS.map((pct) => (
-                        <Chip
-                          key={pct}
-                          label={`${pct}%`}
-                          size="small"
-                          variant={discountPercent === pct ? 'filled' : 'outlined'}
-                          color="secondary"
-                          onClick={() => setDiscountPercent(pct)}
-                        />
-                      ))}
-                      <Box sx={{ flex: 1 }} />
-                      {rates.some((f) => f.branch_id === discountBranchId) && (
-                        <Button
-                          color="error"
-                          disabled={discountSaving}
-                          onClick={() => saveDiscount(true)}
-                        >
-                          {t('customers.family.remove')}
-                        </Button>
-                      )}
+                    <TextField
+                      size="small"
+                      fullWidth
+                      label={t('customers.family.note')}
+                      placeholder={t('customers.family.notePlaceholder')}
+                      value={discountNote}
+                      onChange={(e) => setDiscountNote(e.target.value)}
+                    />
+                    <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
                       <Button
                         variant="contained"
                         color="secondary"
-                        disabled={
-                          discountSaving ||
-                          !discountPercent ||
-                          Number(discountPercent) <= 0 ||
-                          Number(discountPercent) > 100 ||
-                          !discountBranchId
-                        }
-                        onClick={() => saveDiscount()}
+                        disabled={discountSaving || (!!discountGroupId && !discountBranchId) || (!discountGroupId && !personal)}
+                        onClick={saveDiscount}
                       >
                         {t('common.save')}
                       </Button>
                     </Stack>
                   </Stack>
+                )}
+                {canSetDiscount && lockedToHeadOffice && (
+                  <Typography variant="caption" color="text.secondary">
+                    {t('customers.family.headOfficeGroup')}
+                  </Typography>
                 )}
               </InfoCard>
             </Stack>
