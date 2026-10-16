@@ -1,4 +1,4 @@
-import type { FamilyDiscount } from './customerApi';
+import type { CustomerGroupRef } from './customerApi';
 
 import { httpClient } from './httpClient';
 
@@ -62,8 +62,8 @@ export interface CustomerProfile {
   credit: ProfileLedger | null;
   /** Cashback the customer earned, kept apart from credit. */
   wallet: ProfileLedger | null;
-  /** The person's personal discount group and the branch they work at (one at most). */
-  family_discounts: FamilyDiscount[];
+  /** The groups the customer is in. */
+  groups: CustomerGroupRef[];
   audit: ProfileAuditEvent[];
 }
 

@@ -115,7 +115,7 @@ interface OrderDiscountRule {
   adjustment: OrderAdjustment | null;
   /** A percent of what the lines now sell for. */
   percent: string | null;
-  /** The most a percent may take off (a coupon batch's cap, a personal discount group's). */
+  /** The most a percent may take off (a coupon batch's cap, a group discount's). */
   cap?: string | null;
   /** The amount, when the discount is not a percent. */
   fixed: string;
@@ -887,7 +887,7 @@ export class OrderService {
           order_id: order.id,
           type: 'DISCOUNT',
           source_type: disc.source,
-          source_id: disc.itemDiscountId || disc.couponId || disc.personal?.groupId || null,
+          source_id: disc.itemDiscountId || disc.couponId || disc.personal?.discountId || null,
           code: (disc.source === 'MANUAL' ? 'MANUAL_DISCOUNT' : disc.source === 'ITEM' ? 'ITEM_DISCOUNT' : disc.source === 'COUPON' ? 'COUPON' : null),
           name: disc.name,
           amount: disc.amount,
@@ -905,9 +905,9 @@ export class OrderService {
                   value: submittedManualDiscount?.value ?? null,
                 }
               : {}),
-            // The person's group, and the most its caps let it take off this order.
+            // The group discount, and the most its monthly limits let it take off this order.
             ...(disc.source === 'CUSTOMER'
-              ? { percent: disc.percent, reasonCode: 'FRIENDS_FAMILY', groupId: disc.personal?.groupId ?? null, maxDiscount: disc.maxDiscount ?? null }
+              ? { percent: disc.percent, reasonCode: 'FRIENDS_FAMILY', discountId: disc.personal?.discountId ?? null, maxDiscount: disc.maxDiscount ?? null }
               : {}),
             ...(disc.source === 'ITEM' ? { productId: disc.productId, percent: disc.percent } : {}),
             ...(disc.source === 'COUPON'
@@ -2673,7 +2673,7 @@ export class OrderService {
 
   /**
    * How a sent order's one order discount is priced when its lines change: a percent (the
-   * cashier's, or the person's personal discount, within its group's caps) stays a percent of what is left; an
+   * cashier's, or the customer's group discount, within its monthly limits) stays a percent of what is left; an
    * amount stays that amount, never more than what is left. A percent coupon stays its percent
    * within the batch's cap; a free-item coupon follows its product's line. A cashier's percent
    * recorded before the percent was kept, or a discount with no record, keeps the amount it had.

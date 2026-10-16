@@ -7,7 +7,6 @@ import { DiscountsService } from '../src/modules/discounts/discounts.service';
 import { DiscountEvaluationService } from '../src/modules/discounts/discount-evaluation.service';
 import { CreditService } from '../src/modules/customer/credit.service';
 
-import { CustomerDiscount } from '../src/entities/CustomerDiscount.entity';
 import { Customer } from '../src/entities/Customer.entity';
 import { CustomerCreditAccount } from '../src/entities/CustomerCreditAccount.entity';
 import { CreditEntry } from '../src/entities/CreditEntry.entity';
@@ -92,7 +91,6 @@ describe('Phase 1 Customer Club & Discounts Workflows (Spec)', () => {
         DiscountsService,
         DiscountEvaluationService,
         CreditService,
-        { provide: getRepositoryToken(CustomerDiscount), useValue: customerDiscountRepo },
         { provide: getRepositoryToken(Customer), useValue: customerRepo },
         { provide: getRepositoryToken(Product), useValue: { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() } },
         { provide: getRepositoryToken(TenantSetting), useValue: settingRepo },
@@ -109,7 +107,7 @@ describe('Phase 1 Customer Club & Discounts Workflows (Spec)', () => {
     creditService = moduleRef.get<CreditService>(CreditService);
   });
 
-  // Workflow 1, the personal discount, is covered in personal-discounts.spec.ts.
+  // Workflow 1, the customer's group discount, is covered in customer-groups.spec.ts and discounts.spec.ts.
 
   describe('Workflow 2: Purchase-Based Cashback & Wallet', () => {
     it('calculates and posts 5% cashback on completed paid subtotal', async () => {

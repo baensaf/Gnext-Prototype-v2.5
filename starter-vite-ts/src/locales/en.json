@@ -110,7 +110,8 @@
     "priceChanges": "Price Changes",
     "itemDiscounts": "Item Discounts",
     "mediaLocalizationSim": "Media & translations demo",
-    "coupons": "Coupons"
+    "coupons": "Coupons",
+    "customerGroups": "Customer groups"
   },
   "common": {
     "languages": "Languages",
@@ -388,17 +389,17 @@
       "remove": "Remove discount",
       "apply": "Apply",
       "applyWithPin": "Apply with manager PIN",
-      "family": "Personal {{pct}}%",
-      "familyTakeOff": "Take the personal discount off this order",
-      "familyPutBack": "Put the personal discount back",
-      "familyPartial": "Personal {{pct}}% on {{amount}}",
+      "family": "Group {{pct}}%",
+      "familyTakeOff": "Take the group discount off this order",
+      "familyPutBack": "Put the group discount back",
+      "familyPartial": "Group {{pct}}% on {{amount}}",
       "familyLeftUses": "{{count}} more orders this month",
       "familyLeftAmount": "{{amount}} left this month",
       "familyNoLimit": "no monthly limit",
       "familyRefused": {
-        "OTHER_BRANCH": "Personal discount: only at their own branch",
-        "USES_SPENT": "Personal discount: this month's orders are used up",
-        "MONTH_SPENT": "Personal discount: this month's cap is spent"
+        "OTHER_BRANCH": "Group discount: only at their own branch",
+        "USES_SPENT": "Group discount: this month's orders are used up",
+        "MONTH_SPENT": "Group discount: this month's cap is spent"
       }
     },
     "held": {
@@ -1416,29 +1417,9 @@
     },
     "filters": {
       "all": "All",
-      "family": "Personal discount",
       "wallet": "Wallet money",
-      "owes": "Owes"
-    },
-    "family": {
-      "column": "Personal discount",
-      "title": "Personal discount",
-      "help": "Head office's groups set the percent and the monthly limits. A group for one branch works only at the branch the person works at; the month starts again on the 1st.",
-      "branch": "Works at",
-      "note": "Who they are",
-      "notePlaceholder": "e.g. cashier at Nasr",
-      "remove": "Remove",
-      "saveFailed": "The discount could not be saved",
-      "none": "Not in a personal discount group.",
-      "group": "Group",
-      "noGroup": "No personal discount",
-      "anyBranch": "Any branch",
-      "ownBranch": "Own branch only",
-      "usage": "This month: {{uses}} orders, {{covered}} covered",
-      "leftUses": "{{count}} orders left",
-      "leftAmount": "{{amount}} left",
-      "noLimit": "No monthly limit",
-      "headOfficeGroup": "Head office sets this group"
+      "owes": "Owes",
+      "grouped": "In a group"
     },
     "drawer": {
       "birthDate": "Birthday",
@@ -1451,6 +1432,31 @@
     },
     "creditSummary": {
       "owing": "{{count}} customers owe"
+    },
+    "groups": {
+      "title": "Groups",
+      "column": "Groups",
+      "none": "Not in any group.",
+      "discounts": "Group discounts at the till",
+      "ownBranch": "own branch only",
+      "anyBranch": "any branch",
+      "usage": "This month: {{uses}} orders, {{covered}} covered",
+      "leftUses_one": "{{count}} order left",
+      "leftUses_other": "{{count}} orders left",
+      "leftAmount": "{{amount}} left",
+      "noLimit": "no monthly limit",
+      "addTo": "Add to group",
+      "branch": "Branch they belong to",
+      "branchHelp": "Where a staff member works; a discount for their own branch only works there.",
+      "noBranch": "No branch",
+      "add": "Add",
+      "saveFailed": "The group could not be changed",
+      "filter": "Group",
+      "allGroups": "All groups",
+      "addSelected_one": "Add {{count}} customer to a group",
+      "addSelected_other": "Add {{count}} customers to a group",
+      "added_one": "Added {{count}} customer; {{already}} already in the group.",
+      "added_other": "Added {{count}} customers; {{already}} already in the group."
     }
   },
   "credit": {
@@ -2013,26 +2019,10 @@
     "savedSuccess": "Role-based manual discount authorization policy saved successfully.",
     "failedToLoad": "Failed to load discount authorization policy",
     "failedToSave": "Failed to save discount authorization settings",
-    "familyTitle": "Personal discount",
-    "familyDesc": "Categories a personal discount never touches, such as drinks. This covers a customer's own rate and a cashier discount given with the Personal discount reason.",
+    "familyTitle": "Never discounted",
+    "familyDesc": "Categories a group discount never touches, such as drinks. This also covers a cashier's discount given with the Personal discount reason.",
     "familyExcluded": "Never discounted",
-    "familyExcludedPlaceholder": "Pick categories",
-    "groupsTitle": "Personal discount groups",
-    "groupsDesc": "Who gets a personal discount, how much, and how far a month takes it. Both caps are how much of their orders the discount covers; above the cap per order the rest is full price. Unused allowance does not carry over to next month.",
-    "groupName": "Group",
-    "groupPercent": "Discount",
-    "groupMonthlyCap": "Monthly cap",
-    "groupUses": "Orders a month",
-    "groupPerVisit": "Cap per order",
-    "groupWhere": "Where",
-    "anyBranch": "Any branch",
-    "ownBranch": "Own branch",
-    "noLimit": "No limit",
-    "groupMembers": "People",
-    "addGroup": "Add group",
-    "removeGroup": "Remove group",
-    "groupHasMembers": "Move its {{count}} people to another group first",
-    "groupsSaveFailed": "The groups could not be saved"
+    "familyExcludedPlaceholder": "Pick categories"
   },
   "wallet": {
     "title": "Customer Club Wallet & Cashback",
@@ -3935,5 +3925,37 @@
       "saveFailed": "The coupon batch could not be saved",
       "copyFailed": "The codes could not be copied"
     }
+  },
+  "customerGroups": {
+    "title": "Customer groups",
+    "subtitle": "Groups of customers, such as staff, owners or regulars, and the discounts each group gets. Add people to groups from the customer list.",
+    "loadFailed": "The groups could not be loaded",
+    "saveFailed": "The groups could not be saved",
+    "saved": "Groups and group discounts saved.",
+    "groupsTitle": "Groups",
+    "groupsHelp": "A customer can be in several groups. Branch managers add and remove their own branch's people in the groups open to branches; the rest are head office's.",
+    "name": "Name",
+    "branchCanAssign": "Branches add people",
+    "members": "People",
+    "removeGroup": "Remove group",
+    "removeWithMembers_one": "Remove group; its {{count}} person leaves it",
+    "removeWithMembers_other": "Remove group; its {{count}} people leave it",
+    "addGroup": "Add group",
+    "discountsTitle": "Group discounts",
+    "discountsHelp": "A percent off at the till for the customers in the groups it picks. A customer in several groups gets the biggest one that applies.",
+    "limitsTitle": "Monthly limits (optional)",
+    "limitsHelp": "An extra beyond Toast, Square and Lightspeed, for staff schemes like Iran Burger's. Both caps are how much of the customer's orders the discount covers; above the cap per order the rest is full price. The month is the calendar month and does not carry over.",
+    "percent": "Discount",
+    "forGroups": "For groups",
+    "pickGroups": "Pick groups",
+    "where": "Where",
+    "anyBranch": "Any branch",
+    "ownBranch": "Own branch only",
+    "monthlyCap": "Monthly cap",
+    "usesPerMonth": "Orders a month",
+    "perVisitCap": "Cap per order",
+    "noLimit": "No limit",
+    "removeDiscount": "Remove discount",
+    "addDiscount": "Add group discount"
   }
 }

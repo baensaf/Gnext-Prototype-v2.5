@@ -43,6 +43,7 @@ import { PriceListsPage } from 'src/pages/catalog/price-lists';
 import { TerminalsPage } from 'src/pages/operations/terminals';
 import { OrdersWorkflowPage } from 'src/pages/orders/workflow';
 import { IncomingOrdersPage } from 'src/pages/orders/incoming';
+import { CustomerGroupsPage } from 'src/pages/customers/groups';
 import { ReportsIndexPage } from 'src/pages/reports/index-page';
 import { BranchNewPage } from 'src/pages/operations/branch-new';
 import { GeneralSettingsPage } from 'src/pages/settings/general';
@@ -227,6 +228,7 @@ export const routesSection: RouteObject[] = [
       { path: 'wallet', element: <WalletCashbackPage /> },
       { path: 'coupons', element: <CouponsPage /> },
       { path: 'customers', element: <CustomersPage /> },
+      { path: 'customers/groups', element: <CustomerGroupsPage /> },
       { path: 'customers/:id', element: <DrawerRedirect to={paths.app.customers.detail} /> },
       // Credit lives on the customer list since 2026-10-12: the Owes filter and the row's dialog.
       { path: 'credit/accounts', element: <Navigate to="/app/customers?has=OWES" replace /> },

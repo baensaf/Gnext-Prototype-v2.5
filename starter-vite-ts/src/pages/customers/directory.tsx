@@ -1,5 +1,6 @@
-import type { GridFilterModel, GridPaginationModel } from '@mui/x-data-grid-premium';
+import type { GridFilterModel, GridPaginationModel, GridRowSelectionModel } from '@mui/x-data-grid-premium';
 import type { CreditSummary } from 'src/api/creditApi';
+import type { CustomerGroup } from 'src/api/discountsApi';
 import type { CustomerDrawerTab } from './customer-drawer';
 import type { Customer, CustomerListFilter } from 'src/api/customerApi';
 
@@ -21,8 +22,14 @@ import {
   Stack,
   Alert,
   Button,
+  Dialog,
+  MenuItem,
+  TextField,
   Typography,
   CardContent,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 
 import { MoneyUtil } from 'src/utils/money.util';
@@ -30,8 +37,10 @@ import { useCurrencyLabel } from 'src/utils/currency';
 
 import { creditApi } from 'src/api/creditApi';
 import { customerApi } from 'src/api/customerApi';
-import { useIsHeadOffice } from 'src/store/useAuthStore';
+import { discountsApi } from 'src/api/discountsApi';
+import { isManagerOrAbove } from 'src/config/role-access';
 import { useBranchContext } from 'src/contexts/branch-context';
+import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
 import { Label } from 'src/components/label';
 import { VersionTag } from 'src/components/version-tag';
@@ -54,13 +63,34 @@ export function CustomersPage() {
   const { t } = useTranslation();
   const currency = useCurrencyLabel();
   const isHeadOffice = useIsHeadOffice();
-  const { branches, selectedBranch, canChangeScope } = useBranchContext();
+  const { branches, canChangeScope } = useBranchContext();
   const branchName = (id?: string | null) => branches.find((b) => b.id === id)?.name || '—';
   const [searchParams, setSearchParams] = useSearchParams();
   const [filter, setFilter] = useState<CustomerListFilter | ''>(() => {
     const has = searchParams.get('has');
-    return has === 'FAMILY' || has === 'OWES' || has === 'WALLET' ? has : '';
+    // FAMILY was the personal discount tab before groups (2026-10-16).
+    if (has === 'FAMILY') return 'GROUPED';
+    return has === 'GROUPED' || has === 'OWES' || has === 'WALLET' ? has : '';
   });
+  // One group's people, as ?group=<id> (the groups page links its member counts here).
+  const groupFilter = searchParams.get('group') || '';
+  const setGroupFilter = (id: string) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (id) next.set('group', id);
+      else next.delete('group');
+      return next;
+    });
+    setPaging((p) => ({ ...p, page: 0 }));
+  };
+  const canAddToGroups = isManagerOrAbove(useAuthStore((state) => state.user?.role));
+  const [groups, setGroups] = useState<CustomerGroup[]>([]);
+  useEffect(() => {
+    discountsApi
+      .getCustomerGroups()
+      .then(setGroups)
+      .catch(() => setGroups([]));
+  }, []);
 
   // One customer opens in the drawer as ?customer=<id> (and &tab=), so it can be linked to.
   const drawerCustomerId = searchParams.get('customer');
@@ -116,8 +146,7 @@ export function CustomersPage() {
         page: paging.page + 1,
         limit: paging.pageSize,
         has: filter || undefined,
-        // Head office looking at one branch sees that branch's friends and family.
-        branchId: filter === 'FAMILY' && selectedBranch ? selectedBranch.id : undefined,
+        groupId: groupFilter || undefined,
       });
       setCustomers(res.items);
       setTotal(res.total);
@@ -128,7 +157,7 @@ export function CustomersPage() {
     } finally {
       setLoading(false);
     }
-  }, [query, paging, filter, selectedBranch, t]);
+  }, [query, paging, filter, groupFilter, t]);
 
   useEffect(() => {
     loadData();
@@ -143,7 +172,7 @@ export function CustomersPage() {
   // office's, like the rest of credit.
   const tabs: { key: '' | CustomerListFilter; label: string; color: 'default' | 'secondary' | 'success' | 'error'; count?: number }[] = [
     { key: '', label: t('customers.filters.all'), color: 'default', count: counts.ALL },
-    { key: 'FAMILY', label: t('customers.filters.family'), color: 'secondary', count: counts.FAMILY },
+    { key: 'GROUPED', label: t('customers.filters.grouped'), color: 'secondary', count: counts.GROUPED },
     { key: 'WALLET', label: t('customers.filters.wallet'), color: 'success', count: counts.WALLET },
     ...(isHeadOffice ? [{ key: 'OWES' as const, label: t('customers.filters.owes'), color: 'error' as const, count: counts.OWES }] : []),
   ];
@@ -176,9 +205,63 @@ export function CustomersPage() {
   );
   const gridFilterModel = useMemo<GridFilterModel>(() => ({ items: [], quickFilterValues: search ? [search] : [] }), [search]);
 
-  // The people this screen shows in a group: a branch sees those who work there; head office everyone.
-  const visibleFamily = (c: Customer) =>
-    (c.family_discounts || []).filter((f) => canChangeScope || f.branch_id === selectedBranch?.id);
+  // Rows ticked for "Add to group". Selecting the whole page arrives as everything but the
+  // unticked rows, so it is read against the rows on screen.
+  const [selection, setSelection] = useState<GridRowSelectionModel>({ type: 'include', ids: new Set() });
+  const selectedIds =
+    selection.type === 'include'
+      ? [...selection.ids].map(String)
+      : customers.filter((c) => !selection.ids.has(c.id)).map((c) => c.id);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addGroupId, setAddGroupId] = useState('');
+  const [addBranchId, setAddBranchId] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  // A branch adds its own people, to the groups head office opens to branches.
+  const addable = groups.filter((g) => canChangeScope || g.branch_can_assign);
+  const addSelected = async () => {
+    if (!addGroupId || !selectedIds.length) return;
+    setAdding(true);
+    try {
+      const res = await discountsApi.addGroupMembers(addGroupId, { customer_ids: selectedIds, branch_id: addBranchId || null });
+      setNotice(t('customers.groups.added', { count: res.added, already: res.already }));
+      setAddOpen(false);
+      setSelection({ type: 'include', ids: new Set() });
+      await loadData();
+    } catch (err: any) {
+      setError(err?.detail || err?.message || t('customers.groups.saveFailed'));
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const toolbar = (
+    <Stack direction="row" sx={{ alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+      {tabsBar}
+      <TextField
+        select
+        size="small"
+        label={t('customers.groups.filter')}
+        value={groupFilter}
+        onChange={(e) => setGroupFilter(e.target.value)}
+        sx={{ minWidth: 180, flexShrink: 0 }}
+      >
+        <MenuItem value="">
+          <em>{t('customers.groups.allGroups')}</em>
+        </MenuItem>
+        {groups.map((g) => (
+          <MenuItem key={g.id} value={g.id}>
+            {g.name}
+          </MenuItem>
+        ))}
+      </TextField>
+      {canAddToGroups && selectedIds.length > 0 && addable.length > 0 && (
+        <Button variant="contained" color="secondary" size="small" sx={{ flexShrink: 0 }} onClick={() => setAddOpen(true)}>
+          {t('customers.groups.addSelected', { count: selectedIds.length })}
+        </Button>
+      )}
+    </Stack>
+  );
 
   return (
     <Box>
@@ -199,6 +282,11 @@ export function CustomersPage() {
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
           {error}
+        </Alert>
+      )}
+      {notice && (
+        <Alert severity="success" sx={{ mb: 3 }} onClose={() => setNotice(null)}>
+          {notice}
         </Alert>
       )}
 
@@ -232,7 +320,11 @@ export function CustomersPage() {
 
       <ServerDataGrid
         rows={customers}
-        toolbarStart={tabsBar}
+        toolbarStart={toolbar}
+        checkboxSelection={canAddToGroups}
+        disableRowSelectionOnClick
+        rowSelectionModel={selection}
+        onRowSelectionModelChange={setSelection}
         // Search goes to the server (500,000 customers), through the grid's own search box.
         filterModel={gridFilterModel}
         onFilterModelChange={(model) => setSearch((model.quickFilterValues ?? []).join(' '))}
@@ -257,31 +349,30 @@ export function CustomersPage() {
             renderCell: (params) => <span dir="ltr">{params.value}</span>,
           },
           {
-            field: 'family_discounts',
-            headerName: t('customers.family.column'),
+            field: 'groups',
+            headerName: t('customers.groups.column'),
             renderHeader: () => (
               <>
-                {t('customers.family.column')} <VersionTag feature="customers.family" sx={{ ml: 1 }} />
+                {t('customers.groups.column')} <VersionTag feature="customers.groups" sx={{ ml: 1 }} />
               </>
             ),
-            // The percent and the group; the branch they work at on hover.
-            width: 280,
+            width: 260,
             // Centres the chips and the dash in the row, as the text columns are.
             display: 'flex',
             sortable: false,
             renderCell: (params) => {
-              const rates = visibleFamily(params.row as Customer);
-              if (rates.length === 0) return <Typography variant="body2" color="text.disabled">—</Typography>;
+              const list = (params.row as Customer).groups || [];
+              if (list.length === 0) return <Typography variant="body2" color="text.disabled">—</Typography>;
               return (
                 <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap', py: 1 }}>
-                  {rates.map((f) => (
+                  {list.map((g) => (
                     <Chip
-                      key={f.id}
+                      key={g.id}
                       size="small"
                       color="secondary"
                       variant="outlined"
-                      label={f.group_name ? `${Number(f.percent)}% · ${f.group_name}` : `${Number(f.percent)}%`}
-                      title={branchName(f.branch_id)}
+                      label={g.name}
+                      title={g.branch_id ? branchName(g.branch_id) : undefined}
                       sx={{ fontWeight: 600, maxWidth: '100%' }}
                     />
                   ))}
@@ -393,6 +484,45 @@ export function CustomersPage() {
         createCustomer={customerApi.createCustomer}
         showCredit={isHeadOffice}
       />
+
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>{t('customers.groups.addSelected', { count: selectedIds.length })}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <TextField select label={t('customers.groups.addTo')} value={addGroupId} onChange={(e) => setAddGroupId(e.target.value)}>
+              {addable.map((g) => (
+                <MenuItem key={g.id} value={g.id}>
+                  {g.name}
+                </MenuItem>
+              ))}
+            </TextField>
+            {canChangeScope && (
+              <TextField
+                select
+                label={t('customers.groups.branch')}
+                value={addBranchId}
+                onChange={(e) => setAddBranchId(e.target.value)}
+                helperText={t('customers.groups.branchHelp')}
+              >
+                <MenuItem value="">
+                  <em>{t('customers.groups.noBranch')}</em>
+                </MenuItem>
+                {branches.map((b) => (
+                  <MenuItem key={b.id} value={b.id}>
+                    {b.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddOpen(false)}>{t('common.cancel')}</Button>
+          <Button variant="contained" color="secondary" disabled={!addGroupId || adding} onClick={addSelected}>
+            {t('customers.groups.add')}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <CustomerDrawer
         customerId={drawerCustomerId}

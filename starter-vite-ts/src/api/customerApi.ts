@@ -19,24 +19,19 @@ export interface Customer {
   wallet_account?: CustomerCreditAccount | null;
   wallet_balance?: string;
   credit_limit?: string;
-  /** The person's personal discount group (one at most). */
-  family_discounts?: FamilyDiscount[];
+  /** The groups the customer is in. */
+  groups?: CustomerGroupRef[];
 }
 
-/** A person's personal discount: their group and the branch they work at. */
-export interface FamilyDiscount {
+/** A group a customer is in, and the branch they belong to there. */
+export interface CustomerGroupRef {
   id: string;
+  name: string;
   branch_id: string | null;
-  group_id?: string | null;
-  group_name?: string | null;
-  /** The group works at every branch, not only theirs. */
-  any_branch?: boolean;
-  percent: string;
-  note?: string | null;
 }
 
-/** The customer list's filters: friends and family, who owes, who has wallet money. */
-export type CustomerListFilter = 'FAMILY' | 'OWES' | 'WALLET';
+/** The customer list's filters: anyone in a group, who owes, who has wallet money. */
+export type CustomerListFilter = 'GROUPED' | 'OWES' | 'WALLET';
 
 export interface CustomerAddress {
   id: string;
@@ -133,7 +128,7 @@ export const customerApi = {
     page: number;
     limit: number;
     has?: CustomerListFilter;
-    branchId?: string;
+    groupId?: string;
   }): Promise<CustomerPage> => {
     const res = await httpClient.get('/api/v1/customers', { params: { ...params, search: params.search || undefined } });
     return res.data;

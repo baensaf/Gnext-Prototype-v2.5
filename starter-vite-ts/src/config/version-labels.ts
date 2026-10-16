@@ -101,6 +101,8 @@ export const FEATURE_LABELS = {
   'customers.credit': 'V2',
   'customers.wallet': 'V2',
   'customers.family': 'V2',
+  // Customer groups and group discounts (2026-10-16): Iran Burger's staff scheme lives here.
+  'customers.groups': 'V2',
   // Operations
   'terminals.kiosk': 'V3',
   // Publishing agent versions and self-update; a V1 agent is installed by hand.

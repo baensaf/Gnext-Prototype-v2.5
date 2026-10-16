@@ -1,13 +1,14 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 /**
- * A personal discount group head office sets: who is in it (owners, branch staff with over a
- * year, ...), the percent they get, and how much of it a month allows. Each person on the
- * customer list is put in one group. Iran Burger's staff scheme has nine (2026-10-16).
+ * A percent off for the customers in the groups it picks, filled in on the till. Optional
+ * monthly limits (an extra beyond Toast, Square and Lightspeed, for Iran Burger's staff
+ * scheme): how much of their orders it covers in a calendar month, how many orders, and how
+ * much of one order; the rest of a bigger order is full price.
  */
-@Entity('personal_discount_group')
+@Entity('group_discount')
 @Index(['tenant_id', 'is_active'])
-export class PersonalDiscountGroup {
+export class GroupDiscount {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
@@ -20,21 +21,21 @@ export class PersonalDiscountGroup {
   @Column({ type: 'numeric', precision: 5, scale: 2 })
   percent: string;
 
-  /** How much of their orders the discount covers in a calendar month; null is no limit. */
+  @Column({ type: 'uuid', array: true, default: () => "'{}'" })
+  group_ids: string[];
+
+  /** Only at the branch the person belongs to in the group. */
+  @Column({ type: 'boolean', default: false })
+  own_branch_only: boolean;
+
   @Column({ type: 'numeric', precision: 19, scale: 4, nullable: true })
   monthly_cap: string | null;
 
-  /** How many orders a month may carry it; null is no limit. */
   @Column({ type: 'int', nullable: true })
   uses_per_month: number | null;
 
-  /** How much of one order it covers; the rest of the order is full price. Null is no limit. */
   @Column({ type: 'numeric', precision: 19, scale: 4, nullable: true })
   per_visit_cap: string | null;
-
-  /** True: any branch. False: only the branch the person works at. */
-  @Column({ type: 'boolean', default: false })
-  any_branch: boolean;
 
   @Column({ type: 'int', default: 0 })
   sort_order: number;

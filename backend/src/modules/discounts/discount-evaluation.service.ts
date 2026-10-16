@@ -10,7 +10,7 @@ import { HEAD_OFFICE_ROLES } from '../../common/utils/user-scope.util';
 import { DiscountQuoteRequestDto, QuoteItemDto, ManualDiscountDto } from './dtos/discounts.dto';
 import { ItemDiscountsService } from './item-discounts.service';
 import { CouponsService, CouponRefusal } from './coupons.service';
-import { PersonalDiscountsService, PersonalRefusal } from './personal-discounts.service';
+import { CustomerGroupsService, GroupDiscountRefusal } from './customer-groups.service';
 import { Coupon } from '../../entities/Coupon.entity';
 import { CouponBatch } from '../../entities/CouponBatch.entity';
 
@@ -29,11 +29,11 @@ export interface ConsideredDiscount {
   percent?: string;
   /** COUPON and CUSTOMER: the most the percent may take off, so an edit later prices it within the same cap. */
   maxDiscount?: string;
-  /** CUSTOMER: the person's group and what is left of it this month, or why it was not given. */
+  /** CUSTOMER: the customer's group discount and what is left of it this month, or why it was not given. */
   personal?: {
-    groupId: string;
-    groupName: string;
-    refusal?: PersonalRefusal;
+    discountId: string;
+    name: string;
+    refusal?: GroupDiscountRefusal;
     /** How much of this order it covers; less than the order when a cap stopped it. */
     covered?: string;
     partial?: boolean;
@@ -93,7 +93,7 @@ export class DiscountEvaluationService {
     @Optional()
     private readonly coupons?: CouponsService,
     @Optional()
-    private readonly personal?: PersonalDiscountsService,
+    private readonly groups?: CustomerGroupsService,
   ) {}
 
   /**
@@ -427,77 +427,83 @@ export class DiscountEvaluationService {
       }
     }
 
-    // B. The person's personal discount, on till orders, unless the cashier took it off. A
-    // coupon or a manual discount replaces it. Their group sets the percent and holds it to a
-    // month: so many orders, so much of their orders covered, so much of one order (the rest
-    // is full price), and for most groups only the branch the person works at.
-    if (!singleDiscountApplied && orderDraft.customerId && orderDraft.branchId && channel === 'POS' && !orderDraft.skipCustomerDiscount && this.personal) {
-      const found = await this.personal.forCustomer(tenantId, orderDraft.customerId);
-      if (found && MoneyUtil.greaterThan(found.group.percent, '0')) {
-        const { assignment, group } = found;
-        const name = `${group.name} ${Number(group.percent)}%`;
-        const used = await this.personal.usage(tenantId, orderDraft.customerId, orderDraft.orderId);
-        const { usesLeft, monthLeft } = this.personal.left(group, used);
-        const refuse = (refusal: PersonalRefusal) =>
-          consideredDiscounts.push({
+    // B. The customer's group discount, on till orders, unless the cashier took it off. A
+    // coupon or a manual discount replaces it. A customer in several groups gets the biggest
+    // percent that may apply: one for their own branch only works at the branch they belong
+    // to there, and optional monthly limits hold it to so many orders, so much of their orders
+    // covered, and so much of one order (the rest is full price).
+    if (!singleDiscountApplied && orderDraft.customerId && orderDraft.branchId && channel === 'POS' && !orderDraft.skipCustomerDiscount && this.groups) {
+      const offers = await this.groups.offersFor(tenantId, orderDraft.customerId);
+      let refused: ConsideredDiscount | null = null;
+      for (const { discount, branches } of offers) {
+        if (!MoneyUtil.greaterThan(discount.percent, '0')) continue;
+        const name = `${discount.name} ${Number(discount.percent)}%`;
+        const used = await this.groups.usage(tenantId, orderDraft.customerId, discount.id, orderDraft.orderId);
+        const { usesLeft, monthLeft } = this.groups.left(discount, used);
+        const refusal: GroupDiscountRefusal | null =
+          discount.own_branch_only && !branches.includes(orderDraft.branchId)
+            ? 'OTHER_BRANCH'
+            : usesLeft !== null && usesLeft <= 0
+              ? 'USES_SPENT'
+              : monthLeft !== null && !MoneyUtil.greaterThan(monthLeft, '0')
+                ? 'MONTH_SPENT'
+                : null;
+        if (refusal) {
+          refused = refused || {
             source: 'CUSTOMER',
             name,
-            percent: group.percent,
+            percent: discount.percent,
             discountType: 'CUSTOMER_DISCOUNT',
             status: 'REJECTED',
             rejectionReason: refusal,
             amount: '0.0000',
-            personal: { groupId: group.id, groupName: group.name, refusal, usesLeft, monthLeft },
-          });
-
-        if (!group.any_branch && assignment.branch_id !== orderDraft.branchId) {
-          refuse('OTHER_BRANCH');
-        } else if (usesLeft !== null && usesLeft <= 0) {
-          refuse('USES_SPENT');
-        } else if (monthLeft !== null && !MoneyUtil.greaterThan(monthLeft, '0')) {
-          refuse('MONTH_SPENT');
-        } else {
-          // How much of this order it may cover: the cap per order, and what the month has left.
-          let coverable: string | null = group.per_visit_cap ? MoneyUtil.format(group.per_visit_cap) : null;
-          if (monthLeft !== null && (coverable === null || MoneyUtil.lessThan(monthLeft, coverable))) coverable = monthLeft;
-
-          const eligible = lineItems
-            .map((_, i) => i)
-            .filter((i) => isDiscountableLine[i] && !familyExcludedLine[i] && MoneyUtil.greaterThan(remainingBases[i], '0'));
-          const base = eligible.reduce((sum, i) => MoneyUtil.add(sum, remainingBases[i]), '0.0000');
-          const covered = coverable !== null && MoneyUtil.greaterThan(base, coverable) ? coverable : base;
-          const pctDec = MoneyUtil.divide(group.percent, '100', 6);
-          const custDiscountAmt = MoneyUtil.multiply(covered, pctDec);
-
-          if (MoneyUtil.greaterThan(custDiscountAmt, '0')) {
-            const shares = MoneyUtil.allocate(custDiscountAmt, eligible.map((i) => remainingBases[i]));
-            eligible.forEach((lineIndex, k) => {
-              lineItems[lineIndex].discountTotal = MoneyUtil.add(lineItems[lineIndex].discountTotal, shares[k]);
-              remainingBases[lineIndex] = MoneyUtil.subtract(remainingBases[lineIndex], shares[k]);
-            });
-            discountTotal = MoneyUtil.add(discountTotal, custDiscountAmt);
-            const monthAfter = monthLeft === null ? null : MoneyUtil.subtract(monthLeft, covered);
-            consideredDiscounts.push({
-              source: 'CUSTOMER',
-              name,
-              percent: group.percent,
-              maxDiscount: coverable !== null ? MoneyUtil.multiply(coverable, pctDec) : undefined,
-              discountType: 'CUSTOMER_DISCOUNT',
-              status: 'APPLIED',
-              amount: custDiscountAmt,
-              personal: {
-                groupId: group.id,
-                groupName: group.name,
-                covered,
-                partial: MoneyUtil.lessThan(covered, base),
-                usesLeft: usesLeft === null ? null : usesLeft - 1,
-                monthLeft: monthAfter !== null && MoneyUtil.greaterThan(monthAfter, '0') ? monthAfter : monthAfter === null ? null : '0.0000',
-              },
-            });
-            singleDiscountApplied = true;
-          }
+            personal: { discountId: discount.id, name: discount.name, refusal, usesLeft, monthLeft },
+          };
+          continue;
         }
+
+        // How much of this order it may cover: the cap per order, and what the month has left.
+        let coverable: string | null = discount.per_visit_cap ? MoneyUtil.format(discount.per_visit_cap) : null;
+        if (monthLeft !== null && (coverable === null || MoneyUtil.lessThan(monthLeft, coverable))) coverable = monthLeft;
+
+        const eligible = lineItems
+          .map((_, i) => i)
+          .filter((i) => isDiscountableLine[i] && !familyExcludedLine[i] && MoneyUtil.greaterThan(remainingBases[i], '0'));
+        const base = eligible.reduce((sum, i) => MoneyUtil.add(sum, remainingBases[i]), '0.0000');
+        const covered = coverable !== null && MoneyUtil.greaterThan(base, coverable) ? coverable : base;
+        const pctDec = MoneyUtil.divide(discount.percent, '100', 6);
+        const custDiscountAmt = MoneyUtil.multiply(covered, pctDec);
+        if (!MoneyUtil.greaterThan(custDiscountAmt, '0')) break;
+
+        const shares = MoneyUtil.allocate(custDiscountAmt, eligible.map((i) => remainingBases[i]));
+        eligible.forEach((lineIndex, k) => {
+          lineItems[lineIndex].discountTotal = MoneyUtil.add(lineItems[lineIndex].discountTotal, shares[k]);
+          remainingBases[lineIndex] = MoneyUtil.subtract(remainingBases[lineIndex], shares[k]);
+        });
+        discountTotal = MoneyUtil.add(discountTotal, custDiscountAmt);
+        const monthAfter = monthLeft === null ? null : MoneyUtil.subtract(monthLeft, covered);
+        consideredDiscounts.push({
+          source: 'CUSTOMER',
+          name,
+          percent: discount.percent,
+          maxDiscount: coverable !== null ? MoneyUtil.multiply(coverable, pctDec) : undefined,
+          discountType: 'CUSTOMER_DISCOUNT',
+          status: 'APPLIED',
+          amount: custDiscountAmt,
+          personal: {
+            discountId: discount.id,
+            name: discount.name,
+            covered,
+            partial: MoneyUtil.lessThan(covered, base),
+            usesLeft: usesLeft === null ? null : usesLeft - 1,
+            monthLeft: monthAfter === null ? null : MoneyUtil.greaterThan(monthAfter, '0') ? monthAfter : '0.0000',
+          },
+        });
+        singleDiscountApplied = true;
+        refused = null;
+        break;
       }
+      if (refused) consideredDiscounts.push(refused);
     }
 
     // Line totals and tax after discounts. Product tax_rate is stored as a fraction (0.1000 for

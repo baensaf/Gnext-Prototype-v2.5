@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DiscountEvaluationService, DiscountQuoteResult } from './discount-evaluation.service';
 import { DiscountQuoteRequestDto } from './dtos/discounts.dto';
 
-/** Quotes and the manual discount limits; personal discounts live in PersonalDiscountsService. */
+/** Quotes and the manual discount limits; group discounts live in CustomerGroupsService. */
 @Injectable()
 export class DiscountsService {
   constructor(private readonly evaluationService: DiscountEvaluationService) {}

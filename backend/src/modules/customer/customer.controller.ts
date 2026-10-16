@@ -42,7 +42,7 @@ export class CustomerController {
   async getCustomers(
     @Query('search') search?: string,
     @Query('status') status?: string,
-    @Query() query?: PaginationQueryDto & { search?: string; status?: string; has?: string; branchId?: string },
+    @Query() query?: PaginationQueryDto & { search?: string; status?: string; has?: string; branchId?: string; groupId?: string },
     @Req() req?: Request,
   ) {
     const tenantId = (req as any).tenantId;

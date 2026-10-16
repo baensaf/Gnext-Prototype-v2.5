@@ -19,47 +19,61 @@ export interface ConsideredDiscount {
   status: 'APPLIED' | 'REJECTED';
   rejectionReason?: string;
   amount: string;
-  /** CUSTOMER: the person's group and what is left of it this month, or why it was not given. */
+  /** CUSTOMER: the customer's group discount and what is left of it this month, or why it was not given. */
   personal?: {
-    groupId: string;
-    groupName: string;
-    refusal?: PersonalRefusal;
+    discountId: string;
+    name: string;
+    refusal?: GroupDiscountRefusal;
     /** How much of this order it covers; `partial` when a cap stopped it short of the order. */
     covered?: string;
     partial?: boolean;
-    /** Left after this order; null where the group has no limit. */
+    /** Left after this order; null where the discount has no limit. */
     usesLeft: number | null;
     monthLeft: string | null;
   };
 }
 
-/** Why the till did not fill a person's discount in: not their branch, or the month is spent. */
-export type PersonalRefusal = 'OTHER_BRANCH' | 'USES_SPENT' | 'MONTH_SPENT';
+/** Why the till did not fill a group discount in: not their branch, or the month is spent. */
+export type GroupDiscountRefusal = 'OTHER_BRANCH' | 'USES_SPENT' | 'MONTH_SPENT';
 
-/** A personal discount group head office sets (Iran Burger's staff scheme has nine). */
-export interface PersonalDiscountGroup {
+/** A group of customers head office keeps (staff, owners, regulars); a customer can be in several. */
+export interface CustomerGroup {
+  id?: string;
+  name: string;
+  /** Branch managers may add and remove their own branch's people. */
+  branch_can_assign: boolean;
+  /** MANUAL today; automatic groups come later. */
+  kind?: string;
+  members?: number;
+}
+
+/** A percent off for the customers in the groups it picks, with optional monthly limits. */
+export interface GroupDiscount {
   id?: string;
   name: string;
   percent: string;
+  group_ids: string[];
+  /** Only at the branch the person belongs to in the group. */
+  own_branch_only: boolean;
   /** How much of their orders it covers in a calendar month; null is no limit. Rial. */
   monthly_cap: string | null;
   /** Orders a month that may carry it; null is no limit. */
   uses_per_month: number | null;
   /** How much of one order it covers; the rest is full price. Null is no limit. Rial. */
   per_visit_cap: string | null;
-  /** True: any branch. False: only the branch the person works at. */
-  any_branch: boolean;
-  /** People in the group. */
-  members?: number;
 }
 
-/** A person's group, the branch they work at, and what is left this month. */
-export interface PersonalDiscountSummary {
-  assignment: { id: string; branch_id: string | null; group_id: string; note: string | null };
-  group: PersonalDiscountGroup & { id: string };
-  usage: { uses: number; covered: string; monthStart: string };
-  usesLeft: number | null;
-  monthLeft: string | null;
+/** One customer's groups and the group discounts they get, with this month's use. */
+export interface CustomerGroupSummary {
+  memberships: { group_id: string; name: string; branch_can_assign: boolean; branch_id: string | null; note: string | null }[];
+  discounts: (GroupDiscount & {
+    id: string;
+    usage: { uses: number; covered: string; monthStart: string };
+    usesLeft: number | null;
+    monthLeft: string | null;
+    /** The branches the customer belongs to in the groups this discount covers. */
+    branches: (string | null)[];
+  })[];
 }
 
 export interface DiscountQuoteResult {
@@ -136,22 +150,35 @@ export const discountsApi = {
   deleteItemDiscount: async (id: string): Promise<void> => {
     await httpClient.delete('/api/v1/item-discounts/' + id);
   },
-  getPersonalGroups: async (): Promise<PersonalDiscountGroup[]> => {
-    const res = await httpClient.get('/api/v1/personal-discount-groups');
+  getCustomerGroups: async (): Promise<CustomerGroup[]> => {
+    const res = await httpClient.get('/api/v1/customer-groups');
     return res.data;
   },
-  /** Head office saves the whole list, in order; a group left out is removed. */
-  savePersonalGroups: async (groups: PersonalDiscountGroup[]): Promise<PersonalDiscountGroup[]> => {
-    const res = await httpClient.put('/api/v1/personal-discount-groups', { groups });
+  /** Head office saves the whole list, in order; a group left out is removed with its members. */
+  saveCustomerGroups: async (groups: CustomerGroup[]): Promise<CustomerGroup[]> => {
+    const res = await httpClient.put('/api/v1/customer-groups', { groups });
     return res.data;
   },
-  getPersonalDiscount: async (customerId: string): Promise<PersonalDiscountSummary | null> => {
-    const res = await httpClient.get('/api/v1/customer-discounts/personal', { params: { customer_id: customerId } });
-    return res.data || null;
+  getGroupDiscounts: async (): Promise<GroupDiscount[]> => {
+    const res = await httpClient.get('/api/v1/group-discounts');
+    return res.data;
   },
-  /** Puts a person in a group at the branch they work at; no group takes them out. */
-  setPersonalDiscount: async (data: { customer_id: string; group_id: string | null; branch_id?: string; note?: string | null }) => {
-    const res = await httpClient.put('/api/v1/customer-discounts/personal', data);
+  /** Head office saves the whole list, in order; one left out is removed. */
+  saveGroupDiscounts: async (discounts: GroupDiscount[]): Promise<GroupDiscount[]> => {
+    const res = await httpClient.put('/api/v1/group-discounts', { discounts });
+    return res.data;
+  },
+  getCustomerGroupSummary: async (customerId: string): Promise<CustomerGroupSummary> => {
+    const res = await httpClient.get(`/api/v1/customer-groups/of/${customerId}`);
+    return res.data;
+  },
+  /** Adds customers to a group; a branch account's always go in at its own branch. */
+  addGroupMembers: async (groupId: string, data: { customer_ids: string[]; branch_id?: string | null; note?: string | null }) => {
+    const res = await httpClient.post(`/api/v1/customer-groups/${groupId}/members`, data);
+    return res.data as { added: number; already: number };
+  },
+  removeGroupMember: async (groupId: string, customerId: string) => {
+    const res = await httpClient.delete(`/api/v1/customer-groups/${groupId}/members/${customerId}`);
     return res.data;
   },
   getManualDiscountLimits: async (): Promise<ManualDiscountLimits> => {
