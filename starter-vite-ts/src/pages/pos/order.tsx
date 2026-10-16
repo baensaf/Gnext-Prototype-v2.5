@@ -347,13 +347,13 @@ export function PosOrderPage() {
   const [quotedTaxAmount, setQuotedTaxAmount] = useState<string>('0');
   const [quotedDeliveryFee, setQuotedDeliveryFee] = useState<string>('0');
   const [appliedDiscountName, setAppliedDiscountName] = useState<string | null>(null);
-  // The customer's personal discount, once a quote has shown it (or why it was not given: not
+  // The customer's group discount, once a quote has shown it (or why it was not given: not
   // their branch, the month spent), and whether the cashier took it off this order. A new
   // customer starts over.
   const [personal, setPersonal] = useState<(NonNullable<ConsideredDiscount['personal']> & { percent: string }) | null>(null);
   const familyPercent = personal && !personal.refusal ? personal.percent : null;
   const [familySkipped, setFamilySkipped] = useState(false);
-  /** What the person's group has left this month after this order, for the chip's tooltip. */
+  /** What the group discount has left this month after this order, for the chip's tooltip. */
   const personalLeft = (p: NonNullable<ConsideredDiscount['personal']>) => {
     const parts = [
       p.usesLeft !== null ? t('pos.discount.familyLeftUses', { count: p.usesLeft }) : null,
@@ -2291,7 +2291,7 @@ export function PosOrderPage() {
                   )}
                   {couponCode && <VersionTag feature="pos.coupon" />}
                   {familyPercent && personal && !appliedManualDiscount && !couponCode && (
-                    <Tooltip title={`${personal.groupName} · ${personalLeft(personal)}`}>
+                    <Tooltip title={`${personal.name} · ${personalLeft(personal)}`}>
                       <Chip
                         size="small"
                         color="secondary"
@@ -2306,7 +2306,7 @@ export function PosOrderPage() {
                   )}
                   {/* Their group's limit stopped it: said once, so the cashier can tell the guest why. */}
                   {personal?.refusal && !appliedManualDiscount && !couponCode && (
-                    <Tooltip title={personal.groupName}>
+                    <Tooltip title={personal.name}>
                       <Chip
                         size="small"
                         color="warning"

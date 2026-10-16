@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
-import { CustomerDiscount } from '../../entities/CustomerDiscount.entity';
-import { PersonalDiscountGroup } from '../../entities/PersonalDiscountGroup.entity';
+import { CustomerGroup } from '../../entities/CustomerGroup.entity';
+import { CustomerGroupMember } from '../../entities/CustomerGroupMember.entity';
+import { GroupDiscount } from '../../entities/GroupDiscount.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { ApprovalRequest } from '../../entities/ApprovalRequest.entity';
 import { Product } from '../../entities/Product.entity';
@@ -14,7 +15,7 @@ import { DiscountsService } from './discounts.service';
 import { DiscountEvaluationService } from './discount-evaluation.service';
 import { ItemDiscountsService } from './item-discounts.service';
 import { CouponsService } from './coupons.service';
-import { PersonalDiscountsService } from './personal-discounts.service';
+import { CustomerGroupsService } from './customer-groups.service';
 import { DiscountsController } from './discounts.controller';
 import { AuditModule } from '../audit/audit.module';
 
@@ -22,8 +23,9 @@ import { AuditModule } from '../audit/audit.module';
   imports: [
     TypeOrmModule.forFeature([
       TenantSetting,
-      CustomerDiscount,
-      PersonalDiscountGroup,
+      CustomerGroup,
+      CustomerGroupMember,
+      GroupDiscount,
       Customer,
       ApprovalRequest,
       Product,
@@ -34,8 +36,8 @@ import { AuditModule } from '../audit/audit.module';
     ]),
     AuditModule,
   ],
-  providers: [DiscountsService, DiscountEvaluationService, ItemDiscountsService, CouponsService, PersonalDiscountsService],
+  providers: [DiscountsService, DiscountEvaluationService, ItemDiscountsService, CouponsService, CustomerGroupsService],
   controllers: [DiscountsController],
-  exports: [DiscountsService, DiscountEvaluationService, ItemDiscountsService, CouponsService, PersonalDiscountsService],
+  exports: [DiscountsService, DiscountEvaluationService, ItemDiscountsService, CouponsService, CustomerGroupsService],
 })
 export class DiscountsModule {}

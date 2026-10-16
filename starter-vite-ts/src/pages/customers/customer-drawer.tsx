@@ -1,7 +1,7 @@
 import type { AddressDraftState } from 'src/components/customer-register';
 import type { ProfileLedger, CustomerProfile } from 'src/api/profilesApi';
+import type { CustomerGroup, CustomerGroupSummary } from 'src/api/discountsApi';
 import type { Customer, CustomField, CustomerAddress } from 'src/api/customerApi';
-import type { PersonalDiscountGroup, PersonalDiscountSummary } from 'src/api/discountsApi';
 
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
@@ -10,8 +10,8 @@ import EditIcon from '@mui/icons-material/Edit';
 import HomeIcon from '@mui/icons-material/Home';
 import PlaceIcon from '@mui/icons-material/Place';
 import PersonIcon from '@mui/icons-material/Person';
+import GroupsIcon from '@mui/icons-material/Groups';
 import CreditScoreIcon from '@mui/icons-material/CreditScore';
-import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import {
   Box,
@@ -72,7 +72,7 @@ type Props = {
 };
 
 /**
- * One customer over the customer list: the figures, contact details, personal discount,
+ * One customer over the customer list: the figures, contact details, groups,
  * orders, addresses, wallet and credit, each changed where it is shown. The customer had a
  * page of its own and three dialogs off the row until 2026-10-14.
  */
@@ -86,7 +86,7 @@ export function CustomerDrawer({
   const { t } = useTranslation();
   const isHeadOffice = useIsHeadOffice();
   const userRole = useAuthStore((state) => state.user?.role);
-  // A manager puts their own branch's people in a group for one branch; head office anyone anywhere.
+  // A manager adds their own branch's people to the groups open to branches; head office anyone.
   const canSetDiscount = isManagerOrAbove(userRole);
   const { branches, selectedBranch, canChangeScope } = useBranchContext();
   const branchName = (id?: string | null) => branches.find((b) => b.id === id)?.name || '—';
@@ -196,19 +196,23 @@ export function CustomerDrawer({
     }
   };
 
-  // ---- Personal discount: the person's group and the branch they work at ----------------
-  const [groups, setGroups] = useState<PersonalDiscountGroup[]>([]);
-  const [personal, setPersonal] = useState<PersonalDiscountSummary | null>(null);
-  const [discountGroupId, setDiscountGroupId] = useState('');
-  const [discountBranchId, setDiscountBranchId] = useState('');
-  const [discountNote, setDiscountNote] = useState('');
-  const [discountSaving, setDiscountSaving] = useState(false);
-  // A group for every branch is head office's to give and to take away.
-  const lockedToHeadOffice = !canChangeScope && !!personal?.group.any_branch;
+  // ---- Groups: the groups the customer is in, and the group discounts they get -----------
+  const [groups, setGroups] = useState<CustomerGroup[]>([]);
+  const [summary, setSummary] = useState<CustomerGroupSummary | null>(null);
+  const [addGroupId, setAddGroupId] = useState('');
+  const [addBranchId, setAddBranchId] = useState('');
+  const [groupSaving, setGroupSaving] = useState(false);
+  // A branch adds and removes its own people, in the groups head office opens to branches.
+  const ownBranchId = canChangeScope ? null : selectedBranch?.id || null;
+  const canRemove = (m: CustomerGroupSummary['memberships'][number]) =>
+    canSetDiscount && (!ownBranchId || (m.branch_can_assign && m.branch_id === ownBranchId));
+  const addable = groups.filter(
+    (g) => (!ownBranchId || g.branch_can_assign) && !summary?.memberships.some((m) => m.group_id === g.id)
+  );
 
   useEffect(() => {
     discountsApi
-      .getPersonalGroups()
+      .getCustomerGroups()
       .then(setGroups)
       .catch(() => setGroups([]));
   }, []);
@@ -216,33 +220,48 @@ export function CustomerDrawer({
   useEffect(() => {
     if (!customerId || !profile) return;
     discountsApi
-      .getPersonalDiscount(customerId)
-      .then((found) => {
-        setPersonal(found);
-        setDiscountGroupId(found?.group.id || '');
-        setDiscountBranchId(found?.assignment.branch_id || selectedBranch?.id || branches[0]?.id || '');
-        setDiscountNote(found?.assignment.note || '');
-      })
-      .catch(() => setPersonal(null));
-  }, [customerId, profile, selectedBranch, branches]);
+      .getCustomerGroupSummary(customerId)
+      .then(setSummary)
+      .catch(() => setSummary(null));
+  }, [customerId, profile]);
 
-  const saveDiscount = async () => {
-    if (!customerId) return;
-    setDiscountSaving(true);
+  const addToGroup = async () => {
+    if (!customerId || !addGroupId) return;
+    setGroupSaving(true);
     try {
-      await discountsApi.setPersonalDiscount({
-        customer_id: customerId,
-        group_id: discountGroupId || null,
-        branch_id: discountBranchId || undefined,
-        note: discountNote.trim() || null,
-      });
+      await discountsApi.addGroupMembers(addGroupId, { customer_ids: [customerId], branch_id: addBranchId || null });
+      setAddGroupId('');
       await changed();
     } catch (err: any) {
-      setError(err?.detail || err?.message || t('customers.family.saveFailed'));
+      setError(err?.detail || err?.message || t('customers.groups.saveFailed'));
     } finally {
-      setDiscountSaving(false);
+      setGroupSaving(false);
     }
   };
+
+  const removeFromGroup = async (groupId: string) => {
+    if (!customerId) return;
+    setGroupSaving(true);
+    try {
+      await discountsApi.removeGroupMember(groupId, customerId);
+      await changed();
+    } catch (err: any) {
+      setError(err?.detail || err?.message || t('customers.groups.saveFailed'));
+    } finally {
+      setGroupSaving(false);
+    }
+  };
+
+  /** What a group discount has left this month, in words. */
+  const leftText = (d: CustomerGroupSummary['discounts'][number]) =>
+    d.usesLeft === null && d.monthLeft === null
+      ? t('customers.groups.noLimit')
+      : [
+          d.usesLeft !== null ? t('customers.groups.leftUses', { count: d.usesLeft }) : null,
+          d.monthLeft !== null ? t('customers.groups.leftAmount', { amount: formatMoney(d.monthLeft) }) : null,
+        ]
+          .filter(Boolean)
+          .join(' · ');
 
   // ---- Addresses ------------------------------------------------------------------------
   const emptyDraft = (): AddressDraftState => ({
@@ -553,120 +572,91 @@ export function CustomerDrawer({
                 )}
               </InfoCard>
 
-              {/* Personal discount: the person's group, at the branch they work at, filled in on the till. */}
+              {/* Groups: the groups the customer is in, and the group discounts the till fills in. */}
               <InfoCard
-                title={t('customers.family.title')}
-                icon={<VolunteerActivismIcon color="secondary" />}
-                action={<VersionTag feature="customers.family" />}
+                title={t('customers.groups.title')}
+                icon={<GroupsIcon color="secondary" />}
+                action={<VersionTag feature="customers.groups" />}
               >
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  {t('customers.family.help')}
-                </Typography>
-                {personal && (canChangeScope || personal.assignment.branch_id === selectedBranch?.id) ? (
-                  <Stack spacing={0.75} sx={{ mb: canSetDiscount ? 2.5 : 0 }}>
-                    <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                {summary && summary.memberships.length > 0 ? (
+                  <Stack direction="row" sx={{ gap: 1, flexWrap: 'wrap', mb: 2 }}>
+                    {summary.memberships.map((m) => (
                       <Chip
+                        key={m.group_id}
                         color="secondary"
                         variant="outlined"
-                        label={`${Number(personal.group.percent)}% · ${personal.group.name}`}
+                        label={m.branch_id ? `${m.name} · ${branchName(m.branch_id)}` : m.name}
+                        onDelete={canRemove(m) && !groupSaving ? () => removeFromGroup(m.group_id) : undefined}
                         sx={{ fontWeight: 600, maxWidth: '100%' }}
                       />
-                      <Typography variant="caption" color="text.secondary">
-                        {personal.group.any_branch
-                          ? t('customers.family.anyBranch')
-                          : `${t('customers.family.ownBranch')} · ${branchName(personal.assignment.branch_id)}`}
-                      </Typography>
-                    </Stack>
-                    <Typography variant="body2" color="text.secondary">
-                      {t('customers.family.usage', {
-                        uses: personal.usage.uses,
-                        covered: formatMoney(personal.usage.covered),
-                      })}
-                      {' · '}
-                      {personal.usesLeft === null && personal.monthLeft === null
-                        ? t('customers.family.noLimit')
-                        : [
-                            personal.usesLeft !== null ? t('customers.family.leftUses', { count: personal.usesLeft }) : null,
-                            personal.monthLeft !== null
-                              ? t('customers.family.leftAmount', { amount: formatMoney(personal.monthLeft) })
-                              : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                    </Typography>
+                    ))}
                   </Stack>
                 ) : (
-                  <Typography
-                    variant="body2"
-                    color="text.disabled"
-                    sx={{ mb: canSetDiscount ? 2.5 : 0 }}
-                  >
-                    {t('customers.family.none')}
+                  <Typography variant="body2" color="text.disabled" sx={{ mb: 2 }}>
+                    {t('customers.groups.none')}
                   </Typography>
                 )}
-                {canSetDiscount && !lockedToHeadOffice && (
-                  <Stack spacing={2}>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+
+                {summary && summary.discounts.length > 0 && (
+                  <Stack spacing={1} sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2">{t('customers.groups.discounts')}</Typography>
+                    {summary.discounts.map((d) => (
+                      <Box key={d.id}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {`${Number(d.percent)}% · ${d.name}`}
+                          <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                            {d.own_branch_only ? t('customers.groups.ownBranch') : t('customers.groups.anyBranch')}
+                          </Typography>
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {t('customers.groups.usage', { uses: d.usage.uses, covered: formatMoney(d.usage.covered) })}
+                          {' · '}
+                          {leftText(d)}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Stack>
+                )}
+
+                {canSetDiscount && addable.length > 0 && (
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
+                    <TextField
+                      select
+                      size="small"
+                      label={t('customers.groups.addTo')}
+                      value={addGroupId}
+                      onChange={(e) => setAddGroupId(e.target.value)}
+                      sx={{ minWidth: 240, flex: 1 }}
+                    >
+                      {addable.map((g) => (
+                        <MenuItem key={g.id} value={g.id}>
+                          {g.name}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                    {canChangeScope && (
                       <TextField
                         select
                         size="small"
-                        label={t('customers.family.group')}
-                        value={discountGroupId}
-                        onChange={(e) => setDiscountGroupId(e.target.value)}
-                        sx={{ minWidth: 240, flex: 1 }}
+                        label={t('customers.groups.branch')}
+                        value={addBranchId}
+                        onChange={(e) => setAddBranchId(e.target.value)}
+                        sx={{ minWidth: 180 }}
                       >
                         <MenuItem value="">
-                          <em>{t('customers.family.noGroup')}</em>
+                          <em>{t('customers.groups.noBranch')}</em>
                         </MenuItem>
-                        {groups
-                          .filter((g) => canChangeScope || !g.any_branch)
-                          .map((g) => (
-                            <MenuItem key={g.id} value={g.id}>
-                              {`${Number(g.percent)}% · ${g.name}`}
-                            </MenuItem>
-                          ))}
+                        {branches.map((b) => (
+                          <MenuItem key={b.id} value={b.id}>
+                            {b.name}
+                          </MenuItem>
+                        ))}
                       </TextField>
-                      {canChangeScope && (
-                        <TextField
-                          select
-                          size="small"
-                          label={t('customers.family.branch')}
-                          value={discountBranchId}
-                          onChange={(e) => setDiscountBranchId(e.target.value)}
-                          sx={{ minWidth: 180 }}
-                        >
-                          {branches.map((b) => (
-                            <MenuItem key={b.id} value={b.id}>
-                              {b.name}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      )}
-                    </Stack>
-                    <TextField
-                      size="small"
-                      fullWidth
-                      label={t('customers.family.note')}
-                      placeholder={t('customers.family.notePlaceholder')}
-                      value={discountNote}
-                      onChange={(e) => setDiscountNote(e.target.value)}
-                    />
-                    <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-                      <Button
-                        variant="contained"
-                        color="secondary"
-                        disabled={discountSaving || (!!discountGroupId && !discountBranchId) || (!discountGroupId && !personal)}
-                        onClick={saveDiscount}
-                      >
-                        {t('common.save')}
-                      </Button>
-                    </Stack>
+                    )}
+                    <Button variant="contained" color="secondary" disabled={!addGroupId || groupSaving} onClick={addToGroup}>
+                      {t('customers.groups.add')}
+                    </Button>
                   </Stack>
-                )}
-                {canSetDiscount && lockedToHeadOffice && (
-                  <Typography variant="caption" color="text.secondary">
-                    {t('customers.family.headOfficeGroup')}
-                  </Typography>
                 )}
               </InfoCard>
             </Stack>

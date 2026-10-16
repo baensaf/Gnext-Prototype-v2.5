@@ -181,7 +181,7 @@ export function useNavData(): NavSectionProps['data'] {
             },
           ],
         },
-        // One place for the customer: the list (with friends-and-family rates, wallet and credit
+        // One place for the customer: the list (with their groups, wallet and credit
         // on each row, and the credit actions in the row's dialog), and the wallets with the
         // cashback rule.
         {
@@ -192,6 +192,10 @@ export function useNavData(): NavSectionProps['data'] {
             {
               title: t('nav.customers', 'Customer Directory'),
               path: '/app/customers',
+            },
+            {
+              title: t('nav.customerGroups', 'Customer groups'),
+              path: '/app/customers/groups',
             },
             {
               title: t('nav.customerWallet', 'Wallet & Cashback'),

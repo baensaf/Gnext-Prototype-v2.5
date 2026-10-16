@@ -77,7 +77,7 @@ export class ProfilesService {
       orders: summary.orders,
       credit: account ? { account, entries } : null,
       wallet: wallet ? { account: wallet, entries: walletEntries } : null,
-      family_discounts: customer.family_discounts || [],
+      groups: customer.groups || [],
       audit,
     };
   }

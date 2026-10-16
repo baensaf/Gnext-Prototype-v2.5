@@ -2,17 +2,16 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DiscountsService } from '../src/modules/discounts/discounts.service';
 import { DiscountEvaluationService } from '../src/modules/discounts/discount-evaluation.service';
-import { PersonalDiscountsService } from '../src/modules/discounts/personal-discounts.service';
+import { CustomerGroupsService } from '../src/modules/discounts/customer-groups.service';
 import { AuditWriter } from '../src/modules/audit/audit-writer.service';
 import { TenantSetting } from '../src/entities/TenantSetting.entity';
-import { CustomerDiscount } from '../src/entities/CustomerDiscount.entity';
 import { Customer } from '../src/entities/Customer.entity';
 import { ApprovalRequest } from '../src/entities/ApprovalRequest.entity';
 import { Product } from '../src/entities/Product.entity';
 
 /**
  * After the automatic item discounts, the engine has two order discount sources, in
- * precedence order — the cashier's manual discount, the person's personal discount group — and applies at
+ * precedence order — the cashier's manual discount, the customer's group discount — and applies at
  * most one of them. Discount campaigns (automatic promotions, scopes, stacking) and coupons
  * are not part of the prototype.
  */
@@ -21,33 +20,30 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
   let evaluationService: DiscountEvaluationService;
 
   let settingRepo: any;
-  let customerDiscountRepo: any;
-  let personal: any;
+  let groups: any;
   let auditWriter: any;
   let productRepo: any;
 
   beforeEach(async () => {
     settingRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() };
-    customerDiscountRepo = { find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null), create: jest.fn(), save: jest.fn() };
     auditWriter = { write: jest.fn() };
     productRepo = { find: jest.fn().mockResolvedValue([]) };
-    personal = {
-      forCustomer: jest.fn().mockResolvedValue(null),
+    groups = {
+      offersFor: jest.fn().mockResolvedValue([]),
       usage: jest.fn().mockResolvedValue({ uses: 0, covered: '0.0000', monthStart: '2026-09-23' }),
-      left: PersonalDiscountsService.prototype.left,
+      left: CustomerGroupsService.prototype.left,
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DiscountsService,
         DiscountEvaluationService,
-        { provide: getRepositoryToken(CustomerDiscount), useValue: customerDiscountRepo },
         { provide: getRepositoryToken(Customer), useValue: { find: jest.fn().mockResolvedValue([]), findOne: jest.fn() } },
         { provide: getRepositoryToken(ApprovalRequest), useValue: { findOne: jest.fn().mockResolvedValue(null), create: jest.fn(), save: jest.fn() } },
         { provide: getRepositoryToken(TenantSetting), useValue: settingRepo },
         { provide: getRepositoryToken(Product), useValue: productRepo },
         { provide: AuditWriter, useValue: auditWriter },
-        { provide: PersonalDiscountsService, useValue: personal },
+        { provide: CustomerGroupsService, useValue: groups },
       ],
     }).compile();
 
@@ -64,32 +60,34 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
     expect(result.consideredDiscounts).toEqual([]);
   });
 
-  describe("The person's personal discount group", () => {
+  describe("The customer's group discount", () => {
     const item = { productId: 'p-1', unitPrice: '100000.0000', quantity: '1' };
     const drink = { productId: 'p-2', categoryId: 'cat-drinks', unitPrice: '50000.0000', quantity: '1' };
     const drinksExcluded = () =>
       settingRepo.find.mockImplementation(async ({ where }: any) =>
         where?.key === 'DISCOUNT_AUTHORIZATIONS' ? [{ key: 'DISCOUNT_AUTHORIZATIONS', value: { familyExcludedCategoryIds: ['cat-drinks'] } }] : [],
       );
-    const group = (fields: Record<string, unknown> = {}) => ({
-      id: 'g-1',
+    const discount = (fields: Record<string, unknown> = {}) => ({
+      id: 'd-1',
       name: 'Branch staff',
       percent: '20.00',
+      group_ids: ['g-1'],
+      own_branch_only: true,
       monthly_cap: null,
       uses_per_month: null,
       per_visit_cap: null,
-      any_branch: false,
       is_active: true,
       ...fields,
     });
-    const inGroup = (fields: Record<string, unknown> = {}, homeBranch = 'b-1') =>
-      personal.forCustomer.mockResolvedValue({ assignment: { customer_id: 'cust-1', branch_id: homeBranch }, group: group(fields) });
-    const used = (uses: number, covered: string) => personal.usage.mockResolvedValue({ uses, covered, monthStart: '2026-09-23' });
+    /** The customer is in for these discounts (biggest first), belonging to these branches. */
+    const offers = (...list: { fields?: Record<string, unknown>; branches?: (string | null)[] }[]) =>
+      groups.offersFor.mockResolvedValue(list.map((o) => ({ discount: discount(o.fields), branches: o.branches ?? ['b-1'] })));
+    const used = (uses: number, covered: string) => groups.usage.mockResolvedValue({ uses, covered, monthStart: '2026-09-23' });
     const quote = (items: any[] = [item], extra: Record<string, unknown> = {}) =>
       evaluationService.evaluateQuote('t-1', { orderDraft: { customerId: 'cust-1', branchId: 'b-1', items, ...extra } });
 
-    it('applies at the branch the person works at, and names their group', async () => {
-      inGroup();
+    it('applies at the branch the person belongs to, and names the discount', async () => {
+      offers({});
 
       const result = await quote();
 
@@ -97,11 +95,11 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
       expect(result.consideredDiscounts).toEqual([
         expect.objectContaining({ source: 'CUSTOMER', status: 'APPLIED', percent: '20.00', name: 'Branch staff 20%' }),
       ]);
-      expect(personal.forCustomer).toHaveBeenCalledWith('t-1', 'cust-1');
+      expect(groups.offersFor).toHaveBeenCalledWith('t-1', 'cust-1');
     });
 
-    it('is refused at another branch when the group is for their own branch only', async () => {
-      inGroup({}, 'b-2');
+    it('is refused at another branch when it is for their own branch only', async () => {
+      offers({ branches: ['b-2'] });
 
       const result = await quote();
 
@@ -111,28 +109,40 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
       );
     });
 
-    it('works at any branch when the group says so', async () => {
-      inGroup({ any_branch: true }, 'b-2');
+    it('works at any branch when it is not held to one', async () => {
+      offers({ fields: { own_branch_only: false }, branches: ['b-2'] });
 
       expect((await quote()).discountTotal).toBe('20000.0000');
+    });
+
+    it('gives a customer in several groups the biggest discount that may apply', async () => {
+      offers(
+        { fields: { id: 'd-big', name: 'Owners', percent: '35.00' }, branches: ['b-2'] },
+        { fields: { id: 'd-small', name: 'Regulars', percent: '10.00', own_branch_only: false } },
+      );
+
+      const result = await quote();
+
+      expect(result.discountTotal).toBe('10000.0000');
+      expect(result.consideredDiscounts).toEqual([expect.objectContaining({ status: 'APPLIED', name: 'Regulars 10%' })]);
     });
 
     it('is not looked up without the branch the order is at', async () => {
       const result = await evaluationService.evaluateQuote('t-1', { orderDraft: { customerId: 'cust-1', items: [item] } });
 
       expect(result.discountTotal).toBe('0.0000');
-      expect(personal.forCustomer).not.toHaveBeenCalled();
+      expect(groups.offersFor).not.toHaveBeenCalled();
     });
 
     it('stays off when the cashier took it off the order', async () => {
-      inGroup();
+      offers({});
 
       expect((await quote([item], { skipCustomerDiscount: true })).discountTotal).toBe('0.0000');
     });
 
     it("leaves head office's excluded categories at full price", async () => {
       drinksExcluded();
-      inGroup();
+      offers({});
 
       const result = await quote([item, drink]);
 
@@ -140,8 +150,8 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
       expect(result.items[1].discountTotal).toBe('0.0000');
     });
 
-    it('covers an order only up to the cap per visit; the rest is full price', async () => {
-      inGroup({ percent: '25.00', per_visit_cap: '250000.0000' });
+    it('covers an order only up to the cap per order; the rest is full price', async () => {
+      offers({ fields: { percent: '25.00', per_visit_cap: '250000.0000' } });
 
       const result = await quote([{ productId: 'p-1', unitPrice: '400000.0000', quantity: '1' }]);
 
@@ -152,7 +162,7 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
     });
 
     it("covers no more than what is left of the month's cap", async () => {
-      inGroup({ percent: '25.00', monthly_cap: '1000000.0000', per_visit_cap: '250000.0000', uses_per_month: 4 });
+      offers({ fields: { percent: '25.00', monthly_cap: '1000000.0000', per_visit_cap: '250000.0000', uses_per_month: 4 } });
       used(3, '900000.0000');
 
       const result = await quote([{ productId: 'p-1', unitPrice: '400000.0000', quantity: '1' }]);
@@ -162,7 +172,7 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
     });
 
     it('is refused once the month has had its orders', async () => {
-      inGroup({ uses_per_month: 4 });
+      offers({ fields: { uses_per_month: 4 } });
       used(4, '100000.0000');
 
       const result = await quote();
@@ -172,7 +182,7 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
     });
 
     it("is refused once the month's cap is spent", async () => {
-      inGroup({ monthly_cap: '500000.0000' });
+      offers({ fields: { monthly_cap: '500000.0000' } });
       used(2, '500000.0000');
 
       const result = await quote();
@@ -181,12 +191,12 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
       expect(result.consideredDiscounts[0].personal?.refusal).toBe('MONTH_SPENT');
     });
 
-    it('leaves the order being priced out of what the month has used', async () => {
-      inGroup();
+    it('counts the month per discount, leaving out the order being priced', async () => {
+      offers({});
 
       await quote([item], { orderId: 'o-1' });
 
-      expect(personal.usage).toHaveBeenCalledWith('t-1', 'cust-1', 'o-1');
+      expect(groups.usage).toHaveBeenCalledWith('t-1', 'cust-1', 'd-1', 'o-1');
     });
 
     it('excludes the same categories from a cashier discount given as a personal discount, and only that one', async () => {
@@ -207,7 +217,7 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
     });
 
     it("gives way to the cashier's own discount, and only one of them applies", async () => {
-      inGroup();
+      offers({});
 
       const result = await evaluationService.evaluateQuote(
         't-1',
@@ -220,7 +230,7 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
 
       expect(result.discountTotal).toBe('5000.0000');
       expect(result.consideredDiscounts.filter((d) => d.status === 'APPLIED').map((d) => d.source)).toEqual(['MANUAL']);
-      expect(personal.forCustomer).not.toHaveBeenCalled();
+      expect(groups.offersFor).not.toHaveBeenCalled();
     });
   });
 

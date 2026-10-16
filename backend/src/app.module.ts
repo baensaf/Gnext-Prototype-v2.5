@@ -86,8 +86,9 @@ import { ApprovalRequest } from './entities/ApprovalRequest.entity';
 import { ApprovalDecision } from './entities/ApprovalDecision.entity';
 import { PinAttemptLog } from './entities/PinAttemptLog.entity';
 import { Customer } from './entities/Customer.entity';
-import { CustomerDiscount } from './entities/CustomerDiscount.entity';
-import { PersonalDiscountGroup } from './entities/PersonalDiscountGroup.entity';
+import { CustomerGroup } from './entities/CustomerGroup.entity';
+import { CustomerGroupMember } from './entities/CustomerGroupMember.entity';
+import { GroupDiscount } from './entities/GroupDiscount.entity';
 import { Coupon } from './entities/Coupon.entity';
 import { CouponBatch } from './entities/CouponBatch.entity';
 import { ItemDiscount } from './entities/ItemDiscount.entity';
@@ -149,7 +150,7 @@ import { TaraConnection, TaraBranch, TaraTerminal, TaraPurchase, TaraSimPurchase
           PriceEntry, PriceGroupBranch, PriceBulkJob,
           ProductAvailability,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
-          CustomerDiscount, PersonalDiscountGroup, ItemDiscount, Coupon, CouponBatch,
+          CustomerGroup, CustomerGroupMember, GroupDiscount, ItemDiscount, Coupon, CouponBatch,
           Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CreditEntry,
           CustomFieldDefinition, CustomerCustomValue,
           OrderHeader, OrderItem, OrderItemOption, OrderAdjustment, OrderNote, OrderLink, OrderStateEvent, OrderSequence,

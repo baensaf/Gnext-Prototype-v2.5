@@ -1,16 +1,16 @@
-import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Req, Query } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { DiscountsService } from './discounts.service';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { DiscountQuoteRequestDto } from './dtos/discounts.dto';
 import { ItemDiscountsService, ItemDiscountInput } from './item-discounts.service';
 import { CouponsService, CouponBatchInput } from './coupons.service';
-import { PersonalDiscountsService, PersonalDiscountGroupInput } from './personal-discounts.service';
+import { CustomerGroupsService, CustomerGroupInput, GroupDiscountInput } from './customer-groups.service';
 
 /**
  * How an order is discounted. First the automatic item discounts (a dated percent off a
  * product, V1), line by line; then at most one order discount on what is left, in precedence
- * order: a coupon, the cashier's manual discount, then the person's personal discount group.
+ * order: a coupon, the cashier's manual discount, then the customer's group discount.
  * Discount campaigns (targeting, conditions, stacking rules) are not part of the prototype.
  */
 @Controller('api/v1')
@@ -19,7 +19,7 @@ export class DiscountsController {
     private readonly discountsService: DiscountsService,
     private readonly itemDiscounts: ItemDiscountsService,
     private readonly coupons: CouponsService,
-    private readonly personal: PersonalDiscountsService,
+    private readonly groups: CustomerGroupsService,
   ) {}
 
   // One-time coupons (V2): head office makes batches of codes for a campaign; each code
@@ -86,35 +86,56 @@ export class DiscountsController {
     return await this.discountsService.getManualDiscountLimits(tenantId, (req as any).userRole);
   }
 
-  // Personal discounts: head office's groups, and who is in which. A branch's manager puts
-  // their own branch's people in a group for one branch; head office anyone in any group.
-  @Get('personal-discount-groups')
-  async listPersonalDiscountGroups(@Req() req: Request) {
-    return await this.personal.listGroups((req as any).tenantId);
+  // Customer groups and group discounts: head office keeps both; a branch's manager adds and
+  // removes their own branch's people in the groups open to branches.
+  @Get('customer-groups')
+  async listCustomerGroups(@Req() req: Request) {
+    return await this.groups.listGroups((req as any).tenantId);
   }
 
   @HeadOfficeOnly()
-  @Put('personal-discount-groups')
-  async savePersonalDiscountGroups(@Body() body: { groups: PersonalDiscountGroupInput[] }, @Req() req: Request) {
-    return await this.personal.saveGroups((req as any).tenantId, body?.groups || [], (req as any).userId, (req as any).correlationId);
+  @Put('customer-groups')
+  async saveCustomerGroups(@Body() body: { groups: CustomerGroupInput[] }, @Req() req: Request) {
+    return await this.groups.saveGroups((req as any).tenantId, body?.groups || [], (req as any).userId, (req as any).correlationId);
   }
 
-  /** The person's group and what is left of it this month; null when they have none. */
-  @Get('customer-discounts/personal')
-  async getPersonalDiscount(@Query('customer_id') customerId: string, @Req() req: Request) {
-    return await this.personal.summary((req as any).tenantId, customerId);
+  /** One customer's groups and the group discounts they get, with this month's use. */
+  @Get('customer-groups/of/:customerId')
+  async customerGroupSummary(@Param('customerId') customerId: string, @Req() req: Request) {
+    return await this.groups.summary((req as any).tenantId, customerId);
   }
 
-  /** Puts a person in a group at the branch they work at; no group takes them out. */
   @Roles(...MANAGER_AND_ABOVE)
-  @Put('customer-discounts/personal')
-  async setPersonalDiscount(@Body() body: any, @Req() req: Request) {
-    return await this.personal.assign(
+  @Post('customer-groups/:id/members')
+  async addGroupMembers(
+    @Param('id') id: string,
+    @Body() body: { customer_ids: string[]; branch_id?: string | null; note?: string | null },
+    @Req() req: Request,
+  ) {
+    return await this.groups.addMembers(
       (req as any).tenantId,
+      id,
       body,
       (req as any).userBranchId ?? null,
       (req as any).userId,
       (req as any).correlationId,
     );
+  }
+
+  @Roles(...MANAGER_AND_ABOVE)
+  @Delete('customer-groups/:id/members/:customerId')
+  async removeGroupMember(@Param('id') id: string, @Param('customerId') customerId: string, @Req() req: Request) {
+    return await this.groups.removeMember((req as any).tenantId, id, customerId, (req as any).userBranchId ?? null, (req as any).correlationId);
+  }
+
+  @Get('group-discounts')
+  async listGroupDiscounts(@Req() req: Request) {
+    return await this.groups.listDiscounts((req as any).tenantId);
+  }
+
+  @HeadOfficeOnly()
+  @Put('group-discounts')
+  async saveGroupDiscounts(@Body() body: { discounts: GroupDiscountInput[] }, @Req() req: Request) {
+    return await this.groups.saveDiscounts((req as any).tenantId, body?.discounts || [], (req as any).userId, (req as any).correlationId);
   }
 }
