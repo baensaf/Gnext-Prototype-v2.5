@@ -1193,7 +1193,8 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     const userRepo = dataSource.getRepository(AdminUser);
     const seededAdmins = await userRepo.find({ where: { tenant_id: tenantId } });
     expect(seededAdmins.length).toBeGreaterThan(0);
-    const seededAdmin = seededAdmins[0];
+    // The admin, not whichever user the database returns first (a courier has no password).
+    const seededAdmin = seededAdmins.find((u) => u.id === adminUserId)!;
     expect(seededAdmin.is_active).toBe(true);
 
     const validPassword = await argon2.verify(seededAdmin.password_hash, 'GnextDemo!2026');
