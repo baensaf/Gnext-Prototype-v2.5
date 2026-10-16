@@ -4,7 +4,7 @@ import type { ReasonCode } from 'src/api/settingsApi';
 import type { DeliveryZone } from 'src/api/deliveryApi';
 import type { LineQuote, OrderHeader } from 'src/api/orderApi';
 import type { Customer, CustomerAddress } from 'src/api/customerApi';
-import type { ManualDiscount, ManualDiscountLimits } from 'src/api/discountsApi';
+import type { ManualDiscount, ConsideredDiscount, ManualDiscountLimits } from 'src/api/discountsApi';
 import type {
   Product,
   Category,
@@ -347,10 +347,24 @@ export function PosOrderPage() {
   const [quotedTaxAmount, setQuotedTaxAmount] = useState<string>('0');
   const [quotedDeliveryFee, setQuotedDeliveryFee] = useState<string>('0');
   const [appliedDiscountName, setAppliedDiscountName] = useState<string | null>(null);
-  // The customer's friends-and-family rate at this branch, once a quote has shown it, and
-  // whether the cashier took it off this order. A new customer starts over.
-  const [familyPercent, setFamilyPercent] = useState<string | null>(null);
+  // The customer's personal discount, once a quote has shown it (or why it was not given: not
+  // their branch, the month spent), and whether the cashier took it off this order. A new
+  // customer starts over.
+  const [personal, setPersonal] = useState<(NonNullable<ConsideredDiscount['personal']> & { percent: string }) | null>(null);
+  const familyPercent = personal && !personal.refusal ? personal.percent : null;
   const [familySkipped, setFamilySkipped] = useState(false);
+  /** What the person's group has left this month after this order, for the chip's tooltip. */
+  const personalLeft = (p: NonNullable<ConsideredDiscount['personal']>) => {
+    const parts = [
+      p.usesLeft !== null ? t('pos.discount.familyLeftUses', { count: p.usesLeft }) : null,
+      p.monthLeft !== null
+        ? t('pos.discount.familyLeftAmount', {
+            amount: t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(p.monthLeft) }),
+          })
+        : null,
+    ].filter(Boolean);
+    return parts.length ? parts.join(' · ') : t('pos.discount.familyNoLimit');
+  };
   // A one-time coupon code on the order (V2), and why the last quote refused it, if it did:
   // a free item not on the order yet, say. It works or the order is sent without it.
   const [couponCode, setCouponCode] = useState<string | null>(null);
@@ -990,7 +1004,8 @@ export function PosOrderPage() {
       // The order's own discount; item discounts show on their lines instead.
       const applied = quoteRes.consideredDiscounts?.find((d) => d.status === 'APPLIED' && d.source !== 'ITEM');
 
-      if (applied?.source === 'CUSTOMER' && applied.percent) setFamilyPercent(applied.percent);
+      const personalQuote = quoteRes.consideredDiscounts?.find((d) => d.source === 'CUSTOMER');
+      if (personalQuote?.personal) setPersonal({ ...personalQuote.personal, percent: personalQuote.percent || '0' });
       const coupon = quoteRes.consideredDiscounts?.find((d) => d.source === 'COUPON');
       setCouponRefusal(coupon && coupon.status !== 'APPLIED' ? coupon.couponRefusal || 'UNKNOWN' : null);
 
@@ -998,7 +1013,12 @@ export function PosOrderPage() {
         // The cashier's own discount shows as its rate; its name is the same on every order.
         setAppliedDiscountName(
           applied.source === 'CUSTOMER'
-            ? t('pos.discount.family', { pct: Number(applied.percent || 0) })
+            ? applied.personal?.partial && applied.personal.covered
+              ? t('pos.discount.familyPartial', {
+                  pct: Number(applied.percent || 0),
+                  amount: t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(applied.personal.covered) }),
+                })
+              : t('pos.discount.family', { pct: Number(applied.percent || 0) })
             : applied.source === 'COUPON'
               ? t('pos.coupon.name', { code: couponCode })
               : applied.source !== 'MANUAL'
@@ -1014,7 +1034,7 @@ export function PosOrderPage() {
     } catch {
       // A quote that fails leaves the figures as they were; submitting prices the order again.
     }
-  }, [cart, selectedCustomerId, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, lineUnitPrice, familySkipped, couponCode, t]);
+  }, [cart, selectedCustomerId, appliedManualDiscount, selectedBranchId, orderType, deliveryFeeCharged, lineUnitPrice, familySkipped, couponCode, currencyLabel, t]);
 
   /** Puts a typed code on the order; it replaces the cashier's own discount. */
   const applyCoupon = () => {
@@ -1032,7 +1052,7 @@ export function PosOrderPage() {
   }, [evaluateQuote]);
 
   useEffect(() => {
-    setFamilyPercent(null);
+    setPersonal(null);
     setFamilySkipped(false);
   }, [selectedCustomerId]);
 
@@ -2270,19 +2290,33 @@ export function PosOrderPage() {
                     />
                   )}
                   {couponCode && <VersionTag feature="pos.coupon" />}
-                  {familyPercent && !appliedManualDiscount && !couponCode && (
-                    <Chip
-                      size="small"
-                      color="secondary"
-                      variant={familySkipped ? 'outlined' : 'filled'}
-                      label={t('pos.discount.family', { pct: Number(familyPercent) })}
-                      onClick={familySkipped ? () => setFamilySkipped(false) : undefined}
-                      onDelete={familySkipped ? undefined : () => setFamilySkipped(true)}
-                      title={familySkipped ? t('pos.discount.familyPutBack') : t('pos.discount.familyTakeOff')}
-                      sx={{ flexShrink: 0, fontWeight: 600, textDecoration: familySkipped ? 'line-through' : 'none' }}
-                    />
+                  {familyPercent && personal && !appliedManualDiscount && !couponCode && (
+                    <Tooltip title={`${personal.groupName} · ${personalLeft(personal)}`}>
+                      <Chip
+                        size="small"
+                        color="secondary"
+                        variant={familySkipped ? 'outlined' : 'filled'}
+                        label={t('pos.discount.family', { pct: Number(familyPercent) })}
+                        onClick={familySkipped ? () => setFamilySkipped(false) : undefined}
+                        onDelete={familySkipped ? undefined : () => setFamilySkipped(true)}
+                        aria-label={familySkipped ? t('pos.discount.familyPutBack') : t('pos.discount.familyTakeOff')}
+                        sx={{ flexShrink: 0, fontWeight: 600, textDecoration: familySkipped ? 'line-through' : 'none' }}
+                      />
+                    </Tooltip>
                   )}
-                  {familyPercent && !appliedManualDiscount && !couponCode && <VersionTag feature="pos.familyDiscount" />}
+                  {/* Their group's limit stopped it: said once, so the cashier can tell the guest why. */}
+                  {personal?.refusal && !appliedManualDiscount && !couponCode && (
+                    <Tooltip title={personal.groupName}>
+                      <Chip
+                        size="small"
+                        color="warning"
+                        variant="outlined"
+                        label={t(`pos.discount.familyRefused.${personal.refusal}`)}
+                        sx={{ flexShrink: 1, minWidth: 0, fontWeight: 600 }}
+                      />
+                    </Tooltip>
+                  )}
+                  {(familyPercent || personal?.refusal) && !appliedManualDiscount && !couponCode && <VersionTag feature="pos.familyDiscount" />}
                   {MoneyUtil.greaterThan(appliedDiscountAmount, '0') ? (
                     <Typography variant="body2" color="error.main" sx={{ fontWeight: 'bold', flexShrink: 0 }}>
                       -{t('pos.amountIrr', { currency: currencyLabel, amount: MoneyUtil.formatCurrency(appliedDiscountAmount) })}

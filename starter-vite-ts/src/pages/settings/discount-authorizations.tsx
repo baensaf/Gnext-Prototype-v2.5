@@ -1,3 +1,5 @@
+import type { PersonalDiscountGroup } from 'src/api/discountsApi';
+
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
 
@@ -17,6 +19,7 @@ import {
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { catalogApi } from 'src/api/catalogApi';
+import { discountsApi } from 'src/api/discountsApi';
 import { httpClient as axios } from 'src/api/httpClient';
 import { DashboardContent } from 'src/layouts/dashboard';
 import { useIsHeadOffice } from 'src/store/useAuthStore';
@@ -25,6 +28,8 @@ import { useBranchContext } from 'src/contexts/branch-context';
 import { Iconify } from 'src/components/iconify';
 import { SettingScopeNotice } from 'src/components/setting-scope';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
+
+import { PersonalDiscountGroups } from './personal-discount-groups';
 
 interface RolePolicy {
   cashierMaxPct: number;
@@ -63,6 +68,7 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
     familyExcludedCategoryIds: [],
   });
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [groups, setGroups] = useState<PersonalDiscountGroup[]>([]);
 
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
@@ -73,8 +79,13 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
     setLoading(true);
     setError(null);
     try {
-      const [res, cats] = await Promise.all([axios.get('/api/v1/settings'), catalogApi.getCategories().catch(() => [])]);
+      const [res, cats, savedGroups] = await Promise.all([
+        axios.get('/api/v1/settings'),
+        catalogApi.getCategories().catch(() => []),
+        discountsApi.getPersonalGroups().catch(() => []),
+      ]);
       setCategories(cats.map((c) => ({ id: c.id, name: c.name })));
+      setGroups(savedGroups);
       const data = res.data;
       const authSetting = data?.DISCOUNT_AUTHORIZATIONS || data?.DISCOUNTS || {};
 
@@ -106,6 +117,7 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
     setSuccess(null);
     try {
       await axios.patch('/api/v1/settings/DISCOUNT_AUTHORIZATIONS', policy);
+      setGroups(await discountsApi.savePersonalGroups(groups));
       setSuccess(t('authPolicy.savedSuccess', 'Role-based manual discount authorization policy saved successfully.'));
     } catch (err: any) {
       setError(err.detail || err.message || t('authPolicy.failedToSave', 'Failed to save discount authorization settings'));
@@ -248,7 +260,12 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
             </Card>
           </Grid>
 
-          {/* Friends and family: what their discount never touches. */}
+          {/* Personal discount groups: who gets one, how much, and how far a month takes it. */}
+          <Grid size={12}>
+            <PersonalDiscountGroups groups={groups} onChange={setGroups} disabled={!isHeadOffice} />
+          </Grid>
+
+          {/* Personal discount: what it never touches. */}
           <Grid size={{ xs: 12, md: 6 }}>
             <Card sx={{ p: 3 }}>
               <Typography variant="h6" color="secondary.main" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>

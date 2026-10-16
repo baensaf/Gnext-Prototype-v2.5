@@ -1,15 +1,16 @@
-import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Req, Query } from '@nestjs/common';
 import { Request } from 'express';
 import { DiscountsService } from './discounts.service';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { DiscountQuoteRequestDto } from './dtos/discounts.dto';
 import { ItemDiscountsService, ItemDiscountInput } from './item-discounts.service';
 import { CouponsService, CouponBatchInput } from './coupons.service';
+import { PersonalDiscountsService, PersonalDiscountGroupInput } from './personal-discounts.service';
 
 /**
  * How an order is discounted. First the automatic item discounts (a dated percent off a
  * product, V1), line by line; then at most one order discount on what is left, in precedence
- * order: the cashier's manual discount, then the customer's friends-and-family rate at the branch.
+ * order: a coupon, the cashier's manual discount, then the person's personal discount group.
  * Discount campaigns (targeting, conditions, stacking rules) are not part of the prototype.
  */
 @Controller('api/v1')
@@ -18,6 +19,7 @@ export class DiscountsController {
     private readonly discountsService: DiscountsService,
     private readonly itemDiscounts: ItemDiscountsService,
     private readonly coupons: CouponsService,
+    private readonly personal: PersonalDiscountsService,
   ) {}
 
   // One-time coupons (V2): head office makes batches of codes for a campaign; each code
@@ -84,51 +86,35 @@ export class DiscountsController {
     return await this.discountsService.getManualDiscountLimits(tenantId, (req as any).userRole);
   }
 
-  // Friends-and-family rates: each branch's manager keeps their own branch's few people;
-  // head office can set them for any branch.
-  @Get('customer-discounts')
-  async getCustomerDiscounts(@Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const customerId = req.query.customer_id as string | undefined;
-    return await this.discountsService.getCustomerDiscounts(tenantId, customerId, (req as any).userBranchId ?? null);
+  // Personal discounts: head office's groups, and who is in which. A branch's manager puts
+  // their own branch's people in a group for one branch; head office anyone in any group.
+  @Get('personal-discount-groups')
+  async listPersonalDiscountGroups(@Req() req: Request) {
+    return await this.personal.listGroups((req as any).tenantId);
   }
 
-  /** One person's percent at one branch; no percent takes it away. */
+  @HeadOfficeOnly()
+  @Put('personal-discount-groups')
+  async savePersonalDiscountGroups(@Body() body: { groups: PersonalDiscountGroupInput[] }, @Req() req: Request) {
+    return await this.personal.saveGroups((req as any).tenantId, body?.groups || [], (req as any).userId, (req as any).correlationId);
+  }
+
+  /** The person's group and what is left of it this month; null when they have none. */
+  @Get('customer-discounts/personal')
+  async getPersonalDiscount(@Query('customer_id') customerId: string, @Req() req: Request) {
+    return await this.personal.summary((req as any).tenantId, customerId);
+  }
+
+  /** Puts a person in a group at the branch they work at; no group takes them out. */
   @Roles(...MANAGER_AND_ABOVE)
-  @Put('customer-discounts/family')
-  async setFamilyDiscount(@Body() body: any, @Req() req: Request) {
-    return await this.discountsService.setFamilyDiscount(
+  @Put('customer-discounts/personal')
+  async setPersonalDiscount(@Body() body: any, @Req() req: Request) {
+    return await this.personal.assign(
       (req as any).tenantId,
       body,
       (req as any).userBranchId ?? null,
       (req as any).userId,
       (req as any).correlationId,
     );
-  }
-
-  @Roles(...MANAGER_AND_ABOVE)
-  @Post('customer-discounts')
-  async createCustomerDiscount(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-    return await this.discountsService.createCustomerDiscount(tenantId, body, userId, correlationId, (req as any).userBranchId ?? null);
-  }
-
-  @Roles(...MANAGER_AND_ABOVE)
-  @Patch('customer-discounts/:id')
-  async updateCustomerDiscount(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-    return await this.discountsService.updateCustomerDiscount(tenantId, id, body, userId, correlationId, (req as any).userBranchId ?? null);
-  }
-
-  @Roles(...MANAGER_AND_ABOVE)
-  @Delete('customer-discounts/:id')
-  async revokeCustomerDiscount(@Param('id') id: string, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.discountsService.revokeCustomerDiscount(tenantId, id, correlationId, (req as any).userBranchId ?? null);
   }
 }

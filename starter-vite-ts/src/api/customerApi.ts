@@ -19,14 +19,18 @@ export interface Customer {
   wallet_account?: CustomerCreditAccount | null;
   wallet_balance?: string;
   credit_limit?: string;
-  /** Friends-and-family rates, one per branch that gives one. */
+  /** The person's personal discount group (one at most). */
   family_discounts?: FamilyDiscount[];
 }
 
-/** A friend or family member's percent off at one branch. */
+/** A person's personal discount: their group and the branch they work at. */
 export interface FamilyDiscount {
   id: string;
   branch_id: string | null;
+  group_id?: string | null;
+  group_name?: string | null;
+  /** The group works at every branch, not only theirs. */
+  any_branch?: boolean;
   percent: string;
   note?: string | null;
 }
@@ -132,11 +136,6 @@ export const customerApi = {
     branchId?: string;
   }): Promise<CustomerPage> => {
     const res = await httpClient.get('/api/v1/customers', { params: { ...params, search: params.search || undefined } });
-    return res.data;
-  },
-  /** One person's friends-and-family percent at a branch; no percent takes it away. */
-  setFamilyDiscount: async (data: { customer_id: string; branch_id?: string; percent: string | null; note?: string | null }) => {
-    const res = await httpClient.put('/api/v1/customer-discounts/family', data);
     return res.data;
   },
   /** The POS picker: up to `limit` best matches for 3+ typed characters (mobile or name). */

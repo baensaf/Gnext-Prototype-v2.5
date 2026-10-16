@@ -176,7 +176,7 @@ export function CustomersPage() {
   );
   const gridFilterModel = useMemo<GridFilterModel>(() => ({ items: [], quickFilterValues: search ? [search] : [] }), [search]);
 
-  // The rates this screen shows: a branch sees its own; head office every branch's.
+  // The people this screen shows in a group: a branch sees those who work there; head office everyone.
   const visibleFamily = (c: Customer) =>
     (c.family_discounts || []).filter((f) => canChangeScope || f.branch_id === selectedBranch?.id);
 
@@ -264,8 +264,8 @@ export function CustomersPage() {
                 {t('customers.family.column')} <VersionTag feature="customers.family" sx={{ ml: 1 }} />
               </>
             ),
-            // Head office sees the branch beside each rate.
-            width: canChangeScope ? 260 : 150,
+            // The percent and the group; the branch they work at on hover.
+            width: 280,
             // Centres the chips and the dash in the row, as the text columns are.
             display: 'flex',
             sortable: false,
@@ -280,8 +280,9 @@ export function CustomersPage() {
                       size="small"
                       color="secondary"
                       variant="outlined"
-                      label={canChangeScope ? `${Number(f.percent)}% · ${branchName(f.branch_id)}` : `${Number(f.percent)}%`}
-                      sx={{ fontWeight: 600 }}
+                      label={f.group_name ? `${Number(f.percent)}% · ${f.group_name}` : `${Number(f.percent)}%`}
+                      title={branchName(f.branch_id)}
+                      sx={{ fontWeight: 600, maxWidth: '100%' }}
                     />
                   ))}
                 </Stack>

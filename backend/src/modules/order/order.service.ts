@@ -115,7 +115,7 @@ interface OrderDiscountRule {
   adjustment: OrderAdjustment | null;
   /** A percent of what the lines now sell for. */
   percent: string | null;
-  /** The most a percent may take off (a coupon batch's cap). */
+  /** The most a percent may take off (a coupon batch's cap, a personal discount group's). */
   cap?: string | null;
   /** The amount, when the discount is not a percent. */
   fixed: string;
@@ -829,6 +829,7 @@ export class OrderService {
           currencyCode: order.currency_code,
           deliveryFee: order.delivery_fee,
           skipCustomerDiscount: !!dto.skipCustomerDiscount,
+          orderId: order.id,
           items: activeLines.map((i) => {
             const modPerUnit = (i.quantity && Number(i.quantity) > 0 && i.modifier_total)
               ? MoneyUtil.divide(i.modifier_total, i.quantity)
@@ -886,7 +887,7 @@ export class OrderService {
           order_id: order.id,
           type: 'DISCOUNT',
           source_type: disc.source,
-          source_id: disc.itemDiscountId || disc.couponId || null,
+          source_id: disc.itemDiscountId || disc.couponId || disc.personal?.groupId || null,
           code: (disc.source === 'MANUAL' ? 'MANUAL_DISCOUNT' : disc.source === 'ITEM' ? 'ITEM_DISCOUNT' : disc.source === 'COUPON' ? 'COUPON' : null),
           name: disc.name,
           amount: disc.amount,
@@ -904,7 +905,10 @@ export class OrderService {
                   value: submittedManualDiscount?.value ?? null,
                 }
               : {}),
-            ...(disc.source === 'CUSTOMER' ? { percent: disc.percent, reasonCode: 'FRIENDS_FAMILY' } : {}),
+            // The person's group, and the most its caps let it take off this order.
+            ...(disc.source === 'CUSTOMER'
+              ? { percent: disc.percent, reasonCode: 'FRIENDS_FAMILY', groupId: disc.personal?.groupId ?? null, maxDiscount: disc.maxDiscount ?? null }
+              : {}),
             ...(disc.source === 'ITEM' ? { productId: disc.productId, percent: disc.percent } : {}),
             ...(disc.source === 'COUPON'
               ? { couponCode: dto.couponCode, percent: disc.percent, maxDiscount: disc.maxDiscount ?? null, productId: disc.productId }
@@ -2669,7 +2673,7 @@ export class OrderService {
 
   /**
    * How a sent order's one order discount is priced when its lines change: a percent (the
-   * cashier's, or the customer's friends-and-family rate) stays a percent of what is left; an
+   * cashier's, or the person's personal discount, within its group's caps) stays a percent of what is left; an
    * amount stays that amount, never more than what is left. A percent coupon stays its percent
    * within the batch's cap; a free-item coupon follows its product's line. A cashier's percent
    * recorded before the percent was kept, or a discount with no record, keeps the amount it had.
@@ -2693,7 +2697,8 @@ export class OrderService {
     const snap = adjustment.calculation_snapshot || {};
     const given = MoneyUtil.format(snap.amount ?? adjustment.amount);
     if (adjustment.source_type === 'CUSTOMER') {
-      return { adjustment, percent: snap.percent ?? null, fixed: given, familyExclusions: true };
+      // Within what the group's caps allowed when the order was sent.
+      return { adjustment, percent: snap.percent ?? null, cap: snap.maxDiscount ?? null, fixed: given, familyExclusions: true };
     }
     if (adjustment.source_type === 'MANUAL') {
       const typed = snap.value !== null && snap.value !== undefined ? MoneyUtil.format(snap.value) : null;

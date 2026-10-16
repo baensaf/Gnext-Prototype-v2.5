@@ -390,7 +390,16 @@
       "applyWithPin": "Apply with manager PIN",
       "family": "Personal {{pct}}%",
       "familyTakeOff": "Take the personal discount off this order",
-      "familyPutBack": "Put the personal discount back"
+      "familyPutBack": "Put the personal discount back",
+      "familyPartial": "Personal {{pct}}% on {{amount}}",
+      "familyLeftUses": "{{count}} more orders this month",
+      "familyLeftAmount": "{{amount}} left this month",
+      "familyNoLimit": "no monthly limit",
+      "familyRefused": {
+        "OTHER_BRANCH": "Personal discount: only at their own branch",
+        "USES_SPENT": "Personal discount: this month's orders are used up",
+        "MONTH_SPENT": "Personal discount: this month's cap is spent"
+      }
     },
     "held": {
       "discard": "Discard",
@@ -1414,14 +1423,22 @@
     "family": {
       "column": "Personal discount",
       "title": "Personal discount",
-      "help": "A percent off this person's orders at the branch, filled in on the till when they are picked. The cashier can take it off an order.",
-      "branch": "Branch",
-      "percent": "Discount",
+      "help": "Head office's groups set the percent and the monthly limits. A group for one branch works only at the branch the person works at; the month starts again on the 1st.",
+      "branch": "Works at",
       "note": "Who they are",
-      "notePlaceholder": "e.g. the owner's brother",
+      "notePlaceholder": "e.g. cashier at Nasr",
       "remove": "Remove",
       "saveFailed": "The discount could not be saved",
-      "none": "No personal discount at any branch."
+      "none": "Not in a personal discount group.",
+      "group": "Group",
+      "noGroup": "No personal discount",
+      "anyBranch": "Any branch",
+      "ownBranch": "Own branch only",
+      "usage": "This month: {{uses}} orders, {{covered}} covered",
+      "leftUses": "{{count}} orders left",
+      "leftAmount": "{{amount}} left",
+      "noLimit": "No monthly limit",
+      "headOfficeGroup": "Head office sets this group"
     },
     "drawer": {
       "birthDate": "Birthday",
@@ -1999,7 +2016,23 @@
     "familyTitle": "Personal discount",
     "familyDesc": "Categories a personal discount never touches, such as drinks. This covers a customer's own rate and a cashier discount given with the Personal discount reason.",
     "familyExcluded": "Never discounted",
-    "familyExcludedPlaceholder": "Pick categories"
+    "familyExcludedPlaceholder": "Pick categories",
+    "groupsTitle": "Personal discount groups",
+    "groupsDesc": "Who gets a personal discount, how much, and how far a month takes it. Both caps are how much of their orders the discount covers; above the cap per order the rest is full price. Unused allowance does not carry over to next month.",
+    "groupName": "Group",
+    "groupPercent": "Discount",
+    "groupMonthlyCap": "Monthly cap",
+    "groupUses": "Orders a month",
+    "groupPerVisit": "Cap per order",
+    "groupWhere": "Where",
+    "anyBranch": "Any branch",
+    "ownBranch": "Own branch",
+    "noLimit": "No limit",
+    "groupMembers": "People",
+    "addGroup": "Add group",
+    "removeGroup": "Remove group",
+    "groupHasMembers": "Move its {{count}} people to another group first",
+    "groupsSaveFailed": "The groups could not be saved"
   },
   "wallet": {
     "title": "Customer Club Wallet & Cashback",
