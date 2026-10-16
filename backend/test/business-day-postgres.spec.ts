@@ -63,6 +63,9 @@ describe('the overnight business day (PostgreSQL)', () => {
     tenantId = (await save(Tenant, { code: `BDAY-${Date.now()}`, name: 'Overnight', base_currency: 'IRR', default_locale: 'fa', time_zone: 'Asia/Tehran' })).id;
     tehranBranch = (await save(Branch, { tenant_id: tenantId, code: 'THR', name: 'Tehran', is_active: true, time_zone: 'Asia/Tehran' })).id;
     dubaiBranch = (await save(Branch, { tenant_id: tenantId, code: 'DXB', name: 'Dubai', is_active: true, time_zone: 'Asia/Dubai' })).id;
+    // The days closed automatically start at a branch's creation; the scenario runs in October
+    // 2026 on a fake clock, so the branches must predate it whatever today's real date is.
+    await dataSource.getRepository(Branch).update({ tenant_id: tenantId }, { created_at: new Date('2026-10-01T00:00:00Z') } as any);
     tehranTill = (await save(Terminal, { tenant_id: tenantId, branch_id: tehranBranch, code: 'THR-1', name: 'Till 1', terminal_type: 'CASHIER', is_active: true })).id;
     dubaiTill = (await save(Terminal, { tenant_id: tenantId, branch_id: dubaiBranch, code: 'DXB-1', name: 'Till 1', terminal_type: 'CASHIER', is_active: true })).id;
     const categoryId = (await save(Category, { tenant_id: tenantId, code: 'BDAY-MAINS', name: 'Mains', is_active: true })).id;
