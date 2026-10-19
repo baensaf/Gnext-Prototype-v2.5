@@ -1,0 +1,14 @@
+# Gnext is the catch-all on port 80: gnext.top, kiosk.gnext.top, gnextdev.ir, the Arvan origin
+# health check, and anything else. Another platform adds an Ingress with its own host rule,
+# which Traefik matches before this one.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gnext
+spec:
+  ingressClassName: traefik
+  defaultBackend:
+    service:
+      name: frontend
+      port:
+        number: 80

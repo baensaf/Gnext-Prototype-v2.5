@@ -1,0 +1,32 @@
+# Settings for the Traefik that k3s bundles. Copy to /var/lib/rancher/k3s/server/manifests/
+# before turning Traefik on (remove it from `disable:` in /etc/rancher/k3s/config.yaml).
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    # servicelb is off, so Traefik binds the host's port 80 itself. Arvan ends TLS and talks
+    # to the origin on 80 only, so 443 stays closed.
+    service:
+      type: ClusterIP
+    ports:
+      web:
+        hostPort: 80
+        # Agent builds take about ten minutes to upload from CI; no read timeout.
+        transport:
+          respondingTimeouts:
+            readTimeout: 0
+        # Keep the visitor's address that Arvan puts in X-Forwarded-For.
+        forwardedHeaders:
+          insecure: true
+      websecure:
+        expose:
+          default: false
+    # One node and a host port: the old pod has to go before the new one can bind 80.
+    updateStrategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxUnavailable: 1
+        maxSurge: 0
