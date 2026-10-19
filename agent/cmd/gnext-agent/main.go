@@ -178,6 +178,8 @@ func run(ctx context.Context, console io.Writer) int {
 	removeLegacyData(log)
 	if isService() {
 		go manageFirewallRules(log)
+		// One Gnext shortcut, whatever older installers left (2.5.1).
+		tidyShortcuts(shortcutDirs(), log)
 	}
 
 	h, err := newHost(log)

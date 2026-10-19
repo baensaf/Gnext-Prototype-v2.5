@@ -60,6 +60,9 @@ Type: files; Name: "{autoprograms}\Gnext Offline Till.lnk"
 Type: files; Name: "{autodesktop}\Gnext Offline Till.lnk"
 Type: files; Name: "{autoprograms}\Gnext POS.lnk"
 Type: files; Name: "{autodesktop}\Gnext POS.lnk"
+; Since 2.5.1 there is one shortcut, Gnext; the agent's settings shortcut is gone (agent-protocol §20).
+Type: files; Name: "{autoprograms}\Gnext Agent.lnk"
+Type: files; Name: "{autodesktop}\Gnext Agent.lnk"
 
 [UninstallDelete]
 ; Agent updates write the bridge folder themselves, so the uninstaller does not know its files.
@@ -68,17 +71,16 @@ Type: filesandordirs; Name: "{app}\saman.new"
 Type: filesandordirs; Name: "{app}\saman.old*"
 
 [Tasks]
-Name: "desktopicon"; Description: "Create desktop shortcuts to Gnext and Gnext Agent"
+Name: "desktopicon"; Description: "Create a desktop shortcut to Gnext"
 
 [Icons]
-; Gnext, the cashier app the agent serves, opens in its own window (agent 2.4.0, agent-protocol 19.12).
-Name: "{autoprograms}\Gnext"; Filename: "{app}\gnext-agent.exe"; Parameters: "app"; Comment: "Gnext cashier"
-Name: "{autodesktop}\Gnext"; Filename: "{app}\gnext-agent.exe"; Parameters: "app"; Comment: "Gnext cashier"; Tasks: desktopicon
-Name: "{autoprograms}\Gnext Agent"; Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Comment: "Gnext branch agent settings"
-Name: "{autodesktop}\Gnext Agent"; Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Comment: "Gnext branch agent settings"; Tasks: desktopicon
+; One shortcut, Gnext (agent 2.5.1, agent-protocol §20): it opens the app the agent serves in its own
+; window, or the enrolment page while the PC is not connected to a branch yet.
+Name: "{autoprograms}\Gnext"; Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Comment: "Gnext"
+Name: "{autodesktop}\Gnext"; Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Comment: "Gnext"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Description: "Open Gnext Agent"; Flags: postinstall nowait skipifsilent runasoriginaluser
+Filename: "{app}\gnext-agent.exe"; Parameters: "open"; Description: "Open Gnext"; Flags: postinstall nowait skipifsilent runasoriginaluser
 
 [UninstallRun]
 Filename: "{app}\gnext-agent.exe"; Parameters: "service uninstall"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveService"
@@ -92,7 +94,7 @@ Filename: "{sys}\netsh.exe"; Parameters: "advfirewall firewall delete rule name=
 Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM gnext-agent.exe /FI ""SESSION ne 0"""; Flags: runhidden waituntilterminated; RunOnceId: "EndTrays"
 
 [Messages]
-FinishedLabel=The Gnext agent is installed and running. The Gnext shortcut opens the cashier app, which also opens by itself when a user signs in to Windows (the agent's settings page can turn that off). The agent's settings page (the Gnext Agent shortcut, or http://127.0.0.1:47800/agent/) shows the connection and lets a branch manager add printers and card terminals.%n%nLogs: C:\ProgramData\Gnext\Agent\logs\agent.log
+FinishedLabel=The Gnext agent is installed and running. The Gnext shortcut opens Gnext, which also opens by itself when a user signs in to Windows. Printers, card terminals and this PC's settings are managed in Gnext.%n%nLogs: C:\ProgramData\Gnext\Agent\logs\agent.log
 
 [Code]
 var
@@ -183,7 +185,7 @@ begin
   if Code = '' then
   begin
     // The settings page can enrol later, so a missing code is allowed after a warning.
-    Result := MsgBox('No enrolment code was entered. The agent will be installed but will not connect until it is enrolled on its settings page (Gnext Agent shortcut).' + #13#10#13#10 + 'Continue without a code?', mbConfirmation, MB_YESNO) = IDYES;
+    Result := MsgBox('No enrolment code was entered. The agent will be installed but will not connect until it is enrolled: open the Gnext shortcut and enter the code there.' + #13#10#13#10 + 'Continue without a code?', mbConfirmation, MB_YESNO) = IDYES;
     Exit;
   end;
 
