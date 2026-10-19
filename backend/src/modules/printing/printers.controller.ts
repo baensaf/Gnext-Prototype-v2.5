@@ -201,6 +201,9 @@ export class PrintersController {
   async setRoutes(@Param('id') id: string, @Body() body: SetPrinterRoutesDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const saved = await this.routingService.setRoutes(tenantId, id, body.category_ids || [], body.product_ids || []);
+    // An agent that routes chits keeps the routes in its config (protocol §21.2).
+    const printer = await this.printerRepo.findOne({ where: { id, tenant_id: tenantId } });
+    await this.pushConfig(tenantId, printer?.branch_id);
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',
@@ -226,6 +229,7 @@ export class PrintersController {
   async setNotPrinted(@Body() body: SetNotPrintedDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const saved = await this.routingService.setNotPrinted(tenantId, body.branch_id, body.category_ids || [], body.product_ids || []);
+    await this.pushConfig(tenantId, body.branch_id);
     await this.auditWriter.write({
       tenantId,
       actorType: 'ADMIN',

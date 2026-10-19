@@ -3133,3 +3133,97 @@ being down).
 | `GET /api/v1/agents/{id}/logs?lines=` | head office | `logs` |
 | `GET` / `PATCH /api/v1/agents/{id}/settings` `{ app_at_sign_in }` | head office; the change is audited | `settings` |
 | `POST /api/v1/agents/{id}/app-refresh` | head office | `app.refresh` |
+
+## 21. Kitchen routing on the agent (agent 2.5.0, 2026-10-19)
+
+Product decision (2026-10-19): in V1 the branch agent routes kitchen chits. The cloud keeps the
+routing screens and stays where routes are edited; the agent holds a copy and decides, for each
+order, which printers get which lines. That is also the half of offline printing (S-15, V3) that
+the cloud cannot do for the branch.
+
+### 21.1 Who routes
+
+- An agent that routes advertises `print.route` in `hello`. The cloud stores the capabilities
+  and, for a branch whose active agent has it, sends each kitchen print as one `order.print`.
+- A branch without such an agent, a reprint, a reprint to another printer and a reprint of one
+  printer's chit stay on the cloud's own routing and `print.job` (§7.1), as before.
+- Receipts, guest bills and courier slips are not routed: they print at the till's receipt
+  printer through `print.job`.
+
+### 21.2 Routing in the config
+
+`config.updated` and `welcome` carry `routing` beside the devices. `printers` lists every
+printer of the branch, with or without a connection, ordered by code: the order routing picks
+from, and the names chits are labelled with.
+
+```json
+"routing": {
+  "routes": [
+    { "printer_id": "4c1e…", "category_id": "…" },
+    { "printer_id": "9a0b…", "product_id": "…" },
+    { "printer_id": null, "category_id": "…" }
+  ],
+  "kitchen_default_printer_id": "4c1e…",
+  "whole_order_printer_ids": ["77d2…"]
+}
+```
+
+The cloud sends a new config when a printer or a route changes, so routing applies to orders
+sent after the change. The rules are the cloud's (`print-routing.service.ts`):
+
+1. A product's routes beat its category's; with neither, the default kitchen printer; with no
+   default, nowhere.
+2. A route whose `printer_id` is null is the *not printed* list: the line prints in no kitchen.
+3. A line goes to every printer it is routed to; the lines of one printer share one chit. A
+   printer out of service stays on the list, and its chit fails where it is seen.
+4. Each `whole_order_printer_ids` printer gets one more chit with every line, marked
+   «کل سفارش». A line routed only to such a printer is on that chit alone.
+5. Chits are labelled with the printer's name, `"Grill (1/3)"` when the order splits, and name
+   the other stations. Lines with nowhere to print share a chit labelled «آشپزخانه» with no printer.
+6. A `VOID` line with `sent_to` goes to those printers whatever the routing says now; `[]`
+   means it never printed and is left out; `null` routes it afresh.
+
+### 21.3 `order.print`
+
+```json
+{ "type": "order.print", "payload": {
+    "expires_at": "…", "job_id": "…", "order_id": "…",
+    "heading": { "display_number": "42", "order_number": "ORD-…", "type_line": "بیرون‌بر",
+                 "date_time": "۱۴۰۵/۰۷/۲۷ ۱۲:۳۰", "time": "۱۲:۳۰", "order_notes": "…", "template": "COMPACT" },
+    "lines": [ { "line_id": "…", "product_id": "…", "category_id": "…", "name": "همبرگر",
+                 "quantity": "1.0000", "options": "…", "note": "…", "change": "VOID", "sent_to": ["4c1e…"] } ],
+    "kitchen_change": "AMENDED", "change_reason": "…" } }
+```
+
+- Acked, journaled and run like `print.job` (§4.4–4.6), on one queue: one order's chits print one
+  after another. It expires after 24 h, as a print job does.
+- The heading is worded by the cloud (the chain's calendar, Persian digits in the time); the agent
+  writes the display number in Persian digits and lays the chit out as the cloud's
+  `print-render.service.ts` does (`agent/internal/chit`): COMPACT unless `template` says DETAILED.
+
+### 21.4 `order.print.result`
+
+```json
+{ "type": "order.print.result", "ref": "<order.print id>", "payload": {
+    "job_id": "…", "order_id": "…", "started_at": "…", "finished_at": "…", "error": null,
+    "chits": [ { "printer_id": "4c1e…", "label": "Grill (1/2)", "whole_order": false,
+                 "line_ids": ["…"], "html": "<!DOCTYPE html>…", "status": "SUCCESS", "error": null } ] } }
+```
+
+- One entry per chit, printed or not. A chit not printed says why: `UNROUTED` (no printer),
+  `PRINTER_OUT_OF_SERVICE`, `DEVICE_NOT_CONFIGURED` (the printer has no connection the agent can
+  use), or a device code of §8.3.
+- `chits` empty with `error` null: every line was on the *not printed* list. With `error` set
+  (`AGENT_RESTARTED`): the order was not routed; some chits may have printed.
+
+### 21.5 What the cloud does with it
+
+- Until the answer, one print job (label «آشپزخانه», no printer) stands for the order, waiting.
+- The answer turns it into one job per chit: the first chit takes that job, each other chit a job
+  of its own, with the chit's printer, label and HTML, and one attempt with what the printer said.
+  A `DEVICE_NOT_CONFIGURED` chit for a printer with no connection prints in the simulator, as when
+  the cloud routed. An `UNROUTED` chit is audited as `PRINT_JOB_UNROUTED`.
+- Each line keeps the printers its non-whole-order chits went to (`order_item.kitchen_printer_ids`),
+  for a later void.
+- An empty answer deletes the job; an order-level error, or a command that expires or is
+  refused, fails it. A person reprints from the print queue (K-20); a reprint uses the stored HTML.

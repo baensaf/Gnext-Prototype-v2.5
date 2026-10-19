@@ -210,6 +210,14 @@ ${agentLog}`);
       throw new Error(`${e.message}\njobs: ${JSON.stringify((await printJobs()).map((j) => [j.document_type, j.status]))}\n--- agent log ---\n${agentLog}`);
     });
     expect(printed).toBe(1);
+    // The agent routed it (protocol §21): one order.print, and the chit came back named after its printer.
+    const sent = await dataSource.query(`SELECT type FROM agent_command WHERE tenant_id = $1 AND type IN ('order.print', 'print.job')`, [tenantId]);
+    expect(sent.map((c: any) => c.type)).toEqual(['order.print']);
+    const [job] = await printJobs();
+    expect(job.label).toBe('Counter printer');
+    expect(job.rendered_html).toContain('همبرگر');
+    const [line] = await dataSource.query(`SELECT kitchen_printer_ids FROM order_item WHERE order_id = $1`, [orderId]);
+    expect(line.kitchen_printer_ids).toEqual([job.printer_id]);
   }, 90000);
 
   it('takes the card payment on the fake terminal, and then prints the receipt', async () => {

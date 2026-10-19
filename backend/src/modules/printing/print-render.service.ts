@@ -126,6 +126,25 @@ export class PrintRenderService {
   }
 
   /**
+   * What heads a kitchen chit, worded as this service prints it, for a branch agent that lays out
+   * its chits itself (protocol §21). Digits stay Latin in the number: the agent writes them in Persian.
+   */
+  chitHeading(o: Omit<RenderDocOptions, 'documentType' | 'items'>) {
+    const tail = String(o.orderNumber || '').split('-').pop() || '';
+    const trimmed = tail.replace(/^0+(?=\d)/, '');
+    const dateTime = this.date({ ...o, documentType: 'KITCHEN_TICKET', items: [] });
+    return {
+      display_number: o.callNumber ? String(o.callNumber) : /^\d+$/.test(trimmed) ? trimmed : String(o.orderNumber || ''),
+      order_number: String(o.orderNumber || ''),
+      type_line: this.orderTypeLine({ ...o, documentType: 'KITCHEN_TICKET', items: [] }),
+      date_time: dateTime,
+      time: dateTime.split(' ').pop() || '',
+      ...(o.orderNotes ? { order_notes: o.orderNotes } : {}),
+      ...(o.template ? { template: o.template } : {}),
+    };
+  }
+
+  /**
    * The page a printer prints when it is set up: which printer this is, so a counter with three
    * printers can tell which one answered, and the full paper width, so a narrow roll shows.
    */

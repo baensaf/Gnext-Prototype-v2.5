@@ -426,6 +426,14 @@ func (a *Agent) command(env protocol.Envelope) {
 		}
 		a.accept(env, p.ID, func() { a.runPrint(env, job, p) })
 
+	case protocol.TypeOrderPrint:
+		var op protocol.OrderPrint
+		if err := json.Unmarshal(env.Payload, &op); err != nil || op.JobID == "" {
+			a.refuse(env, protocol.ErrInvalidPayload, "order.print needs job_id")
+			return
+		}
+		a.accept(env, orderQueue, func() { a.runOrderPrint(env, op) })
+
 	case protocol.TypePaymentCharge, protocol.TypePaymentQuery:
 		if env.Type == protocol.TypePaymentCharge && a.updating.Load() {
 			a.refuse(env, protocol.ErrUnsupported, "updating")
@@ -603,6 +611,15 @@ func (a *Agent) recover() error {
 			a.finish(cmd.ID, protocol.TypePrintResult, protocol.PrintResult{
 				JobID: job.JobID, AttemptNo: job.AttemptNo, PrinterID: job.PrinterID,
 				Status: "FAILED", StartedAt: now, FinishedAt: now, Error: restarted,
+			})
+		case protocol.TypeOrderPrint:
+			// Some chits may have printed before the restart; the cloud shows the order's job
+			// failed, and a person reprints what is missing.
+			var op protocol.OrderPrint
+			_ = json.Unmarshal(cmd.Payload, &op)
+			a.finish(cmd.ID, protocol.TypeOrderPrintResult, protocol.OrderPrintResult{
+				JobID: op.JobID, OrderID: op.OrderID, Chits: []protocol.ChitResult{},
+				StartedAt: now, FinishedAt: now, Error: restarted,
 			})
 		case protocol.TypePaymentCharge, protocol.TypePaymentQuery:
 			var p protocol.PaymentCharge

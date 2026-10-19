@@ -653,7 +653,7 @@ func TestHelloAdvertisesAppServe(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := strings.Join(hello.Capabilities, " ")
-	if got != "print.html payment.charge payment.query app.serve" {
+	if got != "print.html payment.charge payment.query app.serve print.route" {
 		t.Fatalf("capabilities = %q", got)
 	}
 }
