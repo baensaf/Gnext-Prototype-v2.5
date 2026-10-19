@@ -19,6 +19,9 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { fDateTime } from 'src/utils/format-time';
+import { readDeviceId, deviceDisplayName } from 'src/utils/device-id';
+
 import { tenantApi } from 'src/api/tenantApi';
 import { useAuthStore } from 'src/store/useAuthStore';
 import { isApproverRole } from 'src/config/role-access';
@@ -58,6 +61,9 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
   const [selectedId, setSelectedId] = useState('');
   const [pinOpen, setPinOpen] = useState(false);
   const [signOutPinOpen, setSignOutPinOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  // The register is paired with another device: which one, before this one takes it.
+  const [takenBy, setTakenBy] = useState<{ deviceName: string | null; lastSeenAt: string | null } | null>(null);
 
   useEffect(() => {
     if (!open || !branchId) return undefined;
@@ -88,16 +94,40 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
     };
   }, [open, branchId, current?.id, terminalType, t]);
 
-  const assign = () => {
+  const assign = async (replace = false) => {
     const chosen = terminals.find((term) => term.id === selectedId);
     if (!chosen) return;
+    // A till register is paired on the server, one device each; a kiosk (V3) is not.
+    if (!isKiosk) {
+      setSaving(true);
+      setError(null);
+      try {
+        await tenantApi.pairTerminalDevice(chosen.id, {
+          device_id: readDeviceId(),
+          device_name: deviceDisplayName(),
+          replace,
+        });
+      } catch (err: any) {
+        if (err.code === 'REGISTER_PAIRED_ELSEWHERE') {
+          setTakenBy({ deviceName: err.context?.deviceName ?? null, lastSeenAt: err.context?.lastSeenAt ?? null });
+        } else {
+          setError(err.detail || err.message || t('shift.device.pairError', 'Could not set up this register'));
+        }
+        return;
+      } finally {
+        setSaving(false);
+      }
+    }
+    setTakenBy(null);
     onAssigned({ id: chosen.id, code: chosen.code, name: chosen.name, branch_id: chosen.branch_id });
     onClose();
   };
 
+  const chosenTerminal = terminals.find((term) => term.id === selectedId);
+
   return (
     <>
-      <Dialog open={open && !pinOpen && !signOutPinOpen} onClose={onClose} maxWidth="xs" fullWidth>
+      <Dialog open={open && !pinOpen && !signOutPinOpen && !takenBy} onClose={onClose} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ fontWeight: 'bold' }}>{isKiosk ? t('kiosk.device.title', 'Set up this kiosk') : t('shift.device.title', 'Set up this register')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2}>
@@ -151,10 +181,45 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
           <Button onClick={onClose}>{t('common.cancel', 'Cancel')}</Button>
           <Button
             variant="contained"
-            disabled={!selectedId}
+            disabled={!selectedId || saving}
             onClick={() => (canAssign ? assign() : setPinOpen(true))}
           >
             {isKiosk ? t('kiosk.device.assign', 'Use this kiosk') : t('shift.device.assign', 'Use this register')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={open && !!takenBy} onClose={() => setTakenBy(null)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 'bold' }}>{t('shift.device.takenTitle', 'Move this register here?')}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            {takenBy?.lastSeenAt
+              ? t('shift.device.takenSeen', '{{register}} is used by {{device}}, last seen {{seen}}.', {
+                  register: chosenTerminal ? `${chosenTerminal.name} (${chosenTerminal.code})` : '',
+                  device: takenBy?.deviceName || t('shift.device.otherDevice', 'another device'),
+                  seen: fDateTime(takenBy.lastSeenAt),
+                })
+              : t('shift.device.taken', '{{register}} is used by {{device}}.', {
+                  register: chosenTerminal ? `${chosenTerminal.name} (${chosenTerminal.code})` : '',
+                  device: takenBy?.deviceName || t('shift.device.otherDevice', 'another device'),
+                })}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+            {t(
+              'shift.device.takenHelp',
+              'Moving it here cuts the other device off. It asks a manager to set it up the next time it is used.'
+            )}
+          </Typography>
+          {error && (
+            <Alert severity="error" sx={{ mt: 2 }}>
+              {error}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTakenBy(null)}>{t('common.cancel', 'Cancel')}</Button>
+          <Button variant="contained" disabled={saving} onClick={() => assign(true)}>
+            {t('shift.device.move', 'Move it here')}
           </Button>
         </DialogActions>
       </Dialog>

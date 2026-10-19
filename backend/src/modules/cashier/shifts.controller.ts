@@ -5,6 +5,7 @@ import { effectiveBranchId } from '../../common/utils/user-scope.util';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { ShiftOpenDto, ShiftCloseDto } from './dtos/shift.dto';
+import { CheckRegisterDeviceOnRead } from '../../common/guards/register-device.guard';
 
 /**
  * Every route that names a shift by id is held to the caller's own branch by
@@ -38,6 +39,8 @@ export class ShiftsController {
     );
   }
 
+  // The till's own question about its drawer: a device the register is no longer paired with learns it here.
+  @CheckRegisterDeviceOnRead()
   @Get('current')
   async getCurrentShift(
     @Query('terminalId') terminalId: string,

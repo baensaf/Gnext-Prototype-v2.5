@@ -6,6 +6,7 @@ import { HealthController } from './modules/health/health.controller';
 import { SessionGuard } from './common/guards/session.guard';
 import { CsrfGuard } from './common/guards/csrf.guard';
 import { BranchOwnershipGuard } from './common/guards/branch-ownership.guard';
+import { RegisterDeviceGuard } from './common/guards/register-device.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { BranchScopeInterceptor } from './common/interceptors/branch-scope.interceptor';
 import { RequestContextMiddleware } from './common/middleware/request-context.middleware';
@@ -221,6 +222,11 @@ import { TaraConnection, TaraBranch, TaraTerminal, TaraPurchase, TaraSimPurchase
     {
       provide: APP_GUARD,
       useClass: BranchOwnershipGuard,
+    },
+    // A register answers only to the device it is paired with.
+    {
+      provide: APP_GUARD,
+      useClass: RegisterDeviceGuard,
     },
     // Before anything reads the request: a branch account only ever asks about its own
     // branch, whatever the query string says.

@@ -38,6 +38,21 @@ export class Terminal {
   @Column({ type: 'boolean', default: true })
   is_active: boolean;
 
+  /**
+   * The device this register is paired with: an id its browser made up and keeps. One device
+   * per register; a request that names the register from any other device is refused.
+   */
+  @Column({ type: 'uuid', nullable: true })
+  device_id: string | null;
+
+  /** The paired device as people know it: the PC's name, else its browser and system. */
+  @Column({ type: 'varchar', length: 160, nullable: true })
+  device_name: string | null;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  device_paired_at: Date | null;
+
+  /** When the paired device last made a request as this register. */
   @Column({ type: 'timestamptz', nullable: true })
   last_seen_at: Date;
 

@@ -632,6 +632,84 @@ export class TenantService {
     return updated;
   }
 
+  /**
+   * Pairs a device with a register. One device per register, as in Toast and Square: when
+   * another device has it, the answer names that device and when it was last seen, and
+   * `replace` moves the register here, which cuts the other device off. A device moving to
+   * another register leaves its old one unpaired.
+   */
+  async pairTerminalDevice(
+    tenantId: string,
+    terminalId: string,
+    data: { device_id: string; device_name: string; replace?: boolean },
+    correlationId: string,
+  ) {
+    const terminal = await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } });
+    if (!terminal || !terminal.is_active) throw new NotFoundException('Register not found');
+    if (terminal.terminal_type !== 'CASHIER') throw new BadRequestException('Only a till register is paired with a device');
+    const deviceId = data.device_id.toLowerCase();
+    const deviceName = data.device_name.trim().slice(0, 160);
+    const previous = terminal.device_id && terminal.device_id !== deviceId
+      ? { device_id: terminal.device_id, device_name: terminal.device_name, last_seen_at: terminal.last_seen_at }
+      : null;
+    if (previous && !data.replace) {
+      throw new ConflictException({
+        code: 'REGISTER_PAIRED_ELSEWHERE',
+        message: `${terminal.name} is paired with ${previous.device_name || 'another device'}.`,
+        context: { deviceName: previous.device_name, lastSeenAt: previous.last_seen_at },
+      });
+    }
+
+    await this.terminalRepo.manager.transaction(async (em) => {
+      // A device is one register: the one it leaves stops answering to it.
+      await em
+        .createQueryBuilder()
+        .update(Terminal)
+        .set({ device_id: null, device_name: null, device_paired_at: null })
+        .where('tenant_id = :tenantId AND device_id = :deviceId AND id <> :terminalId', { tenantId, deviceId, terminalId })
+        .execute();
+      await em.update(Terminal, { id: terminalId }, {
+        device_id: deviceId,
+        device_name: deviceName,
+        device_paired_at: new Date(),
+        last_seen_at: new Date(),
+      });
+    });
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'REGISTER_DEVICE_PAIRED',
+      entityType: 'Terminal',
+      entityId: terminalId,
+      details: { deviceName, replaced: previous?.device_name ?? null },
+      correlationId,
+    });
+
+    return await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } });
+  }
+
+  /** Cuts a register off from its device. The device asks a manager to set it up next time it is used. */
+  async unpairTerminalDevice(tenantId: string, terminalId: string, correlationId: string) {
+    const terminal = await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } });
+    if (!terminal) throw new NotFoundException('Register not found');
+    if (!terminal.device_id) return terminal;
+    const deviceName = terminal.device_name;
+    await this.terminalRepo.update({ id: terminalId }, { device_id: null, device_name: null, device_paired_at: null });
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      action: 'REGISTER_DEVICE_UNPAIRED',
+      entityType: 'Terminal',
+      entityId: terminalId,
+      details: { deviceName },
+      correlationId,
+    });
+
+    return await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } });
+  }
+
   async archiveTerminal(tenantId: string, terminalId: string, correlationId: string) {
     const terminal = await this.terminalRepo.findOne({ where: { id: terminalId, tenant_id: tenantId } });
     if (!terminal) throw new NotFoundException('Terminal not found');

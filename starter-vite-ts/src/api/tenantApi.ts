@@ -53,7 +53,12 @@ export interface Terminal {
   name: string;
   terminal_type: 'CASHIER' | 'KIOSK';
   is_active: boolean;
-  last_seen_at?: string;
+  /** When the paired device last used this register. */
+  last_seen_at?: string | null;
+  /** The device this register is paired with; null when none is. */
+  device_id?: string | null;
+  device_name?: string | null;
+  device_paired_at?: string | null;
   /** A kiosk's card terminal, charged through the branch agent. */
   payment_device_id?: string | null;
   /** Where its receipts, bills and courier slips print; null: the branch's receipt printer. */
@@ -113,6 +118,18 @@ export const tenantApi = {
   },
   updateTerminal: async (id: string, data: Partial<Terminal>): Promise<Terminal> => {
     const res = await httpClient.patch(`/api/v1/terminals/${id}`, data);
+    return res.data;
+  },
+  /** This device takes the register. `replace` moves it from the device that has it. */
+  pairTerminalDevice: async (
+    id: string,
+    data: { device_id: string; device_name: string; replace?: boolean }
+  ): Promise<Terminal> => {
+    const res = await httpClient.put(`/api/v1/terminals/${id}/device`, data);
+    return res.data;
+  },
+  unpairTerminalDevice: async (id: string): Promise<Terminal> => {
+    const res = await httpClient.delete(`/api/v1/terminals/${id}/device`);
     return res.data;
   },
   archiveTerminal: async (id: string): Promise<void> => {

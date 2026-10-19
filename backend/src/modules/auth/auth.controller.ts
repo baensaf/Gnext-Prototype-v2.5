@@ -2,7 +2,10 @@ import { Controller, Post, Get, Body, Req, Res, HttpStatus } from '@nestjs/commo
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { Public } from '../../common/decorators/public.decorator';
+import { SkipRegisterDeviceCheck } from '../../common/guards/register-device.guard';
 
+// Signing in and out works on any device, paired or not: the till learns it was cut off from its own requests.
+@SkipRegisterDeviceCheck()
 @Controller('api/v1/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
