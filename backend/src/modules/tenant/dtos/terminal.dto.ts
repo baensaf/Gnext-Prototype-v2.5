@@ -64,3 +64,18 @@ export class UpdateTerminalDto {
   @IsIn(['COMPACT', 'DETAILED', null])
   receipt_template?: 'COMPACT' | 'DETAILED' | null;
 }
+
+/** A device taking a register: the id its browser keeps, and a name people will recognise. */
+export class PairTerminalDeviceDto {
+  @IsUUID()
+  device_id: string;
+
+  @IsString()
+  @IsNotEmpty()
+  device_name: string;
+
+  /** The register is paired with another device: move it here. Without it the answer says which device has it. */
+  @IsOptional()
+  @IsBoolean()
+  replace?: boolean;
+}

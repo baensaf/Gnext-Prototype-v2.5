@@ -14,6 +14,8 @@ export interface AgentMode {
   cloud_url: string;
   /** True on the agent's LAN listener: a register that is not the branch PC itself. */
   lan: boolean;
+  /** The branch PC's Windows name, on the loopback listener only (agent 2.5.0 on). */
+  pc_name?: string;
 }
 
 /** The meta tag's `content`, read as an AgentMode. Null for anything that is not one. */
@@ -22,7 +24,7 @@ export function parseAgentMeta(content: string | null | undefined): AgentMode | 
   try {
     const data: unknown = JSON.parse(content);
     if (typeof data !== 'object' || data === null) return null;
-    const { version, cloud_url: cloudUrl, lan } = data as Record<string, unknown>;
+    const { version, cloud_url: cloudUrl, lan, pc_name: pcName } = data as Record<string, unknown>;
     if (typeof cloudUrl !== 'string') return null;
     // The link out needs a place to go. Only http(s), and only the origin: the path comes from
     // the page being left.
@@ -32,6 +34,7 @@ export function parseAgentMeta(content: string | null | undefined): AgentMode | 
       version: typeof version === 'string' ? version : '',
       cloud_url: url.origin,
       lan: lan === true,
+      ...(typeof pcName === 'string' && pcName.trim() ? { pc_name: pcName.trim() } : {}),
     };
   } catch {
     return null;

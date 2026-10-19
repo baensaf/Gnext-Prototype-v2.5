@@ -1,11 +1,12 @@
-import { Controller, Get, Patch, Post, Delete, Body, Param, Query, Req, UseGuards, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Patch, Post, Put, Delete, Body, Param, Query, Req, UseGuards, NotFoundException } from '@nestjs/common';
 import { Request } from 'express';
 import { TenantService } from './tenant.service';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { Terminal } from '../../entities/Terminal.entity';
-import { CreateTerminalDto, UpdateTerminalDto } from './dtos/terminal.dto';
+import { CreateTerminalDto, PairTerminalDeviceDto, UpdateTerminalDto } from './dtos/terminal.dto';
+import { SkipRegisterDeviceCheck } from '../../common/guards/register-device.guard';
 
 /**
  * A branch account reaches only its own branch by id; head office (no branch) reaches any branch
@@ -126,6 +127,28 @@ export class TenantController {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
     return await this.tenantService.updateTerminal(tenantId, id, body, correlationId);
+  }
+
+  /**
+   * The device in front of the register takes it. Any signed-in account of the branch may
+   * call it: the setup dialog asks a cashier for a manager's approval first.
+   */
+  @SkipRegisterDeviceCheck()
+  @BranchOwned(Terminal)
+  @Put('terminals/:id/device')
+  async pairTerminalDevice(@Param('id') id: string, @Body() body: PairTerminalDeviceDto, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.tenantService.pairTerminalDevice(tenantId, id, body, correlationId);
+  }
+
+  @BranchOwned(Terminal)
+  @Roles(...MANAGER_AND_ABOVE)
+  @Delete('terminals/:id/device')
+  async unpairTerminalDevice(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const correlationId = (req as any).correlationId;
+    return await this.tenantService.unpairTerminalDevice(tenantId, id, correlationId);
   }
 
   @BranchOwned(Terminal)

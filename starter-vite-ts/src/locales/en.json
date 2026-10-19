@@ -1110,7 +1110,14 @@
       "mismatch": "This device is {{register}} at {{branch}}",
       "mismatchHelp": "You are working in {{current}}. A drawer can only be opened in the branch it stands in.",
       "switchTo": "Work in {{branch}}",
-      "change": "Set up as a {{branch}} register"
+      "change": "Set up as a {{branch}} register",
+      "pairError": "Could not set up this register",
+      "takenTitle": "Move this register here?",
+      "taken": "{{register}} is used by {{device}}.",
+      "takenSeen": "{{register}} is used by {{device}}, last seen {{seen}}.",
+      "otherDevice": "another device",
+      "takenHelp": "Moving it here cuts the other device off. It asks a manager to set it up the next time it is used.",
+      "move": "Move it here"
     },
     "open": {
       "title": "Open shift",
@@ -3096,7 +3103,18 @@
       "edit": "Edit",
       "editSuccess": "{{name}} saved.",
       "editError": "Could not save the register",
-      "typeLocked": "A register's type is set when it is added."
+      "typeLocked": "A register's type is set when it is added.",
+      "colDevice": "Device",
+      "deviceNone": "Not set up on a device",
+      "deviceUnnamed": "A device",
+      "thisDevice": "This device",
+      "deviceLastSeen": "Last seen {{time}}",
+      "devicePaired": "Set up {{time}}",
+      "unpair": "Unpair device",
+      "unpairTitle": "Unpair this device?",
+      "unpairContent": "{{device}} stops working as {{name}} ({{code}}) at once. The register and its history stay; set up another device on it whenever you like.",
+      "unpairSuccess": "{{name}} is no longer paired with a device",
+      "unpairError": "Could not unpair the device"
     },
     "printers": {
       "title": "Printers",

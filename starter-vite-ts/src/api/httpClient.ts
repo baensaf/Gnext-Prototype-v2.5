@@ -3,7 +3,8 @@ import type { AxiosError } from 'axios';
 import axios from 'axios';
 
 import { generateUuid } from 'src/utils/uuid';
-import { readDeviceTerminal } from 'src/utils/device-terminal';
+import { readDeviceId } from 'src/utils/device-id';
+import { readDeviceTerminal, writeDeviceTerminal } from 'src/utils/device-terminal';
 import { GATEWAY_ERROR, connectionProblemMessage } from 'src/utils/connection-problem';
 import { isGatewayFailure, reportCloudAnswered, reportCloudUnreachable } from 'src/utils/cloud-reachability';
 
@@ -57,6 +58,8 @@ httpClient.interceptors.request.use((config) => {
   const register = readDeviceTerminal();
   if (register) {
     config.headers['X-Terminal-Id'] = register.id;
+    // And which device this is: a register answers only to the one it is paired with.
+    config.headers['X-Device-Id'] = readDeviceId();
   }
 
   // Attach Session Token Authorization header
@@ -111,6 +114,9 @@ httpClient.interceptors.response.use(
 
     if (error.response?.data) {
       const problem = error.response.data;
+      // A manager unpaired this device, or paired the register with another one: forget it,
+      // and the till asks a manager to set this device up again.
+      if (problem.code === 'REGISTER_DEVICE_UNPAIRED') writeDeviceTerminal(null);
       // The agent's own answer for a cloud that did not answer (§19.10): put the words for the
       // cashier where every screen already looks, in `detail`. A write that was not sent says
       // so; one that may have been saved says that, and the cart is the screen's to keep.

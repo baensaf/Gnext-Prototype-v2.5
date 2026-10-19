@@ -9,6 +9,7 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import LinkOffIcon from '@mui/icons-material/LinkOff';
 import {
   Box,
   Card,
@@ -35,6 +36,9 @@ import {
   TableContainer,
   CircularProgress,
 } from '@mui/material';
+
+import { fDateTime } from 'src/utils/format-time';
+import { readDeviceId } from 'src/utils/device-id';
 
 import { tenantApi } from 'src/api/tenantApi';
 import { paymentApi } from 'src/api/paymentApi';
@@ -73,6 +77,9 @@ export function TerminalsPage() {
     name: '',
     code: '',
   });
+
+  // The register whose device is about to be cut off.
+  const [unpairTarget, setUnpairTarget] = useState<Terminal | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -186,6 +193,19 @@ export function TerminalsPage() {
     }
   };
 
+  const handleConfirmUnpair = async () => {
+    if (!unpairTarget) return;
+    try {
+      await tenantApi.unpairTerminalDevice(unpairTarget.id);
+      setSuccess(t('operations.terminals.unpairSuccess', { name: unpairTarget.name }));
+      setUnpairTarget(null);
+      loadData();
+    } catch (err: any) {
+      setError(err.detail || err.message || t('operations.terminals.unpairError'));
+      setUnpairTarget(null);
+    }
+  };
+
   const getTypeChipColor = (type: string) => {
     switch (type) {
       case 'CASHIER': return 'primary';
@@ -271,6 +291,7 @@ export function TerminalsPage() {
                   <TableCell>{t('operations.terminals.colName', 'Terminal Name')}</TableCell>
                   <TableCell>{t('operations.terminals.colType', 'Terminal Type')}</TableCell>
                   <TableCell>{t('operations.terminals.colBranch', 'Branch')}</TableCell>
+                  <TableCell>{t('operations.terminals.colDevice')}</TableCell>
                   <TableCell>{t('operations.terminals.colCardTerminal', 'Card terminal')}</TableCell>
                   <TableCell>{t('operations.terminals.colReceipts')}</TableCell>
                   <TableCell>{t('operations.terminals.colStatus', 'Status')}</TableCell>
@@ -280,13 +301,13 @@ export function TerminalsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 6 }}>
+                    <TableCell colSpan={9} align="center" sx={{ py: 6 }}>
                       <CircularProgress size={32} />
                     </TableCell>
                   </TableRow>
                 ) : terminals.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                    <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
                       <Typography color="text.secondary">
                         {t('operations.terminals.noTerminals', 'No terminals found for this selection.')}
                       </Typography>
@@ -308,6 +329,40 @@ export function TerminalsPage() {
                           />
                         </TableCell>
                         <TableCell>{branchObj ? `${branchObj.name} (${branchObj.code})` : '—'}</TableCell>
+                        <TableCell sx={{ minWidth: 200 }}>
+                          {/* The one device this register answers to (Toast and Square pair one device each). */}
+                          {item.terminal_type !== 'CASHIER' ? (
+                            '—'
+                          ) : item.device_id ? (
+                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                              <Box sx={{ minWidth: 0 }}>
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                  {item.device_name || t('operations.terminals.deviceUnnamed')}
+                                  {item.device_id === readDeviceId() && (
+                                    <Chip size="small" label={t('operations.terminals.thisDevice')} sx={{ ml: 1 }} />
+                                  )}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  {item.last_seen_at
+                                    ? t('operations.terminals.deviceLastSeen', { time: fDateTime(item.last_seen_at) })
+                                    : t('operations.terminals.devicePaired', { time: fDateTime(item.device_paired_at) })}
+                                </Typography>
+                              </Box>
+                              <IconButton
+                                size="small"
+                                title={t('operations.terminals.unpair')}
+                                aria-label={t('operations.terminals.unpair')}
+                                onClick={() => setUnpairTarget(item)}
+                              >
+                                <LinkOffIcon fontSize="small" />
+                              </IconButton>
+                            </Stack>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">
+                              {t('operations.terminals.deviceNone')}
+                            </Typography>
+                          )}
+                        </TableCell>
                         <TableCell>
                           {/* The card terminal (PC-POS) beside this register or kiosk: its card charges go there. */}
                           <Select
@@ -439,6 +494,20 @@ export function TerminalsPage() {
           </form>
         </Box>
       </Drawer>
+
+      <ConfirmDialog
+        open={!!unpairTarget}
+        onClose={() => setUnpairTarget(null)}
+        onConfirm={handleConfirmUnpair}
+        title={t('operations.terminals.unpairTitle')}
+        content={t('operations.terminals.unpairContent', {
+          device: unpairTarget?.device_name || t('operations.terminals.deviceUnnamed'),
+          name: unpairTarget?.name || '',
+          code: unpairTarget?.code || '',
+        })}
+        confirmLabel={t('operations.terminals.unpair')}
+        confirmColor="warning"
+      />
 
       {/* Archive Confirm Dialog */}
       <ConfirmDialog
