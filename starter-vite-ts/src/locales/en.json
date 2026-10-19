@@ -3179,7 +3179,14 @@
       },
       "tillsLink": "Tills",
       "routingLink": "Print routing",
-      "nameRequired": "A printer needs a name."
+      "nameRequired": "A printer needs a name.",
+      "scan": {
+        "button": "Find printers on the network",
+        "busy": "Searching the branch network… (up to 30 seconds)",
+        "found": "{{count}} found. Pick one:",
+        "none": "Nothing answered on this port.",
+        "error": "Could not search the branch network."
+      }
     },
     "agents": {
       "title": "Branch Agents",
@@ -3282,6 +3289,24 @@
         "minVersion": "Oldest agent still allowed to connect (optional)",
         "notes": "Notes",
         "chooseFile": "Choose gnext-agent.exe"
+      },
+      "pc": {
+        "title": "This PC",
+        "offline": "The branch PC can be reached only while its agent is online.",
+        "tooOld": "Update this agent to 2.5.0 or later to manage its PC from here.",
+        "atSignIn": "Open Gnext when someone signs in to Windows",
+        "appRefresh": "Get the newest app now",
+        "appNew": "The agent downloaded the newest app.",
+        "appCurrent": "The agent already has the newest app.",
+        "logsShow": "Show logs",
+        "logsReload": "Reload logs",
+        "error": "The branch agent could not do it."
+      },
+      "queryErrors": {
+        "AGENT_OFFLINE": "The branch agent is offline. Check that the branch PC is on and connected.",
+        "AGENT_TOO_OLD": "The branch agent is too old for this. Update it to 2.5.0 or later.",
+        "AGENT_NO_ANSWER": "The branch agent did not answer in time. Try again.",
+        "AGENT_QUERY_FAILED": "The branch agent could not do it:"
       }
     },
     "printRouting": {

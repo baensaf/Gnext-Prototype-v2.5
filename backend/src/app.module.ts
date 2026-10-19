@@ -42,7 +42,6 @@ import { AgentCommand } from './entities/AgentCommand.entity';
 import { AgentRelease } from './entities/AgentRelease.entity';
 import { NoteTemplate } from './entities/NoteTemplate.entity';
 import { AgentGatewayModule } from './modules/agent-gateway/agent-gateway.module';
-import { AgentLocalModule } from './modules/agent-local/agent-local.module';
 import { LiveModule } from './modules/live/live.module';
 import { ImportJob } from './entities/ImportJob.entity';
 import { ImportRow } from './entities/ImportRow.entity';
@@ -197,7 +196,6 @@ import { TaraConnection, TaraBranch, TaraTerminal, TaraPurchase, TaraSimPurchase
     UsersModule,
     ProfilesModule,
     AgentGatewayModule,
-    AgentLocalModule,
     LiveModule,
     TypeOrmModule.forFeature([AdminUser, Session, IdempotencyRecord]),
   ],

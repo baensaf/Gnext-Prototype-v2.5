@@ -53,6 +53,8 @@ import { VersionTag } from 'src/components/version-tag';
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
+import { PrinterNetworkScan } from './printer-network-scan';
+
 export function PrintersPage() {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -486,6 +488,13 @@ export function PrintersPage() {
                   required
                 />
               </Stack>
+            )}
+            {connForm.kind === 'tcp' && (
+              <PrinterNetworkScan
+                branchId={printerForm.branch_id || getActiveBranchId()}
+                port={Number(connForm.port) || 9100}
+                onPick={(host) => setConnForm({ ...connForm, host })}
+              />
             )}
             {connForm.kind === 'windows' && (
               <TextField

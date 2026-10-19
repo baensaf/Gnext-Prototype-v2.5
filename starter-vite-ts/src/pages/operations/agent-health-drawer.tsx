@@ -28,6 +28,8 @@ import { agentsApi } from 'src/api/agentsApi';
 import { paymentApi } from 'src/api/paymentApi';
 import { printingApi } from 'src/api/printingApi';
 
+import { AgentPcPanel } from './agent-pc-panel';
+
 // ----------------------------------------------------------------------
 
 const REFRESH_MS = 15_000;
@@ -167,6 +169,19 @@ export function AgentHealthDrawer({ agentId, branchId, onClose }: Props) {
                 </Stack>
               )}
             </Stack>
+
+            <Divider />
+
+            <Box>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                {t('operations.agents.pc.title')}
+              </Typography>
+              <AgentPcPanel
+                agentId={agent.id}
+                connected={connection.connected}
+                canAsk={connection.connected && !!connection.capabilities?.includes('agent.query')}
+              />
+            </Box>
 
             <Divider />
 

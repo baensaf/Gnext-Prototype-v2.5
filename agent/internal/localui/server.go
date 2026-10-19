@@ -1,12 +1,13 @@
 // Package localui is the agent's local web server (agent-protocol §19). It listens twice:
 //
-//   - 127.0.0.1:47800, the branch PC's own address: the app, and the agent's settings page under
-//     /agent/ (connection status, enrolment, the branch's printers and terminals, logs);
+//   - 127.0.0.1:47800, the branch PC's own address: the app, and the agent's own page under /agent/
+//     (connection status, enrolment, logs, and the test print the tray asks for);
 //   - 0.0.0.0:47801, the branch network: the app only, for every other register.
 //
 // The app is the cloud's own frontend build, cached on disk (package appcache); /api/* and
-// /uploads/* are passed to the cloud (proxy.go). Device changes made on the settings page go to the
-// cloud as the signed-in manager; the cloud stays the source of truth and pushes the new list back.
+// /uploads/* are passed to the cloud (proxy.go). Devices, the network scan, logs and this PC's settings
+// are managed from the cloud's screens since 2.5.0 (agent.query, §20); the page here only enrols the
+// PC and shows what a PC with no cloud needs to show.
 package localui
 
 import (
@@ -41,9 +42,6 @@ const DefaultLANAddr = "0.0.0.0:47801"
 // LANOff, as Server.LANAddr, turns the LAN listener off.
 const LANOff = "off"
 
-// sessionIdle signs the manager out after this long without a request.
-const sessionIdle = 15 * time.Minute
-
 //go:embed static
 var static embed.FS
 
@@ -66,10 +64,6 @@ type Host interface {
 	State() State
 	// Enrol redeems a code, saves the identity, and restarts the agent on it.
 	Enrol(ctx context.Context, server, code string) error
-	// AppAtSignIn says whether the app opens when a user signs in to Windows (§19.12), and
-	// SetAppAtSignIn changes it (config.json).
-	AppAtSignIn() bool
-	SetAppAtSignIn(on bool) error
 }
 
 type Server struct {
@@ -98,11 +92,6 @@ type Server struct {
 	initOnce  sync.Once
 	px        *Proxy
 	startedAt time.Time
-
-	mu       sync.Mutex
-	session  string
-	user     *cloud.LocalUser
-	lastUsed time.Time
 }
 
 func (s *Server) init() {
@@ -190,20 +179,10 @@ func (s *Server) Handler(addr string) http.Handler {
 	files, _ := fs.Sub(static, "static")
 	mux.Handle("GET /agent/", http.StripPrefix("/agent", http.FileServerFS(files)))
 
-	mux.HandleFunc("GET /agent/api/app/refresh", s.refreshApp)
-	mux.HandleFunc("POST /agent/api/settings", s.settings)
 	mux.HandleFunc("GET /agent/api/logs", s.logs)
 	mux.HandleFunc("POST /agent/api/enrol", s.enrol)
-	mux.HandleFunc("GET /agent/api/session", s.whoami)
-	mux.HandleFunc("POST /agent/api/login", s.login)
-	mux.HandleFunc("POST /agent/api/logout", s.logout)
-	mux.HandleFunc("POST /agent/api/scan", s.scan)
+	// The tray's test print. Everything else about devices is on the cloud's screens (§20).
 	mux.HandleFunc("POST /agent/api/printers/{id}/test", s.testPrint)
-	for _, kind := range []string{"printers", "terminals"} {
-		mux.HandleFunc("POST /agent/api/"+kind, s.deviceChange(http.MethodPost, "/"+kind))
-		mux.HandleFunc("PATCH /agent/api/"+kind+"/{id}", s.deviceChange(http.MethodPatch, "/"+kind+"/{id}"))
-		mux.HandleFunc("DELETE /agent/api/"+kind+"/{id}", s.deviceChange(http.MethodDelete, "/"+kind+"/{id}"))
-	}
 	return localOnly(addr, s.router(false, mux))
 }
 
@@ -294,7 +273,7 @@ func (s *Server) appStatus(lan bool) http.HandlerFunc {
 				"connected": connected, "since": protocol.Now(since),
 				"reachable": reachable, "reachable_since": protocol.Now(reachableSince),
 			},
-			"app":     nil,
+			"app": nil,
 		}
 		if b := s.currentBuild(); b != nil {
 			out["app"] = b.Info
@@ -302,11 +281,10 @@ func (s *Server) appStatus(lan bool) http.HandlerFunc {
 		if !lan {
 			out["enrolled"] = st.Enrolled
 			out["server"] = st.Server
+			out["app_origin"] = st.AppOrigin
 			out["agent_id"] = st.AgentID
 			out["branch_name"] = st.BranchName
 			out["stopped"] = st.Stopped
-			out["user"] = s.currentUser()
-			out["app_at_sign_in"] = s.Host.AppAtSignIn()
 			out["lan_urls"] = s.LANURLs()
 			if st.Agent != nil {
 				out["agent"] = st.Agent.Status()
@@ -317,68 +295,12 @@ func (s *Server) appStatus(lan bool) http.HandlerFunc {
 	}
 }
 
-// refreshApp is GET /agent/api/app/refresh: check the cloud for a newer build now. It needs the
-// settings page's manager session.
-func (s *Server) refreshApp(w http.ResponseWriter, r *http.Request) {
-	if s.sessionToken() == "" {
-		fail(w, http.StatusUnauthorized, "UNAUTHENTICATED", "برای دریافت نسخه جدید وارد شوید.")
-		return
-	}
-	if s.App == nil {
-		fail(w, http.StatusConflict, "APP_CACHE_OFF", "ذخیره‌ی برنامه در این عامل فعال نیست.")
-		return
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Minute)
-	defer cancel()
-	res, err := s.App.Check(ctx)
-	switch {
-	case errors.Is(err, appcache.ErrNoOrigin):
-		fail(w, http.StatusConflict, "NOT_CONFIGURED", "آدرس سرور تنظیم نشده است.")
-		return
-	case err != nil:
-		s.Log.Warn("app build check from the settings page failed", "err", err)
-		fail(w, http.StatusBadGateway, "APP_DOWNLOAD_FAILED", "دریافت نسخه جدید انجام نشد: "+err.Error())
-		return
-	}
-	out := map[string]any{"ok": true, "changed": res.Changed, "files_fetched": res.Fetched, "bytes": res.Bytes, "app": nil}
-	if b := s.currentBuild(); b != nil {
-		out["app"] = b.Info
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-// settings is POST /agent/api/settings: this PC's own settings, for now whether the app opens at
-// Windows sign-in (§19.12). It needs the manager's session like the other changes.
-func (s *Server) settings(w http.ResponseWriter, r *http.Request) {
-	if s.sessionToken() == "" {
-		fail(w, http.StatusUnauthorized, "UNAUTHENTICATED", "برای تغییر تنظیمات وارد شوید.")
-		return
-	}
-	var in struct {
-		AppAtSignIn *bool `json:"app_at_sign_in"`
-	}
-	if !readJSON(w, r, &in) {
-		return
-	}
-	if in.AppAtSignIn == nil {
-		fail(w, http.StatusBadRequest, "INVALID_PAYLOAD", "درخواست نامعتبر است.")
-		return
-	}
-	if err := s.Host.SetAppAtSignIn(*in.AppAtSignIn); err != nil {
-		s.Log.Warn("could not save a setting", "err", err)
-		fail(w, http.StatusInternalServerError, "SETTINGS_NOT_SAVED", "ذخیره‌ی تنظیمات انجام نشد: "+err.Error())
-		return
-	}
-	s.Log.Info("setting changed from the settings page", "app_at_sign_in", *in.AppAtSignIn)
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "app_at_sign_in": *in.AppAtSignIn})
-}
-
 func (s *Server) logs(w http.ResponseWriter, r *http.Request) {
 	lines, _ := strconv.Atoi(r.URL.Query().Get("lines"))
 	if lines <= 0 || lines > 2000 {
 		lines = 300
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"lines": tail(s.LogFile, lines)})
+	writeJSON(w, http.StatusOK, map[string]any{"lines": Tail(s.LogFile, lines)})
 }
 
 func (s *Server) enrol(w http.ResponseWriter, r *http.Request) {
@@ -401,109 +323,8 @@ func (s *Server) enrol(w http.ResponseWriter, r *http.Request) {
 		cloudError(w, err)
 		return
 	}
-	s.signOut(context.Background())
 	s.Log.Info("enrolled from the local page", "server", in.Server)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-}
-
-func (s *Server) whoami(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"user": s.currentUser()})
-}
-
-func (s *Server) login(w http.ResponseWriter, r *http.Request) {
-	c := s.Host.State().Cloud
-	if c == nil {
-		fail(w, http.StatusConflict, "NOT_ENROLLED", "این رایانه هنوز به شعبه‌ای وصل نشده است.")
-		return
-	}
-	var in struct{ Username, Password string }
-	if !readJSON(w, r, &in) {
-		return
-	}
-	token, user, err := c.LocalLogin(r.Context(), in.Username, in.Password)
-	if err != nil {
-		cloudError(w, err)
-		return
-	}
-	s.mu.Lock()
-	old := s.session
-	s.session, s.user, s.lastUsed = token, &user, time.Now()
-	s.mu.Unlock()
-	if old != "" {
-		go func() { _ = c.Local(context.Background(), http.MethodPost, "/logout", old, nil, nil) }()
-	}
-	s.Log.Info("signed in on the local page", "user", user.Username, "role", user.Role)
-	writeJSON(w, http.StatusOK, map[string]any{"user": user})
-}
-
-func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	s.signOut(r.Context())
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-}
-
-func (s *Server) signOut(ctx context.Context) {
-	s.mu.Lock()
-	token := s.session
-	s.session, s.user = "", nil
-	s.mu.Unlock()
-	if c := s.Host.State().Cloud; token != "" && c != nil {
-		_ = c.Local(ctx, http.MethodPost, "/logout", token, nil, nil)
-	}
-}
-
-func (s *Server) currentUser() *cloud.LocalUser {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.user != nil && time.Since(s.lastUsed) > sessionIdle {
-		s.session, s.user = "", nil
-	}
-	return s.user
-}
-
-// sessionToken is the signed-in manager's session, "" when there is none; it counts as use.
-func (s *Server) sessionToken() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.user != nil && time.Since(s.lastUsed) > sessionIdle {
-		s.session, s.user = "", nil
-	}
-	if s.session != "" {
-		s.lastUsed = time.Now()
-	}
-	return s.session
-}
-
-// deviceChange forwards a device change to the cloud as the signed-in manager.
-func (s *Server) deviceChange(method, pattern string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		c := s.Host.State().Cloud
-		if c == nil {
-			fail(w, http.StatusConflict, "NOT_ENROLLED", "این رایانه هنوز به شعبه‌ای وصل نشده است.")
-			return
-		}
-		token := s.sessionToken()
-		if token == "" {
-			fail(w, http.StatusUnauthorized, "UNAUTHENTICATED", "برای تغییر دستگاه‌ها وارد شوید.")
-			return
-		}
-		path := strings.Replace(pattern, "{id}", r.PathValue("id"), 1)
-		var in any
-		if method != http.MethodDelete && !readJSON(w, r, &in) {
-			return
-		}
-		var out any
-		if err := c.Local(r.Context(), method, path, token, in, &out); err != nil {
-			var p *cloud.Problem
-			if errors.As(err, &p) && p.Status == http.StatusUnauthorized {
-				s.mu.Lock()
-				s.session, s.user = "", nil
-				s.mu.Unlock()
-			}
-			cloudError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, out)
-	}
 }
 
 func (s *Server) testPrint(w http.ResponseWriter, r *http.Request) {
@@ -519,17 +340,6 @@ func (s *Server) testPrint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-}
-
-func (s *Server) scan(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Port int }
-	_ = json.NewDecoder(io.LimitReader(r.Body, 1<<10)).Decode(&in)
-	if in.Port <= 0 || in.Port > 65535 {
-		in.Port = 9100
-	}
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
-	defer cancel()
-	writeJSON(w, http.StatusOK, map[string]any{"found": ScanLAN(ctx, in.Port)})
 }
 
 func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
@@ -564,8 +374,8 @@ func cloudError(w http.ResponseWriter, err error) {
 	fail(w, http.StatusBadGateway, "CLOUD_UNREACHABLE", "ارتباط با سرور برقرار نشد: "+err.Error())
 }
 
-// tail returns up to n last lines of a file, reading at most its last 512 KB.
-func tail(path string, n int) []string {
+// Tail returns up to n last lines of a file, reading at most its last 512 KB.
+func Tail(path string, n int) []string {
 	f, err := os.Open(path)
 	if err != nil {
 		return []string{}

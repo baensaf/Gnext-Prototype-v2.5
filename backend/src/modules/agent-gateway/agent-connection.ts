@@ -239,6 +239,10 @@ export class AgentConnection {
         this.recordDevices(this.handle!, message.payload.devices);
         this.sendAck(message.id);
         return;
+      case 'agent.query.result':
+        // A live answer (§20): not acked, not stored; the waiting request takes it.
+        this.deps.sessions.answerQuery(this.agent.id, message.ref, message.payload);
+        return;
       case 'error':
         this.deps.log?.(`agent ${this.agent.id} reported ${message.payload.code}: ${message.payload.message ?? ''}`);
         return;

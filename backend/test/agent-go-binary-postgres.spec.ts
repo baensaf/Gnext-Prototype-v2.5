@@ -21,6 +21,7 @@ import { PaymentDevice } from '../src/entities/PaymentDevice.entity';
 import { Payment } from '../src/entities/Payment.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { AgentRegistryService } from '../src/modules/agent-gateway/agent-registry.service';
+import { AgentSessionsService } from '../src/modules/agent-gateway/agent-sessions.service';
 import { OrderService } from '../src/modules/order/order.service';
 import { PaymentService } from '../src/modules/payment/payment.service';
 import { deleteTenantData } from './utils/tenant-teardown';
@@ -168,6 +169,27 @@ ${agentLog}`);
     });
     expect(JSON.parse(readFileSync(devices, 'utf8')).printers.map((p: any) => p.code)).toEqual(['GOA-PRN']);
   }, 60000);
+
+  // What the agent's own settings page did until 2.5.0, asked from the cloud (protocol §20).
+  it('answers live queries: its logs, its PC settings, and a scan of its network', async () => {
+    const sessions = moduleRef.get(AgentSessionsService);
+    const handle = sessions.get(agentId)!;
+    expect(handle.capabilities).toContain('agent.query');
+
+    const logs = await sessions.query(handle, 'logs', { lines: 50 });
+    expect(Array.isArray(logs.lines)).toBe(true);
+
+    const settings = await sessions.query(handle, 'settings', {});
+    expect(typeof settings.app_at_sign_in).toBe('boolean');
+    const flipped = await sessions.query(handle, 'settings', { app_at_sign_in: !settings.app_at_sign_in });
+    expect(flipped.app_at_sign_in).toBe(!settings.app_at_sign_in);
+
+    const scan = await sessions.query(handle, 'scan', { port: 9100 });
+    expect(scan.port).toBe(9100);
+    expect(Array.isArray(scan.found)).toBe(true);
+
+    await expect(sessions.query(handle, 'nothing' as any)).rejects.toMatchObject({ code: 'AGENT_QUERY_FAILED' });
+  }, 90000);
 
   let orderId: string;
 
