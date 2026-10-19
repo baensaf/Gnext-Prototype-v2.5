@@ -21,13 +21,15 @@ type Props = {
   /** Live and new enough to answer (capability `agent.query`, agent 2.5.0). */
   canAsk: boolean;
   connected: boolean;
+  /** The branch's manager or head office; anyone else at the branch only looks (and reads the logs). */
+  canChange?: boolean;
 };
 
 /**
  * The branch PC itself, asked live through its agent (protocol §20): what used to be on the
  * agent's own settings page at 127.0.0.1:47800. Nothing here is stored in the cloud.
  */
-export function AgentPcPanel({ agentId, canAsk, connected }: Props) {
+export function AgentPcPanel({ agentId, canAsk, connected, canChange = true }: Props) {
   const { t } = useTranslation();
   const [atSignIn, setAtSignIn] = useState<boolean | null>(null);
   const [saving, setSaving] = useState(false);
@@ -111,14 +113,14 @@ export function AgentPcPanel({ agentId, canAsk, connected }: Props) {
         control={
           <Switch
             checked={!!atSignIn}
-            disabled={atSignIn === null || saving}
+            disabled={atSignIn === null || saving || !canChange}
             onChange={(e) => changeAtSignIn(e.target.checked)}
           />
         }
         label={t('operations.agents.pc.atSignIn')}
       />
       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', rowGap: 1 }}>
-        <Button size="small" variant="outlined" onClick={refreshApp} disabled={refreshing}>
+        <Button size="small" variant="outlined" onClick={refreshApp} disabled={refreshing || !canChange}>
           {refreshing ? <CircularProgress size={16} sx={{ mr: 1 }} /> : null}
           {t('operations.agents.pc.appRefresh')}
         </Button>

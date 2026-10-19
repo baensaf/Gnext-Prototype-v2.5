@@ -88,8 +88,10 @@ describe('agent health (PostgreSQL)', () => {
     await app.close();
   });
 
-  it('is head office only', () => {
-    expect(Reflect.getMetadata(HEAD_OFFICE_ONLY_KEY, AgentRegistryController)).toBe(true);
+  // Since 2026-10-19 everyone at the branch reads its agent's health; another branch's answers as
+  // not found (BranchOwned on the route).
+  it("is open to the branch's own accounts", () => {
+    expect(Reflect.getMetadata(HEAD_OFFICE_ONLY_KEY, AgentRegistryController.prototype.agentHealth)).toBeUndefined();
   });
 
   it("shows a live agent's version, capabilities, devices and recent commands", async () => {

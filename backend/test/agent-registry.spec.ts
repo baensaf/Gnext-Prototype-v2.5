@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { HEAD_OFFICE_ONLY_KEY, ROLES_KEY } from '../src/common/decorators/roles.decorator';
+import { BRANCH_OWNED_KEY } from '../src/common/decorators/branch-owned.decorator';
 import { AgentRegistryController } from '../src/modules/agent-gateway/agent-registry.controller';
 import { AgentRegistryService, enrolmentCodeState } from '../src/modules/agent-gateway/agent-registry.service';
 import {
@@ -52,12 +53,27 @@ describe('Agent registry', () => {
   });
 
   describe('who may manage agents', () => {
-    it('is head office, manager and above, for every route', () => {
-      expect(Reflect.getMetadata(HEAD_OFFICE_ONLY_KEY, AgentRegistryController)).toBe(true);
-      expect(Reflect.getMetadata(ROLES_KEY, AgentRegistryController)).toEqual(
-        expect.arrayContaining(['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER']),
-      );
-      expect(Reflect.getMetadata(ROLES_KEY, AgentRegistryController)).not.toContain('CASHIER');
+    // 2026-10-19: everyone at a branch reads its agent (the Branch agent page); enrolment codes and
+    // revoking stay with head office's managers.
+    const meta = (key: string, handler: keyof AgentRegistryController) =>
+      Reflect.getMetadata(key, AgentRegistryController.prototype[handler] as any);
+
+    it('keeps enrolment codes and revoking with head office, manager and above', () => {
+      for (const handler of ['listCodes', 'createCode', 'cancelCode', 'revoke'] as const) {
+        expect(meta(HEAD_OFFICE_ONLY_KEY, handler)).toBe(true);
+        expect(meta(ROLES_KEY, handler)).toEqual(expect.arrayContaining(['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER']));
+        expect(meta(ROLES_KEY, handler)).not.toContain('CASHIER');
+      }
+    });
+
+    it("lets everyone at a branch read its agent, and only its own branch's", () => {
+      expect(Reflect.getMetadata(HEAD_OFFICE_ONLY_KEY, AgentRegistryController)).toBeUndefined();
+      for (const handler of ['list', 'get', 'agentHealth'] as const) {
+        expect(meta(HEAD_OFFICE_ONLY_KEY, handler)).toBeUndefined();
+        expect(meta(ROLES_KEY, handler)).toBeUndefined();
+      }
+      expect(meta(BRANCH_OWNED_KEY, 'get')).toBeDefined();
+      expect(meta(BRANCH_OWNED_KEY, 'agentHealth')).toBeDefined();
     });
   });
 

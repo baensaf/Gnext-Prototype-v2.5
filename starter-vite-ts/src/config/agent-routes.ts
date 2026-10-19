@@ -47,6 +47,10 @@ export const AGENT_ROUTES: AgentRoute[] = [
   // The cashier's shifts and drawer. Below it: one shift (/app/cashier/shifts/:shiftId).
   // Business days and the roll-up are not the cashier's.
   { path: '/app/cashier/shifts' },
+
+  // The branch agent: its status, printers and card terminals, this PC and its logs, which the
+  // agent's own page showed before (2026-10-19). One window for selling and for the agent.
+  { path: '/app/operations/agents', exact: true },
 ];
 
 function stripTrailingSlash(pathname: string): string {

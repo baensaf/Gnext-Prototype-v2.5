@@ -111,7 +111,8 @@
     "itemDiscounts": "Item Discounts",
     "mediaLocalizationSim": "Media & translations demo",
     "coupons": "Coupons",
-    "customerGroups": "Customer groups"
+    "customerGroups": "Customer groups",
+    "branchAgent": "Branch agent"
   },
   "common": {
     "languages": "Languages",
@@ -2736,7 +2737,7 @@
           "description": "Which kitchen printer prints which categories and products."
         },
         "agents": {
-          "title": "Branch agents",
+          "title": "Branch agent",
           "description": "The PC in each branch that serves the tills and reaches its printers and card terminals: pairing, health and version."
         },
         "dataReset": {
@@ -3198,7 +3199,7 @@
       }
     },
     "agents": {
-      "title": "Branch Agents",
+      "title": "Branch agent",
       "intro": "Each branch runs one agent on its PC. The agent connects to the cloud and drives the branch printers and card terminals. Give the installer a one-time enrolment code; revoke an agent to cut it off at once.",
       "loadError": "Failed to load branch agents",
       "createCode": "New enrolment code",
@@ -3316,6 +3317,34 @@
         "AGENT_TOO_OLD": "The branch agent is too old for this. Update it to 2.5.0 or later.",
         "AGENT_NO_ANSWER": "The branch agent did not answer in time. Try again.",
         "AGENT_QUERY_FAILED": "The branch agent could not do it:"
+      },
+      "introBranch": "The PC that runs this branch's tills, printers and card terminals. Everyone at the branch can see it and print a test page; the manager changes the devices and this PC's settings.",
+      "branch": {
+        "title": "Branch agent — {{branch}}",
+        "noAgent": "No agent",
+        "noAgentHelp": "This branch has no agent yet. Head office gives the installer a one-time code; on the branch PC, enter it under Connect this PC.",
+        "tabStatus": "Status",
+        "tabPrinters": "Printers",
+        "tabTerminals": "Card terminals",
+        "tabPc": "This PC and logs",
+        "tabConnect": "Connect this PC",
+        "lanHelp": "The branch's other registers (a PC, tablet or phone on this network) open Gnext at one of these addresses:",
+        "copy": "Copy",
+        "enrolHelp": "Enter the one-time code head office made for this branch. The code works once, for 24 hours.",
+        "reenrolHelp": "This PC is connected. A new code connects it to another branch and revokes the current agent.",
+        "reenrolConfirm": "The current agent of this PC is revoked and it is enrolled with the new code. Continue?",
+        "server": "Server address",
+        "code": "Enrolment code",
+        "connect": "Connect",
+        "enrolled": "Enrolled. The agent is connecting.",
+        "enrolError": "Could not enrol this PC."
+      },
+      "live": {
+        "ONLINE": "Ready",
+        "OFFLINE": "Not reachable",
+        "ERROR": "Fault",
+        "UNSUPPORTED": "Not supported",
+        "UNKNOWN": "Unknown"
       }
     },
     "printRouting": {
