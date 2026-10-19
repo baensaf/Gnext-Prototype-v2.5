@@ -123,3 +123,7 @@ label.check input { display: inline-block; width: auto; margin: 0; }
 .urls li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .urls code { direction: ltr; unicode-bidi: plaintext; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 2px 10px; }
 .offscreen { position: fixed; opacity: 0; top: 0; }
+
+/* Links into Gnext, where devices and settings live since 2.5.0. */
+.links { display: flex; gap: 8px; flex-wrap: wrap; }
+a.btn { text-decoration: none; display: inline-block; }

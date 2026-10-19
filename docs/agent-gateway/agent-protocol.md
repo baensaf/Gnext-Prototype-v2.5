@@ -3072,3 +3072,64 @@ For an agent that advertises `app.serve`:
 - [ ] Every `heartbeat` carries `app_build_id` (`null` while there is no build) and `lan_urls` (an empty list
       if the PC has no private address); the app opens at Windows sign-in unless `app_at_sign_in` is off,
       and never at the service's own start.
+
+## 20. One place to manage the branch PC (agent 2.5.0, 2026-10-19)
+
+Until 2.4.0 the agent had its own settings page at `127.0.0.1:47800/agent/`, with a manager
+sign-in, printer and terminal forms, a network scan, a test print, logs and the *open at Windows
+sign-in* switch, while the same devices were also edited on the cloud's Printers and Card
+terminals screens. Two places to do one job. From 2.5.0 everything is done in the cloud app, and
+the cloud asks the agent live for the few things only the branch PC knows.
+
+### 20.1 Decisions
+
+- The cloud's screens do it all: Printers (with *Find printers on the network*), Card terminals,
+  and the Branch agents drawer (*This PC*: open at sign-in, newest app, logs).
+- The local page keeps only what a PC needs before or without the cloud: enrolment, connection
+  status, the LAN addresses and the served build, and the logs (read-only). It links to the cloud
+  screens. The tray's test print stays.
+- Gone from the agent: the local manager sign-in and its session, `POST /agent/api/{login,logout,
+  settings,scan}`, `GET /agent/api/{session,app/refresh}`, and the device routes under
+  `/agent/api/printers` and `/agent/api/terminals` (but `POST /agent/api/printers/{id}/test`).
+  Gone from the cloud: every route under `/api/v1/agent/local`.
+- The loopback `GET /agent/api/status` no longer carries `user` or `app_at_sign_in`, and adds
+  `app_origin` for the page's links.
+- The app's `gnext-agent` meta carries `pc_name` (the PC's Windows name) on the loopback listener,
+  so a register paired on the branch PC is named after it on the Terminals page.
+
+### 20.2 `agent.query` and `agent.query.result`
+
+An agent that answers live queries advertises the capability `agent.query` in `hello`.
+
+```json
+{ "v": 1, "id": "q-…", "type": "agent.query", "ts": "…",
+  "payload": { "expires_at": "…", "query": "scan", "args": { "port": 9100 } } }
+
+{ "v": 1, "id": "r-…", "type": "agent.query.result", "ts": "…", "ref": "q-…",
+  "payload": { "ok": true, "data": { "port": 9100, "found": [{ "host": "192.168.1.201", "port": 9100 }] } } }
+```
+
+- Neither side acks, journals or resends them. A query is answered once; one that is never
+  answered is the person's to ask again. The cloud stops waiting after 45 s (120 s for
+  `app.refresh`), or at once when the agent's socket closes.
+- On failure: `{ "ok": false, "error": { "code": "UNSUPPORTED" | "INTERNAL" | "INVALID_PAYLOAD", "message": "…" } }`.
+
+| `query` | `args` | `data` |
+|---|---|---|
+| `scan` | `port` (default 9100) | `{ port, found: [{ host, port }] }`: every address of the PC's private /24 networks that accepts a connection; a network where 32 or more answer is left out (a proxy or virtual switch) |
+| `logs` | `lines` (1–2000, default 300) | `{ lines: [] }`, the last lines of the agent's log |
+| `settings` | none to read; `app_at_sign_in` to change it | `{ app_at_sign_in, pc_name }` |
+| `app.refresh` | none | the build check's result: `{ build_id, changed, files_fetched, files_reused, bytes }` |
+
+### 20.3 The cloud's routes
+
+All answer `409` with `code` `AGENT_OFFLINE`, `AGENT_TOO_OLD`, `AGENT_QUERY_FAILED` or
+`AGENT_NO_ANSWER` when the agent cannot answer (never a 5xx, which the app reads as the cloud
+being down).
+
+| Route | Who | Query |
+|---|---|---|
+| `POST /api/v1/agents/branch-scan` `{ branchId, port }` | manager and above; a branch account only its own branch | `scan` |
+| `GET /api/v1/agents/{id}/logs?lines=` | head office | `logs` |
+| `GET` / `PATCH /api/v1/agents/{id}/settings` `{ app_at_sign_in }` | head office; the change is audited | `settings` |
+| `POST /api/v1/agents/{id}/app-refresh` | head office | `app.refresh` |

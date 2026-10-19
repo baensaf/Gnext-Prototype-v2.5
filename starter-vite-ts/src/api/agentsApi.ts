@@ -134,7 +134,59 @@ export interface NewEnrolmentCode {
   expires_at: string;
 }
 
+/** A host on the branch network that answered on the scanned port. */
+export interface NetworkHost {
+  host: string;
+  port: number;
+}
+
+/** The branch PC's own settings, read from the agent live (protocol §20). */
+export interface AgentPcSettings {
+  app_at_sign_in: boolean;
+  pc_name?: string;
+}
+
+const AGENT_QUERY_CODES = ['AGENT_OFFLINE', 'AGENT_TOO_OLD', 'AGENT_NO_ANSWER', 'AGENT_QUERY_FAILED'];
+
+/**
+ * The words for why a live query to the agent got nothing, in the screen's language. An agent that
+ * tried and failed keeps its own message, which says what went wrong on the PC.
+ */
+export function agentQueryMessage(t: (key: string) => string, err: any): string {
+  const code = err?.code;
+  if (code === 'AGENT_QUERY_FAILED') return `${t('operations.agents.queryErrors.AGENT_QUERY_FAILED')} ${err?.detail || ''}`.trim();
+  if (AGENT_QUERY_CODES.includes(code)) return t(`operations.agents.queryErrors.${code}`);
+  return err?.detail || err?.message || '';
+}
+
 export const agentsApi = {
+  /**
+   * Asks the branch's agent which hosts on its network answer on `port` (9100 for network
+   * printers). Takes up to 30 seconds; the agent has to be online.
+   */
+  scanBranchNetwork: async (branchId: string, port = 9100): Promise<{ port: number; found: NetworkHost[] }> => {
+    const res = await httpClient.post('/api/v1/agents/branch-scan', { branchId, port }, { timeout: 60_000 });
+    return res.data;
+  },
+  /** The agent's last log lines, read from the branch PC. */
+  logs: async (id: string, lines = 300): Promise<{ lines: string[] }> => {
+    const res = await httpClient.get(`/api/v1/agents/${id}/logs`, { params: { lines }, timeout: 60_000 });
+    return res.data;
+  },
+  pcSettings: async (id: string): Promise<AgentPcSettings> => {
+    const res = await httpClient.get(`/api/v1/agents/${id}/settings`, { timeout: 60_000 });
+    return res.data;
+  },
+  setPcSettings: async (id: string, data: AgentPcSettings): Promise<AgentPcSettings> => {
+    const res = await httpClient.patch(`/api/v1/agents/${id}/settings`, { app_at_sign_in: data.app_at_sign_in }, { timeout: 60_000 });
+    return res.data;
+  },
+  /** Has the agent fetch the cloud's newest app build now, rather than at its next check. */
+  refreshApp: async (id: string): Promise<{ changed: boolean; build_id?: string }> => {
+    const res = await httpClient.post(`/api/v1/agents/${id}/app-refresh`, {}, { timeout: 150_000 });
+    return res.data;
+  },
+
   list: async (params: { branchId?: string; includeRevoked?: boolean } = {}): Promise<BranchAgent[]> => {
     const res = await httpClient.get('/api/v1/agents', {
       params: { branchId: params.branchId || undefined, includeRevoked: params.includeRevoked ? 'true' : undefined },

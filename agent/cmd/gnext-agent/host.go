@@ -185,6 +185,7 @@ func (h *host) runOnce(ctx context.Context) (int, error) {
 		AppReport:     h.appReport,
 		SavedConfig:   loadDevices(h.log),
 		ConfigChanged: func(c *protocol.Config) { saveDevices(c, h.log) },
+		Queries:       h.queries(),
 	})
 	up := &update.Updater{
 		Client: client, Version: version, Dir: store.UpdatesDir(), Log: h.log,

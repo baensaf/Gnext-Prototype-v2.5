@@ -41,6 +41,8 @@ type Options struct {
 	// AppReport is asked for each heartbeat: the build the agent serves ("" for none) and the LAN
 	// addresses of its app (§19.12). Nil sends a heartbeat without those fields.
 	AppReport func() (buildID string, lanURLs []string)
+	// Queries answer the cloud's live questions (agent.query, §20), by name. Nil answers none.
+	Queries map[string]QueryFunc
 
 	// Timings, overridable in tests.
 	HandshakeTimeout time.Duration
@@ -48,6 +50,12 @@ type Options struct {
 	ProbeInterval    time.Duration
 	BackoffMax       time.Duration
 }
+
+// QueryFunc answers one live query from the cloud. args is the query's own arguments, possibly empty.
+type QueryFunc func(ctx context.Context, args json.RawMessage) (any, error)
+
+// queryTimeout bounds a query: the cloud stops waiting at 45 s, and a network scan takes up to 30.
+const queryTimeout = 40 * time.Second
 
 // ErrStopped is returned by Run when the cloud refused the agent for good (§3.4, §4.9).
 var ErrStopped = errors.New("agent stopped by the cloud; run enrol again")
@@ -209,7 +217,7 @@ func (a *Agent) session(ctx context.Context) (welcomed bool, err error) {
 	hello, _ := protocol.New(protocol.TypeHello, "", protocol.Hello{
 		AgentVersion:     a.o.Version,
 		ProtocolVersions: []int{protocol.Version},
-		Capabilities:     protocol.Capabilities,
+		Capabilities:     a.capabilities(),
 		StartedAt:        protocol.Now(a.startedAt),
 		Devices:          a.deviceList(),
 		UnackedResults:   len(unacked),
@@ -315,6 +323,15 @@ func (a *Agent) heartbeat(ctx context.Context, c *websocket.Conn, interval time.
 	}
 }
 
+// capabilities is what hello advertises: the build's own, and agent.query when it answers queries.
+func (a *Agent) capabilities() []string {
+	caps := append([]string{}, protocol.Capabilities...)
+	if len(a.o.Queries) > 0 {
+		caps = append(caps, protocol.CapabilityQuery)
+	}
+	return caps
+}
+
 // handle processes one frame after welcome.
 func (a *Agent) handle(data []byte) {
 	var env protocol.Envelope
@@ -343,6 +360,8 @@ func (a *Agent) handle(data []byte) {
 	case protocol.TypeError:
 		a.o.Log.Warn("cloud reported an error", "ref", env.Ref, "payload", string(env.Payload))
 	case protocol.TypeWelcome, protocol.TypeHello:
+	case protocol.TypeAgentQuery:
+		go a.query(env)
 	default:
 		if protocol.IsCommand(env.Type) {
 			a.command(env)
@@ -645,6 +664,32 @@ func (a *Agent) sendResult(r protocol.Envelope) {
 		a.sentAt[r.ID] = time.Now()
 		a.sentMu.Unlock()
 	}
+}
+
+// query answers an agent.query (§20): no ack, no journal, one agent.query.result with the
+// query's id as its ref. One that arrives late is still answered; the cloud drops what it no
+// longer waits for.
+func (a *Agent) query(env protocol.Envelope) {
+	var q protocol.AgentQuery
+	answer := func(r protocol.AgentQueryResult) { a.send(protocol.TypeAgentQueryResult, env.ID, r) }
+	if err := json.Unmarshal(env.Payload, &q); err != nil || q.Query == "" {
+		answer(protocol.AgentQueryResult{Error: &protocol.Error{Code: protocol.ErrInvalidPayload, Message: "agent.query needs query"}})
+		return
+	}
+	fn := a.o.Queries[q.Query]
+	if fn == nil {
+		answer(protocol.AgentQueryResult{Error: &protocol.Error{Code: protocol.ErrUnsupported, Message: "unknown query " + q.Query}})
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), queryTimeout)
+	defer cancel()
+	data, err := fn(ctx, q.Args)
+	if err != nil {
+		a.o.Log.Warn("query failed", "query", q.Query, "err", err)
+		answer(protocol.AgentQueryResult{Error: &protocol.Error{Code: protocol.ErrInternal, Message: err.Error()}})
+		return
+	}
+	answer(protocol.AgentQueryResult{OK: true, Data: data})
 }
 
 func (a *Agent) ack(ref string) { a.send(protocol.TypeAck, ref, protocol.Ack{OK: true}) }

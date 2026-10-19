@@ -141,7 +141,9 @@ func TestTheAppIsServedFromTheCurrentBuild(t *testing.T) {
 	}
 	page := rec.Body.String()
 	// The tag sits right after <head>, once, and the rest of the cloud's page is untouched.
-	want := `<head>` + `<meta name="gnext-agent" content='{"version":"2.1.0","cloud_url":"https://gnext.top","lan":false}'>`
+	// On the loopback listener the tag also names the PC (2.5.0), which the register pairs by.
+	pc, _ := os.Hostname()
+	want := `<head>` + `<meta name="gnext-agent" content='{"version":"2.1.0","cloud_url":"https://gnext.top","lan":false,"pc_name":"` + pc + `"}'>`
 	if !strings.Contains(page, want) {
 		t.Fatalf("meta tag not right after <head>, or not in the documented format:\n%s", page)
 	}
@@ -316,13 +318,13 @@ func TestStatusRouteShapeOnBothListeners(t *testing.T) {
 	if app["build_id"] != "9f2c41d7ab03e5c8" || app["built_at"] != "2026-10-06T09:30:00.000Z" || app["downloaded_at"] == "" || len(app) != 3 {
 		t.Errorf("app = %v", app)
 	}
-	for _, k := range []string{"enrolled", "server", "agent_id", "branch_name", "stopped", "user", "agent"} {
+	for _, k := range []string{"enrolled", "server", "app_origin", "agent_id", "branch_name", "stopped", "agent"} {
 		if _, ok := lan[k]; ok {
 			t.Errorf("the LAN status leaks %q", k)
 		}
 	}
 	// The loopback one is the same, plus what the settings page and the tray read.
-	for _, k := range []string{"version", "cloud", "app", "enrolled", "server", "stopped", "user"} {
+	for _, k := range []string{"version", "cloud", "app", "enrolled", "server", "app_origin", "stopped"} {
 		if _, ok := loop[k]; !ok {
 			t.Errorf("the loopback status lacks %q", k)
 		}

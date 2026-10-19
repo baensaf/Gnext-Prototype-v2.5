@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { AGENT_CLOSE, Envelope } from './agent-protocol';
+import { AGENT_CLOSE, Envelope, envelope } from './agent-protocol';
 
 export { AGENT_CLOSE };
 
@@ -18,6 +18,21 @@ export interface AgentConnectionHandle {
   close(code: number, reason: string): void;
 }
 
+/** The questions an agent answers live (agent.query, protocol §20). */
+export type AgentQueryName = 'scan' | 'logs' | 'settings' | 'app.refresh';
+
+/** Why a live query got no data: the agent is away, too old, said no, or did not answer in time. */
+export class AgentQueryError extends Error {
+  constructor(
+    readonly code: 'AGENT_OFFLINE' | 'AGENT_TOO_OLD' | 'AGENT_QUERY_FAILED' | 'AGENT_NO_ANSWER',
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+type PendingQuery = { agentId: string; resolve: (data: any) => void; reject: (err: Error) => void; timer: NodeJS.Timeout };
+
 export type AgentPresenceListener = (event: 'online' | 'offline', handle: AgentConnectionHandle) => void;
 
 /**
@@ -33,6 +48,7 @@ export type AgentPresenceListener = (event: 'online' | 'offline', handle: AgentC
 export class AgentSessionsService {
   private readonly byAgent = new Map<string, AgentConnectionHandle>();
   private readonly listeners = new Set<AgentPresenceListener>();
+  private readonly queries = new Map<string, PendingQuery>();
 
   /**
    * Makes `handle` the agent's connection. An older connection for the same agent is closed
@@ -51,7 +67,47 @@ export class AgentSessionsService {
   unregister(handle: AgentConnectionHandle): void {
     if (this.byAgent.get(handle.agentId) !== handle) return;
     this.byAgent.delete(handle.agentId);
+    // A query whose agent left is not coming back: say so now rather than at the timeout.
+    for (const [id, pending] of this.queries) {
+      if (pending.agentId !== handle.agentId) continue;
+      this.queries.delete(id);
+      clearTimeout(pending.timer);
+      pending.reject(new AgentQueryError('AGENT_OFFLINE', 'The branch agent went offline before it answered.'));
+    }
     this.emit('offline', handle);
+  }
+
+  /**
+   * Asks the agent something and waits for the answer (protocol §20). Nothing is stored: a query
+   * that is not answered in time is the person's to ask again.
+   */
+  query(handle: AgentConnectionHandle, query: AgentQueryName, args: Record<string, any> = {}, timeoutMs = 45_000): Promise<any> {
+    if (!handle.capabilities.includes('agent.query')) {
+      return Promise.reject(new AgentQueryError('AGENT_TOO_OLD', 'The branch agent is too old for this. Update it to 2.5.0 or later.'));
+    }
+    const message = envelope('agent.query', { expires_at: new Date(Date.now() + timeoutMs).toISOString(), query, args });
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.queries.delete(message.id);
+        reject(new AgentQueryError('AGENT_NO_ANSWER', 'The branch agent did not answer in time.'));
+      }, timeoutMs);
+      this.queries.set(message.id, { agentId: handle.agentId, resolve, reject, timer });
+      if (!handle.send(message)) {
+        this.queries.delete(message.id);
+        clearTimeout(timer);
+        reject(new AgentQueryError('AGENT_OFFLINE', 'The branch agent is offline.'));
+      }
+    });
+  }
+
+  /** An agent.query.result came in; `ref` is the query's id. One nobody waits for is dropped. */
+  answerQuery(agentId: string, ref: string | null, payload: Record<string, any>): void {
+    const pending = ref ? this.queries.get(ref) : undefined;
+    if (!pending || pending.agentId !== agentId) return;
+    this.queries.delete(ref!);
+    clearTimeout(pending.timer);
+    if (payload?.ok) pending.resolve(payload.data ?? null);
+    else pending.reject(new AgentQueryError('AGENT_QUERY_FAILED', payload?.error?.message || 'The branch agent could not do it.'));
   }
 
   get(agentId: string): AgentConnectionHandle | undefined {

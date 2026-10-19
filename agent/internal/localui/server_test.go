@@ -22,19 +22,6 @@ type fakeHost struct {
 	agent     *agent.Agent
 	enrols    []string
 	enrolOK   bool
-	// atSignIn is the app_at_sign_in setting; setErr makes saving it fail.
-	atSignIn bool
-	setErr   error
-}
-
-func (h *fakeHost) AppAtSignIn() bool { return h.atSignIn }
-
-func (h *fakeHost) SetAppAtSignIn(on bool) error {
-	if h.setErr != nil {
-		return h.setErr
-	}
-	h.atSignIn = on
-	return nil
 }
 
 func (h *fakeHost) State() State {
@@ -55,32 +42,6 @@ func (h *fakeHost) Enrol(_ context.Context, server, code string) error {
 		return &cloud.Problem{Status: 400, Code: "ENROLMENT_CODE_INVALID", Detail: "bad code"}
 	}
 	return nil
-}
-
-// fakeCloud answers the agent/local routes and records what it was sent.
-func fakeCloud(t *testing.T, seen *[]string) *httptest.Server {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		*seen = append(*seen, r.Method+" "+r.URL.Path+" key="+r.Header.Get("Authorization")+" session="+r.Header.Get("X-Gnext-User-Session"))
-		w.Header().Set("Content-Type", "application/json")
-		switch {
-		case r.URL.Path == "/api/v1/agent/local/login":
-			var in struct{ Username, Password string }
-			_ = json.NewDecoder(r.Body).Decode(&in)
-			if in.Password != "right" {
-				w.WriteHeader(401)
-				io.WriteString(w, `{"status":401,"code":"INVALID_CREDENTIALS","detail":"Invalid username or password."}`)
-				return
-			}
-			io.WriteString(w, `{"session_token":"sess-1","user":{"id":"u","username":"m","display_name":"Manager","role":"MANAGER"}}`)
-		case r.Header.Get("X-Gnext-User-Session") != "sess-1":
-			w.WriteHeader(401)
-			io.WriteString(w, `{"status":401,"code":"UNAUTHENTICATED","detail":"Sign in"}`)
-		default:
-			io.WriteString(w, `{"id":"p1","code":"KIT1"}`)
-		}
-	}))
-	t.Cleanup(srv.Close)
-	return srv
 }
 
 func newServer(h Host) *Server {
@@ -121,13 +82,15 @@ func TestLocalOnlyRefusesForeignHostsAndCrossSiteWrites(t *testing.T) {
 	if rec := call(h, "GET", "/agent/api/status", "", nil); rec.Code != 200 {
 		t.Fatalf("status: %d", rec.Code)
 	}
-	if rec := call(h, "POST", "/agent/api/logout", "", map[string]string{"X-Gnext-Local": ""}); rec.Code != 403 {
+	enrol := `{"server":"https://gnext.test","code":"ABCD-EFGH"}`
+	if rec := call(h, "POST", "/agent/api/enrol", enrol, map[string]string{"X-Gnext-Local": ""}); rec.Code != 403 {
 		t.Fatalf("write without header: %d", rec.Code)
 	}
-	if rec := call(h, "POST", "/agent/api/logout", "", map[string]string{"Origin": "http://evil.example"}); rec.Code != 403 {
+	if rec := call(h, "POST", "/agent/api/enrol", enrol, map[string]string{"Origin": "http://evil.example"}); rec.Code != 403 {
 		t.Fatalf("write from another origin: %d", rec.Code)
 	}
-	if rec := call(h, "POST", "/agent/api/logout", "", map[string]string{"Origin": "http://127.0.0.1:47800"}); rec.Code != 200 {
+	// From the page's own origin it reaches the handler, which passes on the cloud's refusal.
+	if rec := call(h, "POST", "/agent/api/enrol", enrol, map[string]string{"Origin": "http://127.0.0.1:47800"}); rec.Code != 400 {
 		t.Fatalf("write from the page's own origin: %d", rec.Code)
 	}
 }
@@ -169,43 +132,6 @@ func TestSettingsPageIsUnderAgent(t *testing.T) {
 	}
 }
 
-func TestDeviceChangesNeedASignedInManager(t *testing.T) {
-	var seen []string
-	srv := fakeCloud(t, &seen)
-	host := &fakeHost{cloud: &cloud.Client{Server: srv.URL, Key: "gak_k", Version: "1.0.0"}}
-	h := newTestServer(host)
-
-	if rec := call(h, "POST", "/agent/api/printers", `{"name":"x"}`, nil); rec.Code != 401 {
-		t.Fatalf("before sign-in: %d", rec.Code)
-	}
-	if rec := call(h, "POST", "/agent/api/login", `{"username":"m","password":"wrong"}`, nil); rec.Code != 401 {
-		t.Fatalf("wrong password: %d %s", rec.Code, rec.Body)
-	}
-	if rec := call(h, "POST", "/agent/api/login", `{"username":"m","password":"right"}`, nil); rec.Code != 200 {
-		t.Fatalf("sign-in: %d %s", rec.Code, rec.Body)
-	}
-	if rec := call(h, "GET", "/agent/api/session", "", nil); !strings.Contains(rec.Body.String(), "Manager") {
-		t.Fatalf("session: %s", rec.Body)
-	}
-	rec := call(h, "PATCH", "/agent/api/printers/p1", `{"name":"Grill"}`, nil)
-	if rec.Code != 200 {
-		t.Fatalf("patch: %d %s", rec.Code, rec.Body)
-	}
-	last := seen[len(seen)-1]
-	if last != "PATCH /api/v1/agent/local/printers/p1 key=Bearer gak_k session=sess-1" {
-		t.Fatalf("cloud saw %q", last)
-	}
-	if rec := call(h, "DELETE", "/agent/api/terminals/t1", "", nil); rec.Code != 200 {
-		t.Fatalf("delete: %d", rec.Code)
-	}
-	if rec := call(h, "POST", "/agent/api/logout", "", nil); rec.Code != 200 {
-		t.Fatalf("logout: %d", rec.Code)
-	}
-	if rec := call(h, "DELETE", "/agent/api/terminals/t1", "", nil); rec.Code != 401 {
-		t.Fatalf("after logout: %d", rec.Code)
-	}
-}
-
 func TestEnrolPassesTheCloudsAnswerOn(t *testing.T) {
 	host := &fakeHost{}
 	h := newTestServer(host)
@@ -234,84 +160,42 @@ func TestTheOfflineTillRoutesAreGone(t *testing.T) {
 			t.Errorf("GET %s = %d, want 404", path, rec.Code)
 		}
 	}
-	for _, path := range []string{"/agent/api/till/cloud-login", "/agent/api/pairing-codes"} {
+	// Nor, since 2.5.0, a sign-in, device forms, a scan or settings: those are the cloud's (§20).
+	for _, path := range []string{"/agent/api/session", "/agent/api/app/refresh"} {
+		if rec := call(h, "GET", path, "", nil); rec.Code != 404 {
+			t.Errorf("GET %s = %d, want 404", path, rec.Code)
+		}
+	}
+	for _, path := range []string{"/agent/api/till/cloud-login", "/agent/api/pairing-codes", "/agent/api/login", "/agent/api/logout", "/agent/api/settings", "/agent/api/scan", "/agent/api/printers"} {
 		if rec := call(h, "POST", path, `{}`, nil); rec.Code != 404 && rec.Code != 405 {
 			t.Errorf("POST %s = %d, want 404 or 405", path, rec.Code)
 		}
 	}
 }
 
-func TestRefreshNeedsTheManagersSession(t *testing.T) {
-	var seen []string
-	srv := fakeCloud(t, &seen)
-	host := &fakeHost{cloud: &cloud.Client{Server: srv.URL, Key: "gak_k", Version: "1.0.0"}}
-	h := newTestServer(host)
-
-	if rec := call(h, "GET", "/agent/api/app/refresh", "", nil); rec.Code != 401 {
-		t.Fatalf("without a session: %d %s", rec.Code, rec.Body)
-	}
-	if rec := call(h, "POST", "/agent/api/login", `{"username":"m","password":"right"}`, nil); rec.Code != 200 {
-		t.Fatalf("sign-in: %d", rec.Code)
-	}
-	// Signed in, but this server has no app cache (App is nil): a clear answer, not a crash.
-	if rec := call(h, "GET", "/agent/api/app/refresh", "", nil); rec.Code != 409 || !strings.Contains(rec.Body.String(), "APP_CACHE_OFF") {
-		t.Fatalf("with a session and no cache: %d %s", rec.Code, rec.Body)
-	}
-}
-
-// The settings page's own settings (§19.12): the status route shows them on the loopback listener
-// only, and changing one needs the manager's session.
-func TestSettingsAreShownOnLoopbackOnlyAndChangedByAManager(t *testing.T) {
-	var seen []string
-	srv := fakeCloud(t, &seen)
-	host := &fakeHost{cloud: &cloud.Client{Server: srv.URL, Key: "gak_k", Version: "1.0.0"}, atSignIn: true}
-	s := newServer(host)
+// The status route lists the LAN addresses on the loopback listener only (§19.12).
+func TestLANURLsAreShownOnLoopbackOnly(t *testing.T) {
+	s := newServer(&fakeHost{})
 	s.Addresses = func() []string { return []string{"192.168.1.10", "10.0.0.7"} }
 	s.lanBound.Store("0.0.0.0:47801")
 	h := s.Handler(DefaultAddr)
 
 	var st struct {
-		AppAtSignIn *bool    `json:"app_at_sign_in"`
-		LANURLs     []string `json:"lan_urls"`
+		LANURLs []string `json:"lan_urls"`
 	}
 	rec := call(h, "GET", "/agent/api/status", "", nil)
-	if err := json.Unmarshal(rec.Body.Bytes(), &st); err != nil || st.AppAtSignIn == nil || !*st.AppAtSignIn {
+	if err := json.Unmarshal(rec.Body.Bytes(), &st); err != nil {
 		t.Fatalf("status: %s", rec.Body)
 	}
 	if len(st.LANURLs) != 2 || st.LANURLs[0] != "http://192.168.1.10:47801/" || st.LANURLs[1] != "http://10.0.0.7:47801/" {
 		t.Fatalf("lan_urls = %v", st.LANURLs)
 	}
 
-	// The LAN listener answers exactly §19.8: neither field.
 	lanReq := httptest.NewRequest("GET", "/agent/api/status", nil)
 	lanRec := httptest.NewRecorder()
 	s.LANHandler().ServeHTTP(lanRec, lanReq)
-	if strings.Contains(lanRec.Body.String(), "lan_urls") || strings.Contains(lanRec.Body.String(), "app_at_sign_in") {
-		t.Fatalf("the LAN listener leaks settings: %s", lanRec.Body)
-	}
-
-	if rec := call(h, "POST", "/agent/api/settings", `{"app_at_sign_in":false}`, nil); rec.Code != 401 || !host.atSignIn {
-		t.Fatalf("without a session: %d, setting %v", rec.Code, host.atSignIn)
-	}
-	if rec := call(h, "POST", "/agent/api/login", `{"username":"m","password":"right"}`, nil); rec.Code != 200 {
-		t.Fatalf("sign-in: %d", rec.Code)
-	}
-	if rec := call(h, "POST", "/agent/api/settings", `{}`, nil); rec.Code != 400 {
-		t.Fatalf("no field: %d", rec.Code)
-	}
-	if rec := call(h, "POST", "/agent/api/settings", `{"app_at_sign_in":false}`, map[string]string{"X-Gnext-Local": ""}); rec.Code != 403 {
-		t.Fatalf("without the local header: %d", rec.Code)
-	}
-	if rec := call(h, "POST", "/agent/api/settings", `{"app_at_sign_in":false}`, nil); rec.Code != 200 || host.atSignIn {
-		t.Fatalf("turn off: %d %s, setting %v", rec.Code, rec.Body, host.atSignIn)
-	}
-	rec = call(h, "GET", "/agent/api/status", "", nil)
-	if !strings.Contains(rec.Body.String(), `"app_at_sign_in":false`) {
-		t.Fatalf("status after: %s", rec.Body)
-	}
-	host.setErr = io.ErrClosedPipe
-	if rec := call(h, "POST", "/agent/api/settings", `{"app_at_sign_in":true}`, nil); rec.Code != 500 || !strings.Contains(rec.Body.String(), "SETTINGS_NOT_SAVED") {
-		t.Fatalf("a failed save: %d %s", rec.Code, rec.Body)
+	if strings.Contains(lanRec.Body.String(), "lan_urls") {
+		t.Fatalf("the LAN listener leaks the PC's fields: %s", lanRec.Body)
 	}
 }
 

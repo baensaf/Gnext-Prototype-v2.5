@@ -25,6 +25,9 @@ type agentMeta struct {
 	Version  string `json:"version"`
 	CloudURL string `json:"cloud_url"`
 	LAN      bool   `json:"lan"`
+	// PCName is the branch PC's Windows name, on the loopback listener only (2.5.0): the app pairs
+	// the register with a device by it. A LAN register is another device, which has its own.
+	PCName string `json:"pc_name,omitempty"`
 }
 
 // metaTag renders the tag: JSON in a single-quoted attribute, HTML-escaped.
@@ -68,7 +71,11 @@ func (s *Server) serveApp(lan bool) http.HandlerFunc {
 				return
 			}
 		}
-		tag := metaTag(agentMeta{Version: s.Version, CloudURL: s.Host.State().AppOrigin, LAN: lan})
+		m := agentMeta{Version: s.Version, CloudURL: s.Host.State().AppOrigin, LAN: lan}
+		if !lan {
+			m.PCName, _ = os.Hostname()
+		}
+		tag := metaTag(m)
 		body := injectMeta(build.Index(), tag)
 		h := w.Header()
 		h.Set("Content-Type", "text/html; charset=utf-8")
