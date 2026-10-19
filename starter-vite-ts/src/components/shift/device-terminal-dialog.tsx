@@ -27,6 +27,7 @@ import { useAuthStore } from 'src/store/useAuthStore';
 import { isApproverRole } from 'src/config/role-access';
 
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
+import { ManagerSignInDialog } from 'src/components/approval/manager-sign-in-dialog';
 
 // ----------------------------------------------------------------------
 
@@ -45,9 +46,9 @@ type Props = {
 };
 
 /**
- * Tells this device which register it is. Done once, by a manager: a cashier sees the
- * same list but hands the choice to a manager's pin, because a till set up against the
- * wrong drawer puts every sale into somebody else's count.
+ * Tells this device which register it is. Done once, by a manager: a cashier sees the same
+ * list but hands the choice to a manager, who signs in on this screen (R-15), because a till
+ * set up against the wrong drawer puts every sale into somebody else's count.
  */
 export function DeviceTerminalDialog({ open, onClose, branchId, branchName, current, onAssigned, terminalType = 'CASHIER', onSignOut }: Props) {
   const isKiosk = terminalType === 'KIOSK';
@@ -59,7 +60,7 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState('');
-  const [pinOpen, setPinOpen] = useState(false);
+  const [signInOpen, setSignInOpen] = useState(false);
   const [signOutPinOpen, setSignOutPinOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   // The register is paired with another device: which one, before this one takes it.
@@ -127,7 +128,7 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
 
   return (
     <>
-      <Dialog open={open && !pinOpen && !signOutPinOpen && !takenBy} onClose={onClose} maxWidth="xs" fullWidth>
+      <Dialog open={open && !signInOpen && !signOutPinOpen && !takenBy} onClose={onClose} maxWidth="xs" fullWidth>
         <DialogTitle sx={{ fontWeight: 'bold' }}>{isKiosk ? t('kiosk.device.title', 'Set up this kiosk') : t('shift.device.title', 'Set up this register')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2}>
@@ -168,7 +169,7 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
               </RadioGroup>
             )}
             {!canAssign && terminals.length > 0 && (
-              <Alert severity="info">{t('shift.device.pinNotice', 'A manager PIN is needed to set up a register.')}</Alert>
+              <Alert severity="info">{t('shift.device.signInNotice')}</Alert>
             )}
           </Stack>
         </DialogContent>
@@ -182,7 +183,7 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
           <Button
             variant="contained"
             disabled={!selectedId || saving}
-            onClick={() => (canAssign ? assign() : setPinOpen(true))}
+            onClick={() => (canAssign ? assign() : setSignInOpen(true))}
           >
             {isKiosk ? t('kiosk.device.assign', 'Use this kiosk') : t('shift.device.assign', 'Use this register')}
           </Button>
@@ -224,13 +225,14 @@ export function DeviceTerminalDialog({ open, onClose, branchId, branchName, curr
         </DialogActions>
       </Dialog>
 
-      <ApprovalModal
-        open={pinOpen}
-        onClose={() => setPinOpen(false)}
+      {/* A manager approves by signing in on this screen (R-15). */}
+      <ManagerSignInDialog
+        open={signInOpen}
+        onClose={() => setSignInOpen(false)}
         actionName="ASSIGN_DEVICE_TERMINAL"
         detailsText={t('shift.device.approvalDetails', 'Set up this device as a cash register')}
-        onSuccess={() => {
-          setPinOpen(false);
+        onApproved={() => {
+          setSignInOpen(false);
           assign();
         }}
       />

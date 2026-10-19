@@ -86,6 +86,21 @@ export class ApprovalController {
     return await this.approvalService.verifyManagerPin(tenantId, userId, body.pin, body.actionName);
   }
 
+  /** A manager approves on the cashier's screen with their own sign-in (R-15). No session is opened. */
+  @Post('verify-sign-in')
+  async verifySignIn(@Body() body: { username: string; password: string; actionName?: string }, @Req() req: Request) {
+    const sessionId = (req as any).user?.id || (req as any).userId;
+    if (!sessionId) throw new UnauthorizedException('User session required');
+    return await this.approvalService.verifyApproverSignIn(
+      (req as any).tenantId,
+      body?.username ?? '',
+      body?.password ?? '',
+      body?.actionName || 'VERIFY_SIGN_IN',
+      sessionId,
+      (req as any).userBranchId ?? null,
+    );
+  }
+
   @Post('evaluate')
   async evaluateAction(@Body() body: { action: string; value: number }, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
