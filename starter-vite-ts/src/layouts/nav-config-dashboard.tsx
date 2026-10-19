@@ -132,6 +132,13 @@ export function useNavData(): NavSectionProps['data'] {
           path: '/app/operations/print-queue',
           icon: ICONS.media,
         },
+        // The branch agent: status, printers, card terminals, this PC and its logs. In the selling
+        // window too, where the agent's own page used to be (2026-10-19).
+        {
+          title: t('nav.branchAgent', 'Branch agent'),
+          path: '/app/operations/agents',
+          icon: ICONS.terminal,
+        },
       ],
     },
     {

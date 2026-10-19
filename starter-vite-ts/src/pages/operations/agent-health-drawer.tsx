@@ -57,8 +57,8 @@ type Props = {
   onClose: () => void;
 };
 
-/** One branch agent up close: its connection, what it says about its devices, and its latest commands. */
-export function AgentHealthDrawer({ agentId, branchId, onClose }: Props) {
+/** The branch agent's health, refreshed every 15 seconds, and the names of the devices it reports. */
+export function useAgentHealth(agentId: string | null, branchId: string | null) {
   const { t } = useTranslation();
   const [health, setHealth] = useState<AgentHealth | null>(null);
   const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
@@ -103,8 +103,13 @@ export function AgentHealthDrawer({ agentId, branchId, onClose }: Props) {
     );
   }, [branchId]);
 
-  const agent = health?.agent;
-  const connection = health?.connection;
+  return { health, deviceNames, error, loading, load };
+}
+
+/** One branch agent up close: its connection, what it says about its devices, and its latest commands. */
+export function AgentHealthDrawer({ agentId, branchId, onClose }: Props) {
+  const { t } = useTranslation();
+  const { health, deviceNames, error, loading, load } = useAgentHealth(agentId, branchId);
 
   return (
     <Drawer anchor="right" open={!!agentId} onClose={onClose}>
@@ -127,143 +132,161 @@ export function AgentHealthDrawer({ agentId, branchId, onClose }: Props) {
           </Alert>
         )}
         {!health && !error && <CircularProgress size={28} />}
-
-        {agent && connection && (
-          <Stack spacing={2.5}>
-            <Stack spacing={0.75}>
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                  {agent.hostname || '—'}
-                </Typography>
-                {agent.status === 'REVOKED' ? (
-                  <Chip size="small" label={t('operations.agents.statusRevoked', 'Revoked')} />
-                ) : connection.connected ? (
-                  <Chip size="small" color="success" label={t('operations.agents.statusOnline', 'Online')} />
-                ) : (
-                  <Chip size="small" color="warning" label={t('operations.agents.statusOffline', 'Offline')} />
-                )}
-              </Stack>
-              <Typography variant="body2" color="text.secondary">
-                {agent.branch_name} · {agent.os || '—'}
-              </Typography>
-              <Row label={t('operations.agents.colVersion', 'Version')} value={connection.agent_version || agent.agent_version || '—'} />
-              <Row label={t('operations.agents.colEnrolled', 'Enrolled')} value={fDateTime(agent.enrolled_at)} />
-              <Row
-                label={t('operations.agents.colLastSeen', 'Last seen')}
-                value={
-                  connection.last_frame_at
-                    ? fDateTime(connection.last_frame_at)
-                    : agent.last_seen_at
-                      ? fDateTime(agent.last_seen_at)
-                      : t('operations.agents.neverSeen', 'Never')
-                }
-              />
-              {connection.connected && connection.connected_at && (
-                <Row label={t('operations.agents.health.connectedSince', 'Connected since')} value={fDateTime(connection.connected_at)} />
-              )}
-              {connection.capabilities && connection.capabilities.length > 0 && (
-                <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', rowGap: 0.5, pt: 0.5 }}>
-                  {connection.capabilities.map((c) => (
-                    <Chip key={c} size="small" variant="outlined" label={c} />
-                  ))}
-                </Stack>
-              )}
-            </Stack>
-
-            <Divider />
-
-            <Box>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                {t('operations.agents.pc.title')}
-              </Typography>
-              <AgentPcPanel
-                agentId={agent.id}
-                connected={connection.connected}
-                canAsk={connection.connected && !!connection.capabilities?.includes('agent.query')}
-              />
-            </Box>
-
-            <Divider />
-
-            <Box>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                {t('operations.agents.health.devices', 'Devices')}
-              </Typography>
-              {connection.devices.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  {connection.connected
-                    ? t('operations.agents.health.noDevices', 'The agent has not reported any device.')
-                    : t('operations.agents.health.devicesOffline', 'Device status is known only while the agent is online.')}
-                </Typography>
-              ) : (
-                <Table size="small">
-                  <TableBody>
-                    {connection.devices.map((d) => (
-                      <TableRow key={`${d.kind}:${d.id}`}>
-                        <TableCell>
-                          <Typography variant="body2">{deviceNames[`${d.kind}:${d.id}`] || d.id}</Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {t(`operations.agents.health.kind.${d.kind}`, d.kind)}
-                            {d.detail ? ` · ${d.detail}` : ''}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right">
-                          <Chip size="small" color={DEVICE_COLOR[d.status] || 'default'} label={d.status} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </Box>
-
-            <Divider />
-
-            <Box>
-              <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                {t('operations.agents.health.commands', 'Recent commands')}
-              </Typography>
-              {health.recent_commands.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  {t('operations.agents.health.noCommands', 'No commands yet.')}
-                </Typography>
-              ) : (
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>{t('operations.agents.health.colType', 'Command')}</TableCell>
-                      <TableCell>{t('operations.agents.colCreated', 'Created')}</TableCell>
-                      <TableCell align="right">{t('operations.agents.colStatus', 'Status')}</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {health.recent_commands.map((c) => (
-                      <TableRow key={c.id}>
-                        <TableCell>
-                          <Typography variant="body2" dir="ltr" sx={{ fontFamily: 'monospace' }}>
-                            {c.type}
-                          </Typography>
-                          {c.error_code && (
-                            <Typography variant="caption" color="error">
-                              {c.error_code}
-                              {c.error_message ? `: ${c.error_message}` : ''}
-                            </Typography>
-                          )}
-                        </TableCell>
-                        <TableCell>{fDateTime(c.created_at)}</TableCell>
-                        <TableCell align="right">
-                          <Chip size="small" color={COMMAND_COLOR[c.status] || 'default'} label={c.status} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </Box>
-          </Stack>
-        )}
+        {health && <AgentHealthView health={health} deviceNames={deviceNames} />}
       </Box>
     </Drawer>
+  );
+}
+
+type ViewProps = {
+  health: AgentHealth;
+  deviceNames: Record<string, string>;
+  /** The This PC part; the Branch agent page shows it in a tab of its own. */
+  showPc?: boolean;
+};
+
+/** The agent's connection, this PC, its devices and its latest commands. */
+export function AgentHealthView({ health, deviceNames, showPc = true }: ViewProps) {
+  const { t } = useTranslation();
+  const { agent, connection } = health;
+
+  return (
+    <Stack spacing={2.5}>
+      <Stack spacing={0.75}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+            {agent.hostname || '—'}
+          </Typography>
+          {agent.status === 'REVOKED' ? (
+            <Chip size="small" label={t('operations.agents.statusRevoked', 'Revoked')} />
+          ) : connection.connected ? (
+            <Chip size="small" color="success" label={t('operations.agents.statusOnline', 'Online')} />
+          ) : (
+            <Chip size="small" color="warning" label={t('operations.agents.statusOffline', 'Offline')} />
+          )}
+        </Stack>
+        <Typography variant="body2" color="text.secondary">
+          {agent.branch_name} · {agent.os || '—'}
+        </Typography>
+        <Row label={t('operations.agents.colVersion', 'Version')} value={connection.agent_version || agent.agent_version || '—'} />
+        <Row label={t('operations.agents.colEnrolled', 'Enrolled')} value={fDateTime(agent.enrolled_at)} />
+        <Row
+          label={t('operations.agents.colLastSeen', 'Last seen')}
+          value={
+            connection.last_frame_at
+              ? fDateTime(connection.last_frame_at)
+              : agent.last_seen_at
+                ? fDateTime(agent.last_seen_at)
+                : t('operations.agents.neverSeen', 'Never')
+          }
+        />
+        {connection.connected && connection.connected_at && (
+          <Row label={t('operations.agents.health.connectedSince', 'Connected since')} value={fDateTime(connection.connected_at)} />
+        )}
+        {connection.capabilities && connection.capabilities.length > 0 && (
+          <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', rowGap: 0.5, pt: 0.5 }}>
+            {connection.capabilities.map((c) => (
+              <Chip key={c} size="small" variant="outlined" label={c} />
+            ))}
+          </Stack>
+        )}
+      </Stack>
+
+      {showPc && (
+        <>
+          <Divider />
+
+          <Box>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              {t('operations.agents.pc.title')}
+            </Typography>
+            <AgentPcPanel
+              agentId={agent.id}
+              connected={connection.connected}
+              canAsk={connection.connected && !!connection.capabilities?.includes('agent.query')}
+            />
+          </Box>
+        </>
+      )}
+
+      <Divider />
+
+      <Box>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          {t('operations.agents.health.devices', 'Devices')}
+        </Typography>
+        {connection.devices.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            {connection.connected
+              ? t('operations.agents.health.noDevices', 'The agent has not reported any device.')
+              : t('operations.agents.health.devicesOffline', 'Device status is known only while the agent is online.')}
+          </Typography>
+        ) : (
+          <Table size="small">
+            <TableBody>
+              {connection.devices.map((d) => (
+                <TableRow key={`${d.kind}:${d.id}`}>
+                  <TableCell>
+                    <Typography variant="body2">{deviceNames[`${d.kind}:${d.id}`] || d.id}</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {t(`operations.agents.health.kind.${d.kind}`, d.kind)}
+                      {d.detail ? ` · ${d.detail}` : ''}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Chip size="small" color={DEVICE_COLOR[d.status] || 'default'} label={d.status} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Box>
+
+      <Divider />
+
+      <Box>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          {t('operations.agents.health.commands', 'Recent commands')}
+        </Typography>
+        {health.recent_commands.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            {t('operations.agents.health.noCommands', 'No commands yet.')}
+          </Typography>
+        ) : (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>{t('operations.agents.health.colType', 'Command')}</TableCell>
+                <TableCell>{t('operations.agents.colCreated', 'Created')}</TableCell>
+                <TableCell align="right">{t('operations.agents.colStatus', 'Status')}</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {health.recent_commands.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    <Typography variant="body2" dir="ltr" sx={{ fontFamily: 'monospace' }}>
+                      {c.type}
+                    </Typography>
+                    {c.error_code && (
+                      <Typography variant="caption" color="error">
+                        {c.error_code}
+                        {c.error_message ? `: ${c.error_message}` : ''}
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>{fDateTime(c.created_at)}</TableCell>
+                  <TableCell align="right">
+                    <Chip size="small" color={COMMAND_COLOR[c.status] || 'default'} label={c.status} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </Box>
+    </Stack>
   );
 }
 

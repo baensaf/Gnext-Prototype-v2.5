@@ -55,7 +55,19 @@ import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 import { PrinterNetworkScan } from './printer-network-scan';
 
-export function PrintersPage() {
+type PrintersPageProps = {
+  /**
+   * Shown inside the Branch agent page (2026-10-19): no page heading or links to pages the
+   * selling window does not open.
+   */
+  embedded?: boolean;
+  /** Look and test-print only: everyone at the branch sees the printers, the manager changes them. */
+  readOnly?: boolean;
+  /** What the branch agent last said about each printer, by printer id (ONLINE, OFFLINE…). */
+  liveStatus?: Record<string, string>;
+};
+
+export function PrintersPage({ embedded = false, readOnly = false, liveStatus }: PrintersPageProps = {}) {
   const { t } = useTranslation();
   const theme = useTheme();
   const role = useAuthStore((state) => state.user?.role);
@@ -242,7 +254,8 @@ export function PrintersPage() {
   };
 
   return (
-    <Box sx={{ pb: 6 }}>
+    <Box sx={{ pb: embedded ? 0 : 6 }}>
+      {!embedded && (
       <CustomBreadcrumbs
         heading={t('operations.printers.title', 'Printers & Print Routing')}
         links={[
@@ -279,7 +292,9 @@ export function PrintersPage() {
           </Stack>
         }
       />
+      )}
 
+      {!embedded && (
       <Alert
         severity="info"
         variant="outlined"
@@ -291,6 +306,7 @@ export function PrintersPage() {
           "Printers with a network connection print for real through this branch's agent. Printers without one are simulated: their jobs are marked printed and nothing comes out."
         )}
       </Alert>
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -300,6 +316,7 @@ export function PrintersPage() {
 
       {/* Where each document prints is set where it belongs: kitchen chits on Print routing,
           receipts and bills on the tills. */}
+      {!embedded && (
       <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
         <Typography variant="body2" sx={{ mb: 1 }}>
           {t('operations.printers.routingHint')}
@@ -313,6 +330,7 @@ export function PrintersPage() {
           </Button>
         </Stack>
       </Alert>
+      )}
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 8 }}>
@@ -324,9 +342,11 @@ export function PrintersPage() {
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                   {t('operations.printers.tabs.printers', 'Printers & Devices')}
                 </Typography>
-                <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenAddPrinter}>
-                  {t('operations.printers.addPrinter', 'Add Printer')}
-                </Button>
+                {!readOnly && (
+                  <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenAddPrinter}>
+                    {t('operations.printers.addPrinter', 'Add Printer')}
+                  </Button>
+                )}
               </Stack>
 
               <Box sx={{ overflowX: 'auto' }}>
@@ -370,11 +390,22 @@ export function PrintersPage() {
                         </TableCell>
                         <TableCell>{pr.paper_width_mm}mm</TableCell>
                         <TableCell>
-                          <Chip
-                            label={pr.is_active !== false ? 'ACTIVE' : 'INACTIVE'}
-                            color={pr.is_active !== false ? 'success' : 'default'}
-                            size="small"
-                          />
+                          <Stack direction="row" spacing={0.5}>
+                            <Chip
+                              label={pr.is_active !== false ? 'ACTIVE' : 'INACTIVE'}
+                              color={pr.is_active !== false ? 'success' : 'default'}
+                              size="small"
+                            />
+                            {/* What the branch agent last said about it, on the Branch agent page. */}
+                            {liveStatus?.[pr.id] && (
+                              <Chip
+                                label={t(`operations.agents.live.${liveStatus[pr.id]}`, liveStatus[pr.id])}
+                                color={liveStatus[pr.id] === 'ONLINE' ? 'success' : liveStatus[pr.id] === 'UNKNOWN' ? 'default' : 'error'}
+                                variant="outlined"
+                                size="small"
+                              />
+                            )}
+                          </Stack>
                         </TableCell>
                         <TableCell align={theme.direction === 'rtl' ? 'left' : 'right'}>
                           <Stack direction="row" spacing={0.5} sx={{ justifyContent: theme.direction === 'rtl' ? 'flex-start' : 'flex-end' }}>
@@ -387,6 +418,7 @@ export function PrintersPage() {
                             >
                               <PlayArrowIcon />
                             </IconButton>
+                            {!readOnly && (
                             <IconButton
                               color="primary"
                               size="small"
@@ -395,6 +427,8 @@ export function PrintersPage() {
                             >
                               <EditIcon />
                             </IconButton>
+                            )}
+                            {!readOnly && (
                             <IconButton
                               color="error"
                               size="small"
@@ -409,6 +443,7 @@ export function PrintersPage() {
                             >
                               <DeleteIcon />
                             </IconButton>
+                            )}
                           </Stack>
                         </TableCell>
                       </TableRow>

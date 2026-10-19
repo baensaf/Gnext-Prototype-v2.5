@@ -40,7 +40,16 @@ import { TerminalAgentDialog } from 'src/components/payment-terminal/terminal-ag
  * and how the branch agent reaches each one. Set up once, like the printers, so it sits
  * with them under Settings rather than on the Payments page, which only reads money.
  */
-export function CardTerminalsPage() {
+type CardTerminalsPageProps = {
+  /** Shown inside the Branch agent page (2026-10-19): no page heading, the header's branch only. */
+  embedded?: boolean;
+  /** Look only: everyone at the branch sees the terminals, the manager changes them. */
+  readOnly?: boolean;
+  /** What the branch agent last said about each terminal, by terminal id (ONLINE, OFFLINE…). */
+  liveStatus?: Record<string, string>;
+};
+
+export function CardTerminalsPage({ embedded = false, readOnly = false, liveStatus }: CardTerminalsPageProps = {}) {
   const { t } = useTranslation();
 
   const [devices, setDevices] = useState<PaymentDevice[]>([]);
@@ -61,7 +70,8 @@ export function CardTerminalsPage() {
   const loadData = useCallback(async () => {
     try {
       const [dList, aList, bList] = await Promise.all([
-        paymentApi.getDevices(),
+        // On the Branch agent page: the branch's own terminals and the chain's shared ones.
+        embedded && devBranchId ? paymentApi.getDevices(devBranchId) : paymentApi.getDevices(),
         paymentApi.getAccounts(),
         tenantApi.getBranches(),
       ]);
@@ -72,7 +82,9 @@ export function CardTerminalsPage() {
     } catch (err: any) {
       setError(err.detail || t('payments.cardTerminals.loadError', 'Failed to load the card terminals'));
     }
-  }, [t]);
+    // devBranchId is the header's branch, read once per load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t, embedded]);
 
   useEffect(() => {
     loadData();
@@ -97,26 +109,36 @@ export function CardTerminalsPage() {
     }
   };
 
+  const actions = (
+    <Stack direction="row" spacing={2}>
+      <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
+        {t('monitoring.refresh', 'Refresh')}
+      </Button>
+      {!readOnly && (
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>
+          {t('payments.addDevice', 'Register Device')}
+        </Button>
+      )}
+    </Stack>
+  );
+
   return (
-    <Box sx={{ pb: 6 }}>
-      <CustomBreadcrumbs
-        heading={t('payments.cardTerminals.title', 'Card terminals')}
-        links={[
-          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
-          { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
-          { name: t('payments.cardTerminals.title', 'Card terminals') },
-        ]}
-        action={
-          <Stack direction="row" spacing={2}>
-            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
-              {t('monitoring.refresh', 'Refresh')}
-            </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setDrawerOpen(true)}>
-              {t('payments.addDevice', 'Register Device')}
-            </Button>
-          </Stack>
-        }
-      />
+    <Box sx={{ pb: embedded ? 0 : 6 }}>
+      {embedded ? (
+        <Stack direction="row" sx={{ justifyContent: 'flex-end', mb: 2 }}>
+          {actions}
+        </Stack>
+      ) : (
+        <CustomBreadcrumbs
+          heading={t('payments.cardTerminals.title', 'Card terminals')}
+          links={[
+            { name: t('nav.home', 'Home'), href: '/app/dashboard' },
+            { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
+            { name: t('payments.cardTerminals.title', 'Card terminals') },
+          ]}
+          action={actions}
+        />
+      )}
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -173,10 +195,25 @@ export function CardTerminalsPage() {
                     <TableCell>{bName}</TableCell>
                     <TableCell>{accNameStr}</TableCell>
                     <TableCell>
-                      <Chip label={d.is_active ? 'Active' : 'Inactive'} color={d.is_active ? 'success' : 'default'} size="small" />
+                      <Stack direction="row" spacing={0.5}>
+                        <Chip label={d.is_active ? 'Active' : 'Inactive'} color={d.is_active ? 'success' : 'default'} size="small" />
+                        {liveStatus?.[d.id] && (
+                          <Chip
+                            label={t(`operations.agents.live.${liveStatus[d.id]}`, liveStatus[d.id])}
+                            color={liveStatus[d.id] === 'ONLINE' ? 'success' : liveStatus[d.id] === 'UNKNOWN' ? 'default' : 'error'}
+                            variant="outlined"
+                            size="small"
+                          />
+                        )}
+                      </Stack>
                     </TableCell>
                     <TableCell>
-                      {d.kind !== 'MOBILE' && (
+                      {d.kind !== 'MOBILE' && readOnly && d.agent_connection && (
+                        <Typography variant="body2" dir="ltr">
+                          {`${d.agent_driver?.toUpperCase() || ''} · ${d.agent_connection.kind === 'tcp' ? `${d.agent_connection.host}:${d.agent_connection.port}` : d.agent_connection.port}`}
+                        </Typography>
+                      )}
+                      {d.kind !== 'MOBILE' && !readOnly && (
                         <Button size="small" variant={d.agent_connection ? 'soft' : 'text'} onClick={() => setAgentDevice(d)}>
                           {d.agent_connection
                             ? `${d.agent_driver?.toUpperCase() || ''} · ${d.agent_connection.kind === 'tcp' ? `${d.agent_connection.host}:${d.agent_connection.port}` : d.agent_connection.port}`

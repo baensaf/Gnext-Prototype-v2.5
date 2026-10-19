@@ -44,12 +44,15 @@ import {
 import { fDateTime } from 'src/utils/format-time';
 
 import { tenantApi } from 'src/api/tenantApi';
-import { useScopedBranchId } from 'src/contexts/branch-context';
+import { isManagerOrAbove } from 'src/config/role-access';
+import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 import { agentsApi, agentAppState, fetchCloudBuildId } from 'src/api/agentsApi';
+import { useScopedBranchId, useBranchContextOptional } from 'src/contexts/branch-context';
 
 import { ConfirmDialog } from 'src/components/confirm-dialog';
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
+import { BranchAgentPanel } from './branch-agent-panel';
 import { AgentHealthDrawer } from './agent-health-drawer';
 import { AgentReleasesCard, compareAgentVersions } from './agent-releases-card';
 
@@ -99,11 +102,19 @@ function AgentAppCell({ agent, cloudBuild }: { agent: BranchAgent; cloudBuild: s
 }
 
 /**
- * Head office decides which PC speaks for each branch: it hands out a one-time code for the
- * installer, sees the agents that enrolled with one, and revokes an agent it no longer trusts.
+ * The branch agent, in one place (2026-10-19). For the branch in the header, everyone at the
+ * branch sees its agent, its printers and card terminals, this PC and its logs, as the agent's own
+ * page used to show them; it opens in the selling app on the branch PC too. Head office also sees
+ * every branch's agent, hands out one-time enrolment codes, and revokes an agent it no longer
+ * trusts.
  */
 export function AgentsPage() {
   const { t } = useTranslation();
+  const isHeadOffice = useIsHeadOffice();
+  const role = useAuthStore((state) => state.user?.role);
+  // The manager and head office change devices and this PC's settings; everyone else looks.
+  const canManage = isManagerOrAbove(role);
+  const scopedBranchName = useBranchContextOptional()?.selectedBranch?.name;
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [agents, setAgents] = useState<BranchAgent[]>([]);
@@ -139,7 +150,7 @@ export function AgentsPage() {
       const [branchList, agentList, codeList, build] = await Promise.all([
         tenantApi.getBranches(),
         agentsApi.list({ branchId: branchId || undefined, includeRevoked }),
-        agentsApi.listCodes(branchId || undefined),
+        isHeadOffice ? agentsApi.listCodes(branchId || undefined) : Promise.resolve([]),
         fetchCloudBuildId(),
       ]);
       setCloudBuild(build);
@@ -152,7 +163,7 @@ export function AgentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [branchId, includeRevoked, errorText]);
+  }, [branchId, includeRevoked, errorText, isHeadOffice]);
 
   useEffect(() => {
     loadData();
@@ -268,6 +279,8 @@ export function AgentsPage() {
             <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
               {t('common.refresh', 'Refresh')}
             </Button>
+            {isHeadOffice && (
+            <>
             <Button variant="outlined" startIcon={<DownloadIcon />} onClick={handleDownloadInstaller} disabled={downloading}>
               {downloading
                 ? t('operations.agents.downloading', 'Downloading…')
@@ -276,16 +289,18 @@ export function AgentsPage() {
             <Button variant="contained" startIcon={<KeyIcon />} onClick={openCodeDialog}>
               {t('operations.agents.createCode', 'New enrolment code')}
             </Button>
+            </>
+            )}
           </Stack>
         }
         sx={{ mb: 2 }}
       />
 
       <Typography variant="body2" color="text.secondary" sx={{ mb: 3, maxWidth: 820 }}>
-        {t(
+        {isHeadOffice ? t(
           'operations.agents.intro',
           'Each branch runs one agent on its PC. The agent connects to the cloud and drives the branch printers and card terminals. Give the installer a one-time enrolment code; revoke an agent to cut it off at once.'
-        )}
+        ) : t('operations.agents.introBranch')}
       </Typography>
 
       {error && (
@@ -299,6 +314,19 @@ export function AgentsPage() {
         </Alert>
       )}
 
+      {branchId && (
+        <BranchAgentPanel
+          branchId={branchId}
+          branchName={scopedBranchName}
+          agents={agents}
+          cloudBuild={cloudBuild}
+          canManage={canManage}
+        />
+      )}
+
+      {/* Every branch's agent, the enrolment codes and the agent's releases are the chain's. */}
+      {isHeadOffice && (
+      <>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ mb: 3, alignItems: { sm: 'center' } }}>
         <FormControlLabel
           control={<Switch checked={includeRevoked} onChange={(e) => setIncludeRevoked(e.target.checked)} />}
@@ -590,6 +618,8 @@ export function AgentsPage() {
       />
 
       <AgentReleasesCard onLatestPublished={setLatestPublished} />
+      </>
+      )}
 
       <AgentHealthDrawer
         agentId={healthAgent?.id ?? null}

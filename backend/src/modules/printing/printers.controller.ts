@@ -124,9 +124,11 @@ export class PrintersController {
     return { success: true };
   }
 
-  /** A test page through the branch agent. The job it returns settles when the printer answers. */
+  /**
+   * A test page through the branch agent. The job it returns settles when the printer answers.
+   * Anyone at the branch may print one, as on the agent's own page before (2026-10-19).
+   */
   @BranchOwned(Printer)
-  @Roles(...MANAGER_AND_ABOVE)
   @Post('printers/:id/test-print')
   async testPrint(@Param('id') id: string, @Req() req: Request) {
     return await this.queueService.testPrint((req as any).tenantId, id, (req as any).userId);

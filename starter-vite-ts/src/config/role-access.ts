@@ -40,6 +40,10 @@ const CASHIER_PATHS = [
   '/app/delivery/orders',
   '/app/delivery/couriers',
   '/app/delivery/settlements',
+  // The branch agent, its printers and card terminals and its logs: everyone at the branch sees
+  // them, as on the agent's own page before (2026-10-19). Changes are the manager's; enrolment
+  // codes and revoking stay with head office, on the same page.
+  '/app/operations/agents',
 ];
 
 /** A branch manager runs one site: its people, its money, its menu, its reports. */
@@ -80,9 +84,6 @@ const CHAIN_ONLY_PATHS = [
   // The customer record is the chain's, so its questions are asked the same at every branch.
   '/app/settings/customer-fields',
   '/app/operations/branches',
-  // Which PC may speak for a branch is decided centrally; a branch account could otherwise
-  // enrol a machine for the shop next door.
-  '/app/operations/agents',
   // Reading every branch at once is head office's job by definition. A branch manager has
   // the live screens for their own site and no business reading the shop next door's
   // drawer variance, so the roll-ups are chain-only even though they only ever read.
