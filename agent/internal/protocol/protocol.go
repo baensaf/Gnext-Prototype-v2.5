@@ -35,7 +35,8 @@ const (
 
 // Capabilities this build advertises in hello.
 // app.serve: the agent serves the cloud's cached frontend build and proxies the API (§19.3).
-var Capabilities = []string{"print.html", "payment.charge", "payment.query", "app.serve"}
+// print.route: the agent routes and lays out kitchen chits itself (order.print, §21).
+var Capabilities = []string{"print.html", "payment.charge", "payment.query", "app.serve", "print.route"}
 
 // Ack and envelope error codes (§8.1).
 const (
@@ -104,7 +105,7 @@ func New(typ, ref string, payload any) (Envelope, error) {
 // IsCommand reports whether a cloud → agent type asks for work.
 func IsCommand(typ string) bool {
 	switch typ {
-	case TypeConfigUpdated, TypePrintJob, TypePaymentCharge, TypePaymentQuery, TypeCheckUpdate:
+	case TypeConfigUpdated, TypePrintJob, TypePaymentCharge, TypePaymentQuery, TypeCheckUpdate, TypeOrderPrint:
 		return true
 	}
 	return false
@@ -173,6 +174,8 @@ type Config struct {
 	ConfigVersion int        `json:"config_version"`
 	Printers      []Printer  `json:"printers"`
 	Terminals     []Terminal `json:"terminals"`
+	// Routing is the branch's kitchen routing (§21); nil from a cloud that routes chits itself.
+	Routing *Routing `json:"routing,omitempty"`
 }
 
 // Connection says how the agent reaches a device. `port` is a number for tcp and a string

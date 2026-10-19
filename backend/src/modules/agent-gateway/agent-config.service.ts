@@ -4,6 +4,7 @@ import { In, Repository } from 'typeorm';
 import { Printer } from '../../entities/Printer.entity';
 import { PaymentDevice } from '../../entities/PaymentDevice.entity';
 import { Agent } from '../../entities/Agent.entity';
+import { PrintRoute } from '../../entities/PrintRoute.entity';
 import { AgentCommandsService } from './agent-commands.service';
 import { AgentSessionsService } from './agent-sessions.service';
 
@@ -32,10 +33,18 @@ export interface AgentTerminalConfig {
   charge_timeout_s: number;
 }
 
+/** The branch's kitchen routing, for an agent that routes chits itself (protocol §21.2). */
+export interface AgentRoutingConfig {
+  routes: Array<{ printer_id: string | null; category_id?: string; product_id?: string }>;
+  kitchen_default_printer_id?: string;
+  whole_order_printer_ids: string[];
+}
+
 export interface AgentConfig {
   config_version: number;
   printers: AgentPrinterConfig[];
   terminals: AgentTerminalConfig[];
+  routing?: AgentRoutingConfig;
 }
 
 const DEFAULT_CHARGE_TIMEOUT_S = 90;
@@ -51,6 +60,7 @@ export class AgentConfigService implements OnApplicationBootstrap {
     @InjectRepository(Printer) private readonly printerRepo: Repository<Printer>,
     @InjectRepository(PaymentDevice) private readonly deviceRepo: Repository<PaymentDevice>,
     @InjectRepository(Agent) private readonly agentRepo: Repository<Agent>,
+    @InjectRepository(PrintRoute) private readonly routeRepo: Repository<PrintRoute>,
     private readonly sessions: AgentSessionsService,
     private readonly commands: AgentCommandsService,
   ) {}
@@ -108,12 +118,15 @@ export class AgentConfigService implements OnApplicationBootstrap {
   }
 
   async forBranch(tenantId: string, branchId: string): Promise<AgentConfig> {
-    const [printers, devices] = await Promise.all([
-      this.printerRepo.find({ where: { tenant_id: tenantId, branch_id: branchId }, order: { code: 'ASC' } }),
+    const [printers, devices, routes] = await Promise.all([
+      this.printerRepo.find({ where: { tenant_id: tenantId, branch_id: branchId }, order: { code: 'ASC', id: 'ASC' } }),
       this.deviceRepo.find({ where: { tenant_id: tenantId, branch_id: branchId, kind: In(['POS', 'NETWORK']) }, order: { code: 'ASC' } }),
+      this.routeRepo.find({ where: { tenant_id: tenantId, branch_id: branchId } }),
     ]);
 
-    const stamps = [...printers, ...devices].map((row) => new Date(row.updated_at).getTime() || 0);
+    const stamps = [...printers, ...devices, ...routes.map((r) => ({ updated_at: r.created_at }))].map(
+      (row) => new Date(row.updated_at).getTime() || 0,
+    );
     return {
       // Seconds since the epoch of the latest change: grows whenever the list changes shape.
       config_version: Math.floor(Math.max(0, ...stamps) / 1000),
@@ -136,6 +149,17 @@ export class AgentConfigService implements OnApplicationBootstrap {
         connection: d.agent_driver ? d.agent_connection ?? null : null,
         charge_timeout_s: DEFAULT_CHARGE_TIMEOUT_S,
       })),
+      // Every printer of the branch is listed above, in the order routing picks from, with or
+      // without a connection: an agent that routes needs the names and the in-service flags.
+      routing: {
+        routes: routes.map((r) => ({
+          printer_id: r.printer_id ?? null,
+          ...(r.category_id ? { category_id: r.category_id } : {}),
+          ...(r.product_id ? { product_id: r.product_id } : {}),
+        })),
+        ...(printers.find((p) => p.kitchen_default) ? { kitchen_default_printer_id: printers.find((p) => p.kitchen_default)!.id } : {}),
+        whole_order_printer_ids: printers.filter((p) => p.is_active && p.prints_whole_order).map((p) => p.id),
+      },
     };
   }
 }

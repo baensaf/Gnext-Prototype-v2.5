@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, IsNull, Repository } from 'typeorm';
 import { PrintJob } from '../../entities/PrintJob.entity';
@@ -18,6 +18,7 @@ import { markAsReprint, PrintRenderService, RenderDocOptions, TicketTemplate } f
 import { PrintRoutingService, RoutedPrinter } from './print-routing.service';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { AgentPrintingService } from './agent-printing.service';
+import { AgentRoutedPrintingService, OrderPrintPayload } from './agent-routed-printing.service';
 import { printableOrderNote } from '../order/order-notes';
 
 /** What changed on an order the kitchen has already been sent. */
@@ -77,6 +78,7 @@ export class PrintQueueService {
     private readonly auditWriter: AuditWriter,
     private readonly agentPrinting: AgentPrintingService,
     @InjectRepository(Product) private readonly productRepo: Repository<Product>,
+    @Optional() private readonly agentRouted?: AgentRoutedPrintingService,
   ) {}
 
   /**
@@ -133,6 +135,11 @@ export class PrintQueueService {
       }
 
       if (activeLines.length === 0) return [];
+      // A branch agent that routes chits gets the order once and splits it itself (protocol §21).
+      // A reprint, or one for a single printer, is of chits already laid out, and stays here.
+      if (!isReprint && !targetPrinterId && !onlyPrinterId && (await this.agentRouted?.routesOnAgent(tenantId, order.branch_id))) {
+        return [await this.sendToAgent(tenantId, order, heading, activeLines.map((item) => ({ item })), opts)];
+      }
       const batches = (await this.splitByPrinter(tenantId, order, activeLines.map((item) => ({ item })))).filter(
         // The printer's lines as they stand now, so a line added since the first chit is on it.
         (batch) => !onlyPrinterId || batch.printer?.id === onlyPrinterId,
@@ -208,6 +215,14 @@ export class PrintQueueService {
 
       // A chit still waiting for the agent is not taken back: the change chit follows it (K-20).
       const heading = await this.orderHeading(order);
+      if (await this.agentRouted?.routesOnAgent(tenantId, order.branch_id)) {
+        return [
+          await this.sendToAgent(tenantId, order, { ...heading, placedAt: new Date() }, lines, opts, {
+            kitchen_change: change.kind,
+            ...(change.reason ? { change_reason: change.reason } : {}),
+          }),
+        ];
+      }
       const jobs: PrintJob[] = [];
       const changeBatches = await this.splitByPrinter(tenantId, order, lines);
       for (const batch of changeBatches) {
@@ -394,6 +409,43 @@ export class PrintQueueService {
     }
     const whole = passPrinters.map((printer): PrinterBatch => ({ printer, label: printer.name, lines, wholeOrder: true }));
     return [...stations, ...whole];
+  }
+
+  /**
+   * The order's kitchen lines for the branch agent to route, lay out and print (protocol §21). A
+   * voided line carries where it first printed, so it goes back there whatever the routing says now.
+   */
+  private async sendToAgent(
+    tenantId: string,
+    order: OrderHeader,
+    heading: Omit<RenderDocOptions, 'documentType' | 'items'>,
+    lines: PrinterBatch['lines'],
+    opts: Pick<JobOptions, 'reason' | 'userId'>,
+    change: Pick<OrderPrintPayload, 'kitchen_change' | 'change_reason'> = {},
+  ): Promise<PrintJob> {
+    const ids = [...new Set(lines.map((l) => l.item.product_id).filter(Boolean))];
+    const products = ids.length ? await this.productRepo.find({ where: { id: In(ids), tenant_id: tenantId }, select: ['id', 'category_id'] }) : [];
+    const categoryOf = new Map(products.map((p) => [p.id, p.category_id]));
+    const payload: OrderPrintPayload = {
+      order_id: order.id,
+      heading: this.renderService.chitHeading(heading),
+      lines: lines.map(({ item, change: lineChange }) => {
+        const rendered = this.renderLine(item, lineChange);
+        return {
+          line_id: item.id,
+          product_id: item.product_id,
+          ...(categoryOf.get(item.product_id) ? { category_id: categoryOf.get(item.product_id)! } : {}),
+          name: rendered.product_name,
+          quantity: String(item.quantity),
+          ...(rendered.options_summary ? { options: rendered.options_summary } : {}),
+          ...(rendered.special_instructions ? { note: rendered.special_instructions } : {}),
+          ...(lineChange ? { change: lineChange } : {}),
+          sent_to: lineChange === 'VOID' ? item.kitchen_printer_ids ?? null : null,
+        };
+      }),
+      ...change,
+    };
+    return await this.agentRouted!.send(tenantId, order.branch_id, payload, { reason: opts.reason, userId: opts.userId });
   }
 
   private renderKitchenChit(

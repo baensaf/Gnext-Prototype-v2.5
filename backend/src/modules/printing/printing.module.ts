@@ -8,6 +8,7 @@ import { Branch } from '../../entities/Branch.entity';
 import { Product } from '../../entities/Product.entity';
 import { PrintRoute } from '../../entities/PrintRoute.entity';
 import { Terminal } from '../../entities/Terminal.entity';
+import { Agent } from '../../entities/Agent.entity';
 import { PrintRenderService } from './print-render.service';
 import { PrintRoutingService } from './print-routing.service';
 import { PrintQueueService } from './print-queue.service';
@@ -15,6 +16,7 @@ import { PrintersController } from './printers.controller';
 import { AuditModule } from '../audit/audit.module';
 import { AgentGatewayModule } from '../agent-gateway/agent-gateway.module';
 import { AgentPrintingService } from './agent-printing.service';
+import { AgentRoutedPrintingService } from './agent-routed-printing.service';
 
 @Module({
   imports: [
@@ -27,11 +29,12 @@ import { AgentPrintingService } from './agent-printing.service';
       Product,
       PrintRoute,
       Terminal,
+      Agent,
     ]),
     AuditModule,
     AgentGatewayModule,
   ],
-  providers: [PrintRenderService, PrintRoutingService, PrintQueueService, AgentPrintingService],
+  providers: [PrintRenderService, PrintRoutingService, PrintQueueService, AgentPrintingService, AgentRoutedPrintingService],
   controllers: [PrintersController],
   exports: [PrintQueueService, PrintRenderService, PrintRoutingService],
 })
