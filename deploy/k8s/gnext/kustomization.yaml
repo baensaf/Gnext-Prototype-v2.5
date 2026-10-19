@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: gnext
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - backend.yaml
+  - frontend.yaml
+  - ingress.yaml
+# deploy-k3s.sh sets the tags to the commit it built: kustomize edit set image ...
+images:
+  - name: gnext-backend
+    newTag: latest
+  - name: gnext-frontend
+    newTag: latest

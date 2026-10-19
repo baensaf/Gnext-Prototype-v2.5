@@ -1,0 +1,109 @@
+# NestJS API. On every start it runs the migrations and the idempotent seed, so it runs as
+# one replica and is replaced with Recreate: two pods must never migrate at once.
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 3100
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-uploads
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:16-alpine
+          command: ["sh", "-c", "until pg_isready -h postgres -p 5432; do sleep 2; done"]
+      containers:
+        - name: backend
+          # Built on the VPS and imported into k3s; the tag is set by kustomize / deploy-k3s.sh.
+          image: gnext-backend
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3100
+          env:
+            - { name: NODE_ENV, value: production }
+            - { name: PORT, value: "3100" }
+            - { name: DB_HOST, value: postgres }
+            - { name: DB_PORT, value: "5432" }
+            - { name: SEED_PROFILE, value: minimal }
+            - { name: DATA_DIR, value: /app/data }
+            - { name: UPLOAD_DIR, value: /app/uploads }
+            - name: DB_USER
+              valueFrom: { secretKeyRef: { name: gnext-env, key: DB_USER } }
+            - name: DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: gnext-env, key: DB_PASSWORD } }
+            - name: DB_NAME
+              valueFrom: { secretKeyRef: { name: gnext-env, key: DB_NAME } }
+            - name: ADMIN_USERNAME
+              valueFrom: { secretKeyRef: { name: gnext-env, key: ADMIN_USERNAME } }
+            - name: ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: gnext-env, key: ADMIN_PASSWORD } }
+            - name: APPROVER_DEMO_PIN
+              valueFrom: { secretKeyRef: { name: gnext-env, key: APPROVER_DEMO_PIN, optional: true } }
+            # Public base URL agents are told to connect to, e.g. https://gnext.top.
+            - name: AGENT_PUBLIC_URL
+              valueFrom: { secretKeyRef: { name: gnext-env, key: AGENT_PUBLIC_URL, optional: true } }
+            # The site's own address; the backend accepts cross-origin calls from it.
+            - name: FRONTEND_URL
+              valueFrom: { secretKeyRef: { name: gnext-env, key: FRONTEND_URL, optional: true } }
+            # Shared with the AGENT_RELEASE_TOKEN repository secret; lets CI add unpublished agent builds.
+            - name: AGENT_RELEASE_CI_TOKEN
+              valueFrom: { secretKeyRef: { name: gnext-env, key: AGENT_RELEASE_CI_TOKEN, optional: true } }
+          # Migrations and the seed run before the server listens.
+          startupProbe:
+            httpGet: { path: /health/ready, port: 3100 }
+            periodSeconds: 10
+            failureThreshold: 42
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 3100 }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1536Mi }
+          volumeMounts:
+            - { name: uploads, mountPath: /app/uploads }
+            - { name: data, mountPath: /app/data }
+      volumes:
+        - name: uploads
+          persistentVolumeClaim: { claimName: backend-uploads }
+        - name: data
+          persistentVolumeClaim: { claimName: backend-data }
