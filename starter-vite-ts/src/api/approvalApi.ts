@@ -47,6 +47,15 @@ export const approvalApi = {
     const res = await httpClient.post('/api/v1/approvals/rules', data);
     return res.data;
   },
+  /** A manager approves on this screen with their own username and password (R-15); no session opens. */
+  verifySignIn: async (
+    username: string,
+    password: string,
+    actionName: string
+  ): Promise<{ success: boolean; approver_user_id: string; display_name: string; role: string }> => {
+    const res = await httpClient.post('/api/v1/approvals/verify-sign-in', { username, password, actionName });
+    return res.data;
+  },
   verifyPin: async (
     pin: string,
     userId?: string,

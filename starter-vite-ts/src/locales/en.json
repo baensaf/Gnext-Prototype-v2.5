@@ -1102,7 +1102,6 @@
       "branch": "Branch",
       "none": "This branch has no active cash registers. A manager can add one under Terminals.",
       "loadError": "Could not load registers",
-      "pinNotice": "A manager PIN is needed to set up a register.",
       "assign": "Use this register",
       "approvalDetails": "Set up this device as a cash register",
       "notSetUp": "This device is not set up as a register",
@@ -1117,7 +1116,8 @@
       "takenSeen": "{{register}} is used by {{device}}, last seen {{seen}}.",
       "otherDevice": "another device",
       "takenHelp": "Moving it here cuts the other device off. It asks a manager to set it up the next time it is used.",
-      "move": "Move it here"
+      "move": "Move it here",
+      "signInNotice": "A manager signs in to approve setting up a register."
     },
     "open": {
       "title": "Open shift",
@@ -2931,7 +2931,16 @@
     "invalidPin": "Wrong manager PIN. {{count}} tries left.",
     "approverLabel": "Manager",
     "noApprovers": "No manager at this branch has a PIN set. Head office sets PINs on the Users screen.",
-    "headOffice": "Head office"
+    "headOffice": "Head office",
+    "signIn": {
+      "title": "Manager approval",
+      "help": "A manager signs in here with their own username and password. Only this action is approved; you stay signed in.",
+      "username": "Manager's username",
+      "password": "Password",
+      "approve": "Approve",
+      "failed": "Wrong username or password, or this account cannot approve here.",
+      "rateLimited": "Too many wrong tries. Wait 15 minutes and try again."
+    }
   },
   "printQueue": {
     "title": "Print Queue & Spooler",

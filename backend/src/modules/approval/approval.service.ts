@@ -247,6 +247,74 @@ export class ApprovalService {
   }
 
   /**
+   * A manager approves by signing in on the cashier's screen (R-15): their own username and
+   * password, checked here without opening a session, so the cashier stays signed in. The same
+   * accounts may approve as with a PIN (an approver of this branch, or of head office), the same
+   * five wrong tries in 15 minutes stop the person asking, and nobody approves their own action.
+   */
+  async verifyApproverSignIn(
+    tenantId: string,
+    username: string,
+    password: string,
+    actionName: string,
+    requesterId: string,
+    branchId?: string | null,
+  ) {
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
+    const recentFailedCount = await this.pinLogRepo.count({
+      where: { tenant_id: tenantId, user_id: requesterId, is_success: false, attempted_at: MoreThan(fifteenMinutesAgo) },
+    });
+    if (recentFailedCount >= 5) {
+      throw new ForbiddenException({ code: 'PIN_RATE_LIMITED', title: 'Too Many Wrong Tries', detail: 'Too many wrong sign-ins. 5 failed attempts in the last 15 minutes.' });
+    }
+
+    const account = username?.trim()
+      ? await this.userRepo.findOne({ where: { tenant_id: tenantId, username: username.toLowerCase().trim(), is_active: true } })
+      : null;
+    let approver: AdminUser | null = null;
+    if (
+      account &&
+      APPROVER_ROLES.includes((account.role || '').toUpperCase()) &&
+      !account.branch_removed_at &&
+      (!account.branch_id || !branchId || account.branch_id === branchId) &&
+      account.id !== requesterId
+    ) {
+      try {
+        if (password && (await argon2.verify(account.password_hash, password))) approver = account;
+      } catch {
+        // A malformed hash is not a match.
+      }
+    }
+
+    await this.pinLogRepo.save(this.pinLogRepo.create({ tenant_id: tenantId, user_id: requesterId, action: actionName, is_success: !!approver }));
+
+    if (!approver) {
+      await this.auditWriter.write({
+        tenantId,
+        actorType: 'ADMIN',
+        action: 'APPROVAL_SIGN_IN_FAILED',
+        correlationId: actionName,
+        details: { requesterId, username: username?.trim() || null, recentFailedCount: recentFailedCount + 1 },
+      });
+      throw new UnauthorizedException({
+        code: 'APPROVAL_SIGN_IN_FAILED',
+        title: 'Not Approved',
+        detail: `Wrong username or password, or this account cannot approve here. Remaining attempts: ${4 - recentFailedCount}`,
+      });
+    }
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'ADMIN',
+      actorId: approver.id,
+      action: 'APPROVAL_SIGN_IN_ACCEPTED',
+      correlationId: actionName,
+      details: { requesterId, approverId: approver.id, approverRole: approver.role },
+    });
+    return { success: true, approver_user_id: approver.id, display_name: approver.display_name, role: approver.role };
+  }
+
+  /**
    * Releases an action for the caller: an approver needs nobody, anyone else needs a pin
    * that belongs to one. Returns the approver's id when a pin was used, so the caller can
    * record who released it.
