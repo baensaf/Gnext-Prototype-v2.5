@@ -404,9 +404,12 @@ func (t *tray) menu() {
 	item := func(menu uintptr, flags, id uintptr, text string) {
 		procAppendMenuW.Call(menu, flags, id, uintptr(unsafe.Pointer(windows.StringToUTF16Ptr(text))))
 	}
-	// Gnext first, then the agent's settings, then what the agent is doing (§19.12).
+	// Gnext, then what the agent is doing (§19.12). Everything else about the PC is in Gnext
+	// (§20); the agent's page is offered only to enrol a PC that is not connected yet.
 	item(m, mfString, cmdOpenApp, "باز کردن جی‌نکست")
-	item(m, mfString, cmdOpen, "تنظیمات عامل")
+	if !v.Enrolled {
+		item(m, mfString, cmdOpen, "اتصال این رایانه به شعبه")
+	}
 	procAppendMenuW.Call(m, mfSeparator, 0, 0)
 	item(m, mfString|mfDisabled, 0, v.Title)
 	item(m, mfString|mfDisabled, 0, v.Cloud)

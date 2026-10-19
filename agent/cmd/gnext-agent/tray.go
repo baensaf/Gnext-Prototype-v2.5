@@ -55,6 +55,8 @@ type trayView struct {
 	Cloud    string
 	Items    []trayItem
 	Printers []trayPrinter // for test prints
+	// Enrolled hides the menu's way to the agent's page, which is only for enrolling (2.5.1).
+	Enrolled bool
 }
 
 // Tip is the icon's tooltip: the title and the first problem, or that all is well.
@@ -106,6 +108,7 @@ func (w *trayWatch) observe(st *trayStatus, err error, now time.Time) (trayView,
 		v.Cloud = "به سرور Gnext وصل است"
 	}
 	if st != nil {
+		v.Enrolled = st.Enrolled
 		branch := st.BranchName
 		if st.Agent != nil && st.Agent.BranchName != "" {
 			branch = st.Agent.BranchName

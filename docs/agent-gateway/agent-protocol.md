@@ -3097,6 +3097,14 @@ the cloud asks the agent live for the few things only the branch PC knows.
 - The app's `gnext-agent` meta carries `pc_name` (the PC's Windows name) on the loopback listener,
   so a register paired on the branch PC is named after it on the Terminals page.
 
+**2.5.1: one window.** 2.5.0 still had two ways in, the *Gnext* app and the *Gnext Agent* page. From
+2.5.1 `gnext-agent open` (the exe with no arguments, every shortcut and a click on the tray) opens the
+app once the PC is enrolled, and the agent's page only before that; the page itself only enrols (or
+re-enrols) the PC. The tray offers the page only while the PC is not enrolled. The installer makes one
+shortcut, *Gnext*, and the service renames *Gnext Agent* to *Gnext* (or removes it beside one) and removes
+*Gnext Offline Till* and *Gnext POS* from the Start menu and the public desktop at start, since an update
+does not run the installer.
+
 ### 20.2 `agent.query` and `agent.query.result`
 
 An agent that answers live queries advertises the capability `agent.query` in `hello`.

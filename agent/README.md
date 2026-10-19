@@ -117,20 +117,20 @@ head-office pages stay on gnext.top; the app links out to them.
 
 - **Tray icon** (`gnext-agent tray`): the service starts one in every signed-in user's session, at start
   and at each sign-in. Its colour is the agent's state (green ready, amber a warning such as paper low, red a
-  problem, grey agent not running); its menu starts with *Open Gnext* and *Agent settings*, then lists the
-  connection and each device, and test-prints; a click opens the settings window. It pops a system
+  problem, grey agent not running); its menu starts with *Open Gnext* (and, only while the PC is not
+  enrolled, *Connect this PC to a branch*), then lists the connection and each device, and test-prints; a
+  click opens Gnext. It pops a system
   notification (logo and status light, under the name *Gnext Agent*) when the cloud is away for 30 s or a
   device breaks, and again when they are back. Closing it hides it until the next sign-in. After an update
   the old tray leaves and the service starts the new one.
-- **Settings window** (Start-menu and desktop shortcut *Gnext Agent*, the tray, or running the exe): the
-  page on `http://127.0.0.1:47800/agent/` in a window of its own, drawn by WebView2 (in the browser if it is
-  missing). One window per user. In Persian: connection status, the registers' addresses and the app build,
-  open-at-sign-in, enrol or re-enrol with a server and a code, printers and card terminals with live status,
-  test print, LAN scan for port-9100 printers, and logs. Anyone at the PC can look and test-print; adding,
-  editing or removing a device, *Download now* and the sign-in setting need a Gnext sign-in by this
-  branch's manager or head office. Device changes are made in the cloud (`/api/v1/agent/local`, audited
-  under that user) and pushed back to the agent. The page and its API (`/agent/api/*`) only exist on
-  127.0.0.1, which refuses other hosts and cross-site writes.
+- **One shortcut, *Gnext*** (2.5.1; Start menu and desktop, or running the exe, `gnext-agent open`): once
+  the PC is enrolled it opens Gnext, the app the agent serves, in a WebView2 window of its own. Before that
+  it opens the agent's page on `http://127.0.0.1:47800/agent/`, which only enrols the PC (server and code)
+  and, once enrolled, says which branch it is on and can re-enrol. Printers, card terminals, the LAN scan,
+  logs and the open-at-sign-in setting are managed from Gnext (agent-protocol §20). The service renames or
+  removes the shortcuts older installers left (*Gnext Agent*, *Gnext Offline Till*, *Gnext POS*) at start.
+  The page and its API (`/agent/api/*`) only exist on 127.0.0.1, which refuses other hosts and cross-site
+  writes.
 
 ## Offline selling
 
@@ -160,7 +160,7 @@ only when the product owner asks: [`agent-protocol.md` §19.14](../docs/agent-ga
 | `internal/update` | Release check, download, verify, swap |
 | `internal/winsession` | Starts the ticket browser, the tray and the app as the signed-in user |
 | `internal/store` | `config.json` (`server`, optional `app_url`, `app_at_sign_in`), `identity.json`, `devices.json`, DPAPI, removal of 1.x's offline files |
-| `installer/gnext-agent.iss` | Setup wizard (Inno Setup): server, enrolment code, service, the Gnext and Gnext Agent shortcuts |
+| `installer/gnext-agent.iss` | Setup wizard (Inno Setup): server, enrolment code, service, the Gnext shortcut |
 
 ## Develop
 

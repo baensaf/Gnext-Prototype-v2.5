@@ -61,7 +61,16 @@ var (
 // that comes with Windows 10 and 11), so the agent opens like an app rather than a browser
 // tab. One window per user: a second call brings the first to the front. Without WebView2 the
 // page opens in the browser as before.
-func runWindow() int { return showWindow(settingsWindow) }
+//
+// Since 2.5.1 there is one window for people: once the PC is enrolled, "open" (and with it every
+// shortcut left over from older agents) opens Gnext itself. The agent's page is only for enrolling
+// a PC that is not connected yet, or when the agent cannot be asked.
+func runWindow() int {
+	if st, err := fetchTrayStatus(); err == nil && st.Enrolled {
+		return showWindow(appWindow)
+	}
+	return showWindow(settingsWindow)
+}
 
 // runApp shows Gnext, the cashier app the agent serves, the same way (§19.12).
 func runApp() int { return showWindow(appWindow) }

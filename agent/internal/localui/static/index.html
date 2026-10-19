@@ -21,85 +21,30 @@
     </div>
   </header>
 
-  <nav class="tabs" role="tablist">
-    <button class="tab active" data-tab="status">وضعیت</button>
-    <button class="tab" data-tab="enrol">اتصال به شعبه</button>
-    <button class="tab" data-tab="logs">گزارش‌ها</button>
-  </nav>
-
   <main>
-    <section id="tab-status" class="panel">
-      <div id="not-enrolled" class="card warn" hidden>
-        <h2>این رایانه هنوز به شعبه‌ای وصل نشده است</h2>
-        <p>از صفحهٔ «عامل‌های شعبه» در جی‌نکست یک کد ثبت بگیرید و در زبانهٔ «اتصال به شعبه» وارد کنید.</p>
-        <button class="btn primary" data-goto="enrol">اتصال به شعبه</button>
-      </div>
-      <div id="in-gnext" class="card" hidden>
-        <h2>تنظیمات در جی‌نکست</h2>
-        <p class="muted">چاپگرها، کارت‌خوان‌ها، جستجوی چاپگر در شبکه، گزارش‌ها و تنظیمات این رایانه در خود جی‌نکست است.</p>
-        <p class="links">
-          <a id="link-printers" class="btn" target="_blank" rel="noopener">چاپگرها</a>
-          <a id="link-terminals" class="btn" target="_blank" rel="noopener">کارت‌خوان‌ها</a>
-          <a id="link-agents" class="btn" target="_blank" rel="noopener">عامل‌های شعبه</a>
-        </p>
-      </div>
-      <div class="grid">
-        <div class="card">
-          <h2>اتصال</h2>
-          <dl class="facts">
-            <dt>وضعیت</dt><dd id="s-conn">—</dd>
-            <dt>سرور</dt><dd id="s-server" class="ltr">—</dd>
-            <dt>شعبه</dt><dd id="s-branch">—</dd>
-            <dt>متصل از</dt><dd id="s-since">—</dd>
-            <dt>آخرین خطا</dt><dd id="s-error" class="ltr small">—</dd>
-          </dl>
-        </div>
-        <div class="card">
-          <h2>این رایانه</h2>
-          <dl class="facts">
-            <dt>نسخهٔ عامل</dt><dd id="s-version" class="ltr">—</dd>
-            <dt>شناسهٔ عامل</dt><dd id="s-agent" class="ltr small">—</dd>
-            <dt>کار در حال اجرا</dt><dd id="s-running">—</dd>
-            <dt>دستگاه‌ها</dt><dd id="s-devices">—</dd>
-          </dl>
-        </div>
-      </div>
-      <div class="card" id="registers">
-        <h2>صندوق‌ها در این شبکه</h2>
-        <p class="muted">هر صندوق دیگر شعبه (رایانه، تبلت یا گوشی روی همین شبکه) با یکی از این آدرس‌ها جی‌نکست را باز می‌کند.</p>
-        <ul id="lan-urls" class="urls"></ul>
-        <p id="lan-none" class="note" hidden>این رایانه آدرسی روی شبکهٔ شعبه ندارد، یا درگاه شبکه در دسترس نیست.</p>
-        <dl class="facts">
-          <dt>نسخهٔ برنامه</dt><dd id="app-build" class="ltr small">—</dd>
-          <dt>ساخته‌شده در</dt><dd id="app-built">—</dd>
-          <dt>دریافت‌شده در</dt><dd id="app-downloaded">—</dd>
-        </dl>
-      </div>
-    </section>
+    <!-- Since 2.5.1 this page only enrols the PC; everything else is in Gnext itself (§20). -->
+    <div id="enrolled" class="card narrow" hidden>
+      <h2>این رایانه به شعبهٔ <b id="branch"></b> وصل است</h2>
+      <p class="muted">چاپگرها، کارت‌خوان‌ها، گزارش‌ها و تنظیمات این رایانه در خود جی‌نکست است. جی‌نکست را با میان‌بر «Gnext» باز کنید.</p>
+      <p><a class="btn primary" href="/">باز کردن جی‌نکست</a></p>
+      <details>
+        <summary class="muted">اتصال به شعبهٔ دیگر</summary>
+        <p class="note warn-text">ثبت با کد جدید، عامل فعلی این رایانه را لغو می‌کند.</p>
+        <div id="enrol-slot-enrolled"></div>
+      </details>
+    </div>
 
-    <section id="tab-enrol" class="panel" hidden>
-      <div class="card narrow">
-        <h2>اتصال به شعبه</h2>
-        <p class="muted">کد ثبت را مدیر ستاد در صفحهٔ «عامل‌های شعبه» می‌سازد. هر کد یک بار و تا ۲۴ ساعت کار می‌کند.</p>
-        <p id="enrol-replace" class="note warn-text" hidden>این رایانه اکنون به شعبهٔ <b id="enrol-branch"></b> وصل است. ثبت با کد جدید، عامل فعلی را لغو می‌کند.</p>
-        <form id="enrol-form">
-          <label>آدرس سرور<input name="server" class="ltr" required placeholder="https://gnext.top"></label>
-          <label>کد ثبت<input name="code" class="ltr code" required placeholder="XXXX-XXXX" autocomplete="off"></label>
-          <button class="btn primary" type="submit">ثبت و اتصال</button>
-        </form>
-      </div>
-    </section>
+    <div id="not-enrolled" class="card narrow" hidden>
+      <h2>اتصال این رایانه به شعبه</h2>
+      <p class="muted">کد ثبت را مدیر ستاد در صفحهٔ «عامل‌های شعبه» در جی‌نکست می‌سازد. هر کد یک بار و تا ۲۴ ساعت کار می‌کند.</p>
+      <div id="enrol-slot-new"></div>
+    </div>
 
-    <section id="tab-logs" class="panel" hidden>
-      <div class="card">
-        <div class="card-head">
-          <h2>گزارش‌های عامل</h2>
-          <button class="btn" id="refresh-logs">تازه‌سازی</button>
-        </div>
-        <p class="muted small">وقتی اینترنت وصل است، همین گزارش‌ها در جی‌نکست هم دیده می‌شود.</p>
-        <pre id="logs" class="logs ltr"></pre>
-      </div>
-    </section>
+    <form id="enrol-form">
+      <label>آدرس سرور<input name="server" class="ltr" required placeholder="https://gnext.top"></label>
+      <label>کد ثبت<input name="code" class="ltr code" required placeholder="XXXX-XXXX" autocomplete="off"></label>
+      <button class="btn primary" type="submit">ثبت و اتصال</button>
+    </form>
   </main>
 
   <div id="toast" class="toast" hidden></div>
