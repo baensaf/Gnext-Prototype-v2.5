@@ -187,7 +187,7 @@ export function NoteTemplatesPage() {
         </Alert>
       )}
 
-      <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+      <Card>
         <CardContent sx={{ p: 0 }}>
           <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
             <Table>

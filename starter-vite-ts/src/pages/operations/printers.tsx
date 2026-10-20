@@ -337,7 +337,7 @@ export function PrintersPage({ embedded = false, readOnly = false, liveStatus }:
           <CircularProgress />
         </Box>
       ) : (
-            <Card sx={{ p: 3, borderRadius: 2 }}>
+            <Card sx={{ p: 3 }}>
               <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                   {t('operations.printers.tabs.printers', 'Printers & Devices')}

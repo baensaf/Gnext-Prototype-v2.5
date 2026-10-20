@@ -105,7 +105,7 @@ export function CardTerminalsPage({ embedded = false, readOnly = false, liveStat
       setDevSerial('');
       loadData();
     } catch (err: any) {
-      setError(err.detail || 'Failed to create payment device');
+      setError(err.detail || t('payments.cardTerminals.createFailed', 'Failed to create payment device'));
     }
   };
 
@@ -150,17 +150,17 @@ export function CardTerminalsPage({ embedded = false, readOnly = false, liveStat
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>Device Name</TableCell>
-              <TableCell>Type</TableCell>
-              <TableCell>Serial Number</TableCell>
-              <TableCell>Assigned Branch</TableCell>
+              <TableCell>{t('payments.cardTerminals.colName', 'Device name')}</TableCell>
+              <TableCell>{t('payments.cardTerminals.colType', 'Type')}</TableCell>
+              <TableCell>{t('payments.cardTerminals.colSerial', 'Serial number')}</TableCell>
+              <TableCell>{t('payments.cardTerminals.colBranch', 'Branch')}</TableCell>
               <TableCell>
                 <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                  <span>Settlement Destination</span>
+                  <span>{t('payments.cardTerminals.colSettlement', 'Settles to')}</span>
                   <VersionTag feature="payments.settlementAccounts" />
                 </Stack>
               </TableCell>
-              <TableCell>Status</TableCell>
+              <TableCell>{t('payments.cardTerminals.colStatus', 'Status')}</TableCell>
               <TableCell>{t('payments.terminalAgent.column', 'Branch agent')}</TableCell>
             </TableRow>
           </TableHead>
@@ -169,14 +169,14 @@ export function CardTerminalsPage({ embedded = false, readOnly = false, liveStat
               <TableRow>
                 <TableCell colSpan={7} align="center">
                   <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
-                    No payment devices registered yet. Click &quot;Register Device&quot; to add your physical or mobile POS.
+                    {t('payments.cardTerminals.empty', 'No card terminals yet. Add one with Register device.')}
                   </Typography>
                 </TableCell>
               </TableRow>
             ) : (
               devices.map((d) => {
-                const bName = branches.find((b) => b.id === d.branch_id)?.name || 'All Branches';
-                const accNameStr = accounts.find((a) => a.id === d.settlement_account_id)?.name || 'Unassigned';
+                const bName = branches.find((b) => b.id === d.branch_id)?.name || t('payments.cardTerminals.allBranches', 'All branches');
+                const accNameStr = accounts.find((a) => a.id === d.settlement_account_id)?.name || t('payments.cardTerminals.unassigned', 'Not set');
 
                 return (
                   <TableRow key={d.id}>
@@ -184,7 +184,7 @@ export function CardTerminalsPage({ embedded = false, readOnly = false, liveStat
                     <TableCell>
                       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                         <Chip
-                          label={d.device_type}
+                          label={t(`payments.cardTerminals.types.${d.device_type}`, d.device_type ?? '')}
                           color={d.device_type === 'MOBILE_POS' ? 'info' : d.device_type === 'POS_TERMINAL' ? 'primary' : 'default'}
                           size="small"
                         />
@@ -196,7 +196,7 @@ export function CardTerminalsPage({ embedded = false, readOnly = false, liveStat
                     <TableCell>{accNameStr}</TableCell>
                     <TableCell>
                       <Stack direction="row" spacing={0.5}>
-                        <Chip label={d.is_active ? 'Active' : 'Inactive'} color={d.is_active ? 'success' : 'default'} size="small" />
+                        <Chip label={d.is_active ? t('payments.cardTerminals.active', 'Active') : t('payments.cardTerminals.inactive', 'Inactive')} color={d.is_active ? 'success' : 'default'} size="small" />
                         {liveStatus?.[d.id] && (
                           <Chip
                             label={t(`operations.agents.live.${liveStatus[d.id]}`, liveStatus[d.id])}
@@ -232,21 +232,21 @@ export function CardTerminalsPage({ embedded = false, readOnly = false, liveStat
       <Drawer anchor="right" open={drawerOpen} onClose={() => setDrawerOpen(false)}>
         <Box sx={{ width: 400, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Register Payment Device
+            {t('payments.cardTerminals.drawerTitle', 'Register card terminal')}
           </Typography>
           <Box component="form" onSubmit={handleCreateDevice}>
             <Stack spacing={2.5}>
-              <TextField label="Device Name" value={devName} onChange={(e) => setDevName(e.target.value)} required fullWidth placeholder="e.g. Counter Card POS Terminal" />
-              <TextField select label="Device Type" value={devType} onChange={(e) => setDevType(e.target.value)} fullWidth>
-                <MenuItem value="POS_TERMINAL">Physical POS Terminal</MenuItem>
-                <MenuItem value="MOBILE_POS">Courier Mobile POS</MenuItem>
+              <TextField label={t('payments.cardTerminals.colName', 'Device name')} value={devName} onChange={(e) => setDevName(e.target.value)} required fullWidth placeholder={t('payments.cardTerminals.namePlaceholder', 'e.g. Counter card terminal')} />
+              <TextField select label={t('payments.cardTerminals.colType', 'Type')} value={devType} onChange={(e) => setDevType(e.target.value)} fullWidth>
+                <MenuItem value="POS_TERMINAL">{t('payments.cardTerminals.types.POS_TERMINAL', 'Counter terminal')}</MenuItem>
+                <MenuItem value="MOBILE_POS">{t('payments.cardTerminals.types.MOBILE_POS', 'Courier mobile terminal')}</MenuItem>
                 <MenuItem value="BANK_TRANSFER">
-                  Bank Transfer Account <VersionTag feature="payments.bankTransfer" sx={{ ml: 1 }} />
+                  {t('payments.cardTerminals.types.BANK_TRANSFER', 'Bank transfer account')} <VersionTag feature="payments.bankTransfer" sx={{ ml: 1 }} />
                 </MenuItem>
               </TextField>
-              <TextField label="Serial Number" value={devSerial} onChange={(e) => setDevSerial(e.target.value)} fullWidth placeholder="e.g. SN-8839210" />
-              <TextField select label="Branch Scope" value={devBranchId} onChange={(e) => setDevBranchId(e.target.value)} fullWidth>
-                <MenuItem value="">All Branches</MenuItem>
+              <TextField label={t('payments.cardTerminals.colSerial', 'Serial number')} value={devSerial} onChange={(e) => setDevSerial(e.target.value)} fullWidth placeholder="SN-8839210" />
+              <TextField select label={t('payments.cardTerminals.colBranch', 'Branch')} value={devBranchId} onChange={(e) => setDevBranchId(e.target.value)} fullWidth>
+                <MenuItem value="">{t('payments.cardTerminals.allBranches', 'All branches')}</MenuItem>
                 {(scopedBranch ? [scopedBranch] : branches).map((b) => (
                   <MenuItem key={b.id} value={b.id}>
                     {b.name}
@@ -255,22 +255,22 @@ export function CardTerminalsPage({ embedded = false, readOnly = false, liveStat
               </TextField>
               <TextField
                 select
-                label="Settlement Destination Account"
+                label={t('payments.cardTerminals.settlementAccount', 'Settles to account')}
                 value={devAccountId}
                 onChange={(e) => setDevAccountId(e.target.value)}
                 fullWidth
                 slotProps={{ input: { endAdornment: <VersionTag feature="payments.settlementAccounts" sx={{ mr: 3 }} /> } }}
               >
-                <MenuItem value="">Unassigned</MenuItem>
+                <MenuItem value="">{t('payments.cardTerminals.unassigned', 'Not set')}</MenuItem>
                 {accounts.map((a) => (
                   <MenuItem key={a.id} value={a.id}>
-                    {a.name} ({a.bank_name || 'Bank'})
+                    {a.name}{a.bank_name ? ` (${a.bank_name})` : ''}
                   </MenuItem>
                 ))}
               </TextField>
 
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ mt: 2 }}>
-                Save Device
+                {t('payments.cardTerminals.save', 'Save')}
               </Button>
             </Stack>
           </Box>

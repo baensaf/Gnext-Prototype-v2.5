@@ -57,7 +57,7 @@ export function ImageUploader({ value, onUploadSuccess, label = 'Upload Image' }
   };
 
   return (
-    <Card variant="outlined" sx={{ borderRadius: 2, p: 2 }}>
+    <Card variant="outlined" sx={{ p: 2 }}>
       <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
         {label}
       </Typography>

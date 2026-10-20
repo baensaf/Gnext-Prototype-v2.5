@@ -92,7 +92,7 @@ export function CallNumberRangesCard({ editable }: Props) {
   };
 
   return (
-    <Card sx={{ p: 3, borderRadius: 2 }}>
+    <Card sx={{ p: 3 }}>
       <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5 }}>
         {t('settings.callNumbers.title', 'Daily order numbers')}
       </Typography>

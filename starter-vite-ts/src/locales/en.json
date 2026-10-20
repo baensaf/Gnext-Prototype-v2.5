@@ -186,7 +186,10 @@
     "phone": "Phone",
     "agentHealth": "Agent Health",
     "scopeBranch": "This branch",
-    "scopeChain": "All branches"
+    "scopeChain": "All branches",
+    "branchOnline": "Online",
+    "branchOffline": "Offline",
+    "agentHealthy": "Healthy"
   },
   "pos": {
     "cartBar": {
@@ -435,7 +438,9 @@
         "BELOW_MINIMUM": "order below the minimum",
         "ITEM_MISSING": "add the free item to the order"
       }
-    }
+    },
+    "categories": "Categories",
+    "allItems": "All items"
   },
   "kiosk": {
     "title": "SELF-SERVICE KIOSK",
@@ -1260,7 +1265,28 @@
     "loadError": "Could not load the payments",
     "cardTerminals": {
       "title": "Card terminals",
-      "loadError": "Failed to load the card terminals"
+      "loadError": "Failed to load the card terminals",
+      "createFailed": "Failed to create the card terminal",
+      "colName": "Device name",
+      "colType": "Type",
+      "colSerial": "Serial number",
+      "colBranch": "Branch",
+      "colSettlement": "Settles to",
+      "colStatus": "Status",
+      "empty": "No card terminals yet. Add one with Register device.",
+      "allBranches": "All branches",
+      "unassigned": "Not set",
+      "types": {
+        "POS_TERMINAL": "Counter terminal",
+        "MOBILE_POS": "Courier mobile terminal",
+        "BANK_TRANSFER": "Bank transfer account"
+      },
+      "active": "Active",
+      "inactive": "Inactive",
+      "drawerTitle": "Register card terminal",
+      "namePlaceholder": "e.g. Counter card terminal",
+      "settlementAccount": "Settles to account",
+      "save": "Save"
     },
     "void": "Cancel",
     "tabTransactions": "Payment Records",
@@ -1324,7 +1350,17 @@
     "taraCheck": "Check with Tara",
     "taraChecked": "Tara answered; the payment is updated.",
     "taraStillWaiting": "Tara still has not answered. Gnext keeps asking.",
-    "taraCheckFailed": "Could not check with Tara."
+    "taraCheckFailed": "Could not check with Tara.",
+    "accounts": {
+      "colName": "Account name",
+      "colBank": "Bank",
+      "colNumber": "Account number",
+      "colIban": "IBAN (Sheba)",
+      "empty": "No settlement accounts yet.",
+      "drawerTitle": "New settlement account",
+      "namePlaceholder": "e.g. Mellat company account",
+      "bankPlaceholder": "e.g. Bank Mellat"
+    }
   },
   "refunds": {
     "reason": "Reason",
@@ -2076,6 +2112,131 @@
         "INTEGRATION": "Integrations",
         "V5_PREVIEW": "Preview"
       }
+    },
+    "names": {
+      "sales-summary": "Sales summary",
+      "product-sales": "Product and category sales",
+      "payments-by-method": "Payments by method",
+      "discounts": "Discounts given",
+      "cashier-shifts": "Cashier shifts",
+      "customer-credit": "Customer credit",
+      "aggregator-orders": "Online platform orders",
+      "snappfood-reconciliation": "Snappfood reconciliation",
+      "courier-settlements": "Courier settlements",
+      "tax": "Tax",
+      "sales-by-day": "Sales by day",
+      "sales-by-hour": "Sales by hour",
+      "sales-by-channel": "Sales by channel and order type",
+      "sales-by-employee": "Sales by employee",
+      "voids-cancellations": "Voids and cancellations"
+    },
+    "columns": {
+      "order_number": "Order number",
+      "net_sales": "Net sales",
+      "quantity": "Quantity",
+      "business_date": "Business date",
+      "refunded": "Refunded",
+      "reason": "Reason",
+      "branch_id": "Branch id",
+      "amount": "Amount",
+      "type": "Type",
+      "status": "Status",
+      "order_count": "Order count",
+      "kind": "Kind",
+      "item": "Item",
+      "discounts": "Discounts",
+      "tax": "Tax",
+      "paid": "Paid",
+      "packaging": "Packaging",
+      "outstanding": "Outstanding",
+      "order_id": "Order id",
+      "net": "Net",
+      "gross_subtotal": "Gross subtotal",
+      "gross_sales": "Gross sales",
+      "expected_cash": "Expected cash",
+      "discrepancy": "Discrepancy",
+      "delivery": "Delivery",
+      "date": "Date",
+      "channel": "Channel",
+      "average_check": "Average check",
+      "actual_cash": "Actual cash",
+      "variance": "Variance",
+      "unit_price": "Unit price",
+      "total_amount": "Total amount",
+      "taxable_amount": "Taxable amount",
+      "tax_amount": "Tax amount",
+      "succeeded": "Succeeded",
+      "state": "State",
+      "share_percent": "Share percent",
+      "reversed": "Reversed",
+      "product_name": "Product name",
+      "product_id": "Product id",
+      "orders": "Orders",
+      "occurred_at": "Occurred at",
+      "net_due": "Net due",
+      "method_name": "Method name",
+      "method_kind": "Method kind",
+      "external_id": "External id",
+      "discount_amount": "Discount amount",
+      "debit": "Debit",
+      "credit": "Credit",
+      "code": "Code",
+      "voided_lines": "Voided lines",
+      "verified_pos": "Verified pos",
+      "transaction_count": "Transaction count",
+      "tax_rate": "Tax rate",
+      "succeeded_amount": "Succeeded amount",
+      "source": "Source",
+      "shift_id": "Shift id",
+      "running_balance": "Running balance",
+      "reversed_amount": "Reversed amount",
+      "refunded_amount": "Refunded amount",
+      "refund_number": "Refund number",
+      "reconciliation_status": "Reconciliation status",
+      "reason_code": "Reason code",
+      "order_type": "Order type",
+      "opening_cash": "Opening cash",
+      "opened_at": "Opened at",
+      "closed_at": "Closed at",
+      "net_amount": "Net amount",
+      "expected_pos": "Expected pos",
+      "employee": "Employee",
+      "courier_id": "Courier id",
+      "cashier_id": "Cashier id",
+      "cancelled_orders": "Cancelled orders",
+      "hour": "Hour",
+      "order_total": "Order total",
+      "order_tax": "Order tax",
+      "revenue": "Revenue",
+      "reason_text": "Reason text",
+      "occurred_by": "Occurred by",
+      "action": "Action",
+      "to_state": "To state",
+      "shift_count": "Shift count",
+      "expected_total": "Expected total",
+      "actual_total": "Actual total",
+      "total_discrepancy": "Total discrepancy",
+      "refund_count": "Refund count",
+      "cashier": "Cashier",
+      "courier": "Courier",
+      "branch": "Branch",
+      "customer": "Customer"
+    },
+    "viewer": {
+      "subtitle": "Pick a report and a date range. Totals show under the rows.",
+      "exportCsv": "Export CSV",
+      "exportXlsx": "Export Excel",
+      "report": "Report",
+      "from": "From",
+      "to": "To",
+      "run": "Run report",
+      "results": "Results ({{count}} rows)",
+      "basis": "By business day",
+      "empty": "No data for these filters.",
+      "clear": "Clear filters",
+      "totals": "Totals",
+      "queryFailed": "The report could not be run",
+      "exportFailed": "The export failed"
     }
   },
   "simulation": {
@@ -3565,7 +3726,8 @@
       "authority": "Set discount caps and approval thresholds",
       "users": "Hire, move and deactivate staff — and set their pin",
       "usersNote": "Anyone may change their own pin. Setting somebody else’s is head office’s.",
-      "branches": "Open a branch, set its trading hours"
+      "branches": "Open a branch, set its trading hours",
+      "discountsNote": "A manager sets their own branch's people; head office any branch's."
     }
   },
   "profile": {
@@ -4038,5 +4200,9 @@
     "noLimit": "No limit",
     "removeDiscount": "Remove discount",
     "addDiscount": "Add group discount"
+  },
+  "importWizard": {
+    "rowInvalid": "Invalid",
+    "rowValid": "Valid"
   }
 }

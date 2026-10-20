@@ -42,7 +42,6 @@ import {
   TableCell,
   TableHead,
   TextField,
-  Container,
   Typography,
   IconButton,
   InputLabel,
@@ -412,7 +411,7 @@ export function ProductDetailPage() {
   const currentCategory = categories.find((c) => c.id === product?.category_id);
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Box sx={{ pb: 6 }}>
       {confirmDialog}
       {/* Header */}
       <Stack sx={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
@@ -747,7 +746,7 @@ export function ProductDetailPage() {
                       <TableCell sx={{ fontWeight: 'bold' }}>{v.name}</TableCell>
                       <TableCell>{v.barcode || '—'}</TableCell>
                       <TableCell sx={{ fontWeight: 'bold' }}>
-                        <span dir="ltr">{MoneyUtil.formatCurrency(v.base_price)} {currency}</span>
+                        <span><bdi dir="ltr">{MoneyUtil.formatCurrency(v.base_price)}</bdi> {currency}</span>
                       </TableCell>
                       <TableCell align="right">
                         <IconButton
@@ -811,7 +810,7 @@ export function ProductDetailPage() {
               {allOptionGroups.map((group) => {
                 const on = offeredIds(group);
                 return (
-                  <Card key={group.id} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                  <Card key={group.id} variant="outlined" sx={{ p: 2 }}>
                     <Stack sx={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                       <Box>
                         <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
@@ -922,7 +921,7 @@ export function ProductDetailPage() {
       </Dialog>
 
       <AddonGroupSheet open={!!sheet} group={sheet?.group ?? null} onClose={() => setSheet(null)} onSaved={handleGroupSaved} />
-    </Container>
+    </Box>
   );
 }
 

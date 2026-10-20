@@ -30,7 +30,7 @@ export function minutesSince(iso: string | null, now: number): number {
 }
 
 export function clockTime(iso: string, language: string): string {
-  return new Date(iso).toLocaleTimeString(language === 'fa' ? 'fa-IR' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleTimeString(language === 'fa' ? 'fa-IR-u-nu-latn' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
 export const owesMoney = (card: Pick<OnlineCard, 'collectAmount'>) => MoneyUtil.greaterThan(card.collectAmount || '0', '0');

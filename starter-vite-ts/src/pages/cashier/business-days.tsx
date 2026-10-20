@@ -102,7 +102,7 @@ export function BusinessDaysPage() {
         return (
           <Typography variant="caption">
             {t('cashier.ordersCount', 'Orders')}: {totals.orderCount ?? 0} · {t('cashier.sales', 'Sales')}:{' '}
-            <span dir="ltr">{MoneyUtil.formatCurrency(totals.totalSales || 0)} {currencyLabel}</span>
+            <span><bdi dir="ltr">{MoneyUtil.formatCurrency(totals.totalSales || 0)}</bdi> {currencyLabel}</span>
           </Typography>
         );
       },
@@ -134,7 +134,7 @@ export function BusinessDaysPage() {
   ];
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <Box sx={{ pb: 6 }}>
       <Stack sx={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>

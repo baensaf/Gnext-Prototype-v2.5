@@ -136,7 +136,7 @@ export function CustomerFieldsPage() {
         </Alert>
       )}
 
-      <Card sx={{ p: 3, borderRadius: 2 }}>
+      <Card sx={{ p: 3 }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', p: 6 }}>
             <CircularProgress />

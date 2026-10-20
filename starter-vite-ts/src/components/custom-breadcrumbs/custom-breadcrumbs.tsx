@@ -46,7 +46,7 @@ export function CustomBreadcrumbs({
         <Box sx={{ flexGrow: 1 }}>
           {/* HEADING */}
           {heading && (
-            <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
+            <Typography variant="h4" sx={{ fontWeight: 'bold', mb: links.length ? 1 : 0 }}>
               {heading}
             </Typography>
           )}

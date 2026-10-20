@@ -183,7 +183,7 @@ export default function WalletCashbackPage({ isEmbedded = false }: WalletCashbac
           <CircularProgress />
         </Box>
       ) : accounts.length === 0 ? (
-        <Card sx={{ p: 4, textAlign: 'center' }}>
+        <Card sx={{ p: 3, textAlign: 'center' }}>
           <Typography variant="body1" color="text.secondary">
             {t('wallet.noAccounts', 'No customer wallet accounts created yet. Wallets are auto-created on first cashback award or POS credit deposit.')}
           </Typography>

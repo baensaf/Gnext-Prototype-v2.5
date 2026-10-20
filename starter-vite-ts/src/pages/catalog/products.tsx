@@ -50,14 +50,16 @@ import { useDragSort, DragHandleCell } from 'src/components/drag-sort';
 import { useConfirm } from 'src/components/confirm-dialog/use-confirm';
 
 /** A product's price, or the range of its sizes' prices when it is sold in sizes. */
+// Each figure is isolated left-to-right (LRI … PDI) so a minus sign stays with it, while
+// the unit follows the page direction.
+const figure = (value: string | number) => `\u2066${MoneyUtil.formatCurrency(value)}\u2069`;
+
 const priceLabel = (p: Product, currency: string) => {
   const sizes = p.variants || [];
-  if (!sizes.length) return `${MoneyUtil.formatCurrency(p.base_price)} ${currency}`;
+  if (!sizes.length) return `${figure(p.base_price)} ${currency}`;
   const prices = sizes.map((v) => Number(v.base_price || 0));
   const [low, high] = [Math.min(...prices), Math.max(...prices)];
-  return low === high
-    ? `${MoneyUtil.formatCurrency(low)} ${currency}`
-    : `${MoneyUtil.formatCurrency(low)} – ${MoneyUtil.formatCurrency(high)} ${currency}`;
+  return low === high ? `${figure(low)} ${currency}` : `${figure(low)} – ${figure(high)} ${currency}`;
 };
 
 export function ProductsPage() {
@@ -253,7 +255,7 @@ export function ProductsPage() {
         </FormControl>
       </Stack>
 
-      <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+      <Card>
         <CardContent sx={{ p: 0 }}>
           <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
             <Table>
@@ -296,7 +298,7 @@ export function ProductsPage() {
                       </TableCell>
                       <TableCell>{catObj ? catObj.name : '—'}</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                        <span dir="ltr">{priceLabel(p, currency)}</span>
+                        <span>{priceLabel(p, currency)}</span>
                       </TableCell>
                       <TableCell align="center">{p.variants?.length || '—'}</TableCell>
                       <TableCell align="center">

@@ -1623,7 +1623,7 @@ export function PosOrderPage() {
                     fontSize: '0.7rem',
                   }}
                 >
-                  Categories
+                  {t('pos.categories', 'Categories')}
                 </Typography>
                 <Tabs
                   orientation="vertical"
@@ -1664,7 +1664,7 @@ export function PosOrderPage() {
                     },
                   }}
                 >
-                  <Tab label="All Items" value="" />
+                  <Tab label={t('pos.allItems', 'All items')} value="" />
                   {categories.map((c) => (
                     <Tab key={c.id} label={c.name} value={c.id} />
                   ))}

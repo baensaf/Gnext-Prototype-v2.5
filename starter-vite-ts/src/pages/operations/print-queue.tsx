@@ -160,7 +160,7 @@ export function PrintQueuePage() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ pb: 6 }}>
       <Stack direction="row" sx={{ mb: 3, justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
@@ -207,7 +207,7 @@ export function PrintQueuePage() {
       </Paper>
 
       {/* Jobs Table */}
-      <Card sx={{ borderRadius: 2 }}>
+      <Card>
         <Box sx={{ overflowX: 'auto' }}>
           <Table sx={{ minWidth: 760 }}>
             <TableHead>

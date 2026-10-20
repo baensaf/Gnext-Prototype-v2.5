@@ -136,7 +136,7 @@ export function PaymentsPage() {
                   <TableCell><code>{tx.order_number}</code></TableCell>
                   <TableCell><Chip label={tx.method_kind} size="small" variant="outlined" /></TableCell>
                   <TableCell>
-                    <strong dir="ltr">{MoneyUtil.formatCurrency(tx.amount)} {moneyUnit(tx.currency_code, i18n.language)}</strong>
+                    <strong><bdi dir="ltr">{MoneyUtil.formatCurrency(tx.amount)}</bdi> {moneyUnit(tx.currency_code, i18n.language)}</strong>
                   </TableCell>
                   <TableCell><code>{tx.reference || '-'}</code></TableCell>
                   <TableCell>

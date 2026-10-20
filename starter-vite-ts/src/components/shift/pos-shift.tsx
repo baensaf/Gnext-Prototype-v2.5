@@ -140,7 +140,7 @@ export function PosShiftGate({ register }: { register: RegisterShiftState }) {
   return (
     <>
       {register.isHeadOffice ? (
-        <Card sx={{ borderRadius: 3, p: 4, textAlign: 'center' }}>
+        <Card sx={{ p: 3, textAlign: 'center' }}>
           <Typography variant="h6">{t('shift.gate.headOffice', 'Choose a branch to sell in')}</Typography>
         </Card>
       ) : !ready ? (
@@ -152,7 +152,7 @@ export function PosShiftGate({ register }: { register: RegisterShiftState }) {
           onSetup={() => setSetupOpen(true)}
         />
       ) : (
-        <Card sx={{ borderRadius: 3, p: 5, textAlign: 'center' }}>
+        <Card sx={{ p: 5, textAlign: 'center' }}>
           <Stack spacing={2} sx={{ alignItems: 'center' }}>
             <PointOfSaleIcon color="disabled" sx={{ fontSize: 56 }} />
             <Typography variant="h5">{t('shift.gate.title', 'No shift is open on this register')}</Typography>

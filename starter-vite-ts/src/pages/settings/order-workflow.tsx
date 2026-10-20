@@ -244,7 +244,7 @@ export function OrderWorkflowSettingsPage() {
         <Grid container spacing={3}>
           {/* Time Windows & Governance */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={{ p: 3, height: '100%', borderRadius: 2 }}>
+            <Card sx={{ p: 3, height: '100%' }}>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2 }}>
                 <ScheduleIcon color="primary" />
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -315,7 +315,7 @@ export function OrderWorkflowSettingsPage() {
 
           {/* Lifecycle Automation */}
           <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={{ p: 3, height: '100%', borderRadius: 2 }}>
+            <Card sx={{ p: 3, height: '100%' }}>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2 }}>
                 <AutoAwesomeIcon color="warning" />
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -402,7 +402,7 @@ export function OrderWorkflowSettingsPage() {
 
           {/* Enabled Dining Channels */}
           <Grid size={{ xs: 12 }}>
-            <Card sx={{ p: 3, borderRadius: 2 }}>
+            <Card sx={{ p: 3 }}>
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2 }}>
                 <LocalDiningIcon color="success" />
                 <Typography variant="h6" sx={{ fontWeight: 700 }}>

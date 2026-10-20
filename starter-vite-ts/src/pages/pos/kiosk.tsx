@@ -645,7 +645,7 @@ export function KioskPage() {
         {/* Right Column: Products Grid */}
         <Grid size={{ xs: 12, sm: 8, md: 9, lg: 9.5 }}>
           {filteredProducts.length === 0 ? (
-            <Card sx={{ p: 5, textAlign: 'center', borderRadius: 3 }}>
+            <Card sx={{ p: 5, textAlign: 'center' }}>
               <Typography variant="h6" color="text.secondary">
                 No items found in this category
               </Typography>

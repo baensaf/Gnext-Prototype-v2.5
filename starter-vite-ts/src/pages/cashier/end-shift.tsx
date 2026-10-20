@@ -389,7 +389,7 @@ export function EndShiftPage() {
         <Grid container spacing={3}>
           <Grid size={{ xs: 12, md: 7 }}>
             <Stack spacing={3}>
-              <Card sx={{ p: 3, borderRadius: 2 }}>
+              <Card sx={{ p: 3 }}>
                 <ShiftReport summary={summary} />
               </Card>
               <CashMovements movements={movements} />

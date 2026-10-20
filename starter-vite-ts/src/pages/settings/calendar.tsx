@@ -108,7 +108,7 @@ export function CalendarSettingsPage() {
       )}
 
       <form onSubmit={handleSave}>
-        <Card sx={{ p: 3, borderRadius: 2, maxWidth: 720 }}>
+        <Card sx={{ p: 3, maxWidth: 720 }}>
           <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2 }}>
             <EventIcon color="primary" />
             <Typography variant="h6" sx={{ fontWeight: 700 }}>

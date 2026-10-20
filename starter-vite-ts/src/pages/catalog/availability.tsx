@@ -326,7 +326,7 @@ export function AvailabilityPage() {
                       </Typography>
                     </TableCell>
                     <TableCell>
-                      <span dir="ltr">{MoneyUtil.formatCurrency(p.base_price)} {currency}</span>
+                      <span><bdi dir="ltr">{MoneyUtil.formatCurrency(p.base_price)}</bdi> {currency}</span>
                     </TableCell>
                     <TableCell>
                       <Stack direction="row" sx={{ gap: 0.5, flexWrap: 'wrap' }}>
@@ -346,7 +346,7 @@ export function AvailabilityPage() {
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <span dir="ltr">{MoneyUtil.formatCurrency(v.base_price)} {currency}</span>
+                          <span><bdi dir="ltr">{MoneyUtil.formatCurrency(v.base_price)}</bdi> {currency}</span>
                         </TableCell>
                         {/* A stop on the whole product covers its variants; they have no state of their own then. */}
                         <TableCell>

@@ -3,6 +3,7 @@ import type { NavItemProps, NavSectionProps } from 'src/components/nav-section';
 import type { MainSectionProps, HeaderSectionProps, LayoutSectionProps } from '../core';
 
 import { merge } from 'es-toolkit';
+import { useState, useEffect } from 'react';
 import { useBoolean } from 'minimal-shared/hooks';
 
 import Box from '@mui/material/Box';
@@ -37,6 +38,8 @@ export type DashboardLayoutProps = LayoutBaseProps & {
     header?: HeaderSectionProps;
     nav?: {
       data?: NavSectionProps['data'];
+      /** Start with the narrow, icons-only menu, whatever the saved choice is. */
+      mini?: boolean;
     };
     main?: MainSectionProps;
   };
@@ -53,16 +56,27 @@ export function DashboardLayout({
 
   const settings = useSettingsContext();
 
-  const navVars = dashboardNavColorVars(theme, settings.state.navColor, settings.state.navLayout);
-
   const { value: open, onFalse: onClose, onTrue: onOpen } = useBoolean();
 
   const dynamicNavData = useNavData();
   const navData = slotProps?.nav?.data ?? dynamicNavData;
 
-  const isNavMini = settings.state.navLayout === 'mini';
+  // A page that needs the width (the register) asks for the narrow menu. Its toggle still
+  // opens the menu there, for that visit only, and leaves the saved choice alone.
+  const wantsMini = Boolean(slotProps?.nav?.mini);
+  const [miniOverride, setMiniOverride] = useState<boolean | null>(null);
+  useEffect(() => setMiniOverride(null), [wantsMini]);
+
   const isNavHorizontal = settings.state.navLayout === 'horizontal';
-  const isNavVertical = isNavMini || settings.state.navLayout === 'vertical';
+  const isNavMini =
+    !isNavHorizontal && (miniOverride ?? (wantsMini || settings.state.navLayout === 'mini'));
+  const isNavVertical = !isNavHorizontal;
+
+  const navVars = dashboardNavColorVars(
+    theme,
+    settings.state.navColor,
+    isNavHorizontal ? 'horizontal' : isNavMini ? 'mini' : 'vertical'
+  );
 
   const canDisplayItemByRole = (_allowedRoles: NavItemProps['allowedRoles']): boolean => true;
 
@@ -162,10 +176,9 @@ export function DashboardLayout({
       cssVars={navVars.section}
       checkPermissions={canDisplayItemByRole}
       onToggleNav={() =>
-        settings.setField(
-          'navLayout',
-          settings.state.navLayout === 'vertical' ? 'mini' : 'vertical'
-        )
+        wantsMini
+          ? setMiniOverride(!isNavMini)
+          : settings.setField('navLayout', settings.state.navLayout === 'vertical' ? 'mini' : 'vertical')
       }
     />
   );

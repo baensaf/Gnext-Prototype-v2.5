@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import {
@@ -32,6 +33,7 @@ import { CalendarDateField } from 'src/components/calendar-date-field';
 export function ReportViewerPage() {
   const { reportCode } = useParams();
   const router = useRouter();
+  const { t } = useTranslation();
 
   const [catalog, setCatalog] = useState<any[]>([]);
   const [selectedReportCode, setSelectedReportCode] = useState(reportCode || 'sales-summary');
@@ -66,11 +68,11 @@ export function ReportViewerPage() {
       });
       setReportResult(res.data);
     } catch {
-      alert('Failed to query report');
+      alert(t('reports.viewer.queryFailed', 'The report could not be run'));
     } finally {
       setLoading(false);
     }
-  }, [selectedReportCode, startDate, endDate]);
+  }, [selectedReportCode, startDate, endDate, t]);
 
   const handleExport = async (format: 'CSV' | 'XLSX') => {
     try {
@@ -99,7 +101,7 @@ export function ReportViewerPage() {
       link.click();
       document.body.removeChild(link);
     } catch {
-      alert('Export failed');
+      alert(t('reports.viewer.exportFailed', 'The export failed'));
     }
   };
 
@@ -115,38 +117,38 @@ export function ReportViewerPage() {
   const headers = reportResult?.rows?.length > 0 ? Object.keys(reportResult.rows[0]) : [];
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ pb: 6 }}>
       {/* Header & Catalog Selection */}
       <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-            Reports Catalog & Analytics
+            {t('reports.index.heading', 'Reports & Analytics')}
           </Typography>
 
           <Typography color="text.secondary">
-            Execute Section 13 business & operational reports with live summary totals.
+            {t('reports.viewer.subtitle', 'Pick a report and a date range. Totals show under the rows.')}
           </Typography>
         </Box>
 
         <Stack direction="row" spacing={2}>
           <Button variant="outlined" color="primary" onClick={() => handleExport('CSV')}>
-            Export UTF-8 CSV
+            {t('reports.viewer.exportCsv', 'Export CSV')}
           </Button>
           <Button variant="contained" color="primary" onClick={() => handleExport('XLSX')}>
-            Export Typed XLSX
+            {t('reports.viewer.exportXlsx', 'Export Excel')}
           </Button>
         </Stack>
       </Stack>
 
       {/* Filter bar */}
-      <Card sx={{ p: 3, borderRadius: 3, mb: 3 }}>
+      <Card sx={{ p: 3, mb: 3 }}>
         <Grid container spacing={2} sx={{ alignItems: 'center' }}>
           <Grid size={{ xs: 12, md: 4 }}>
             <FormControl fullWidth size="small">
-              <InputLabel>Select Report</InputLabel>
+              <InputLabel>{t('reports.viewer.report', 'Report')}</InputLabel>
               <Select
                 value={selectedReportCode}
-                label="Select Report"
+                label={t('reports.viewer.report', 'Report')}
                 onChange={(e) => {
                   const val = e.target.value;
                   setSelectedReportCode(val);
@@ -155,7 +157,7 @@ export function ReportViewerPage() {
               >
                 {catalog.map((rep) => (
                   <MenuItem key={rep.code} value={rep.code}>
-                    {rep.name} ({rep.category})
+                    {t(`reports.names.${rep.code}`, String(rep.name))}
                     {REPORT_LABELS[rep.code] && <VersionTag label={REPORT_LABELS[rep.code]} sx={{ ml: 1 }} />}
                   </MenuItem>
                 ))}
@@ -165,7 +167,7 @@ export function ReportViewerPage() {
 
           <Grid size={{ xs: 12, sm: 3 }}>
             <CalendarDateField
-              label="Start Date"
+              label={t('reports.viewer.from', 'From')}
               size="small"
               fullWidth
               slotProps={{ inputLabel: { shrink: true } }}
@@ -176,7 +178,7 @@ export function ReportViewerPage() {
 
           <Grid size={{ xs: 12, sm: 3 }}>
             <CalendarDateField
-              label="End Date"
+              label={t('reports.viewer.to', 'To')}
               size="small"
               fullWidth
               slotProps={{ inputLabel: { shrink: true } }}
@@ -187,29 +189,29 @@ export function ReportViewerPage() {
 
           <Grid size={{ xs: 12, sm: 2 }}>
             <Button variant="contained" fullWidth onClick={handleRunQuery} disabled={loading}>
-              Run Report
+              {t('reports.viewer.run', 'Run report')}
             </Button>
           </Grid>
         </Grid>
       </Card>
 
       {/* Report Data Table */}
-      <Card sx={{ p: 3, borderRadius: 3 }}>
+      <Card sx={{ p: 3 }}>
         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-            Report Results ({reportResult?.rows?.length || 0} rows)
+            {t('reports.viewer.results', { defaultValue: 'Results ({{count}} rows)', count: reportResult?.rows?.length || 0 })}
           </Typography>
 
-          <Chip label="Filter Basis: Business Date" color="info" size="small" sx={{ fontWeight: 'bold' }} />
+          <Chip label={t('reports.viewer.basis', 'By business day')} color="info" size="small" sx={{ fontWeight: 'bold' }} />
         </Stack>
 
         {reportResult?.rows?.length === 0 ? (
           <Box sx={{ p: 4, textAlign: 'center' }}>
             <Typography variant="body1" color="text.secondary">
-              No data for the selected filters.
+              {t('reports.viewer.empty', 'No data for these filters.')}
             </Typography>
             <Button variant="text" color="primary" sx={{ mt: 1 }} onClick={() => { setStartDate(''); setEndDate(''); handleRunQuery(); }}>
-              Clear filters
+              {t('reports.viewer.clear', 'Clear filters')}
             </Button>
           </Box>
         ) : (
@@ -219,7 +221,7 @@ export function ReportViewerPage() {
                 <TableRow>
                   {headers.map((h) => (
                     <TableCell key={h} sx={{ fontWeight: 'bold', textTransform: 'capitalize' }}>
-                      {h.replace(/_/g, ' ')}
+                      {t(`reports.columns.${h}`, h.replace(/_/g, ' '))}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -238,7 +240,7 @@ export function ReportViewerPage() {
                 {/* Summary Totals Row */}
                 {reportResult?.summary_totals && (
                   <TableRow sx={{ bgcolor: 'action.hover' }}>
-                    <TableCell sx={{ fontWeight: 'bold' }}>SUMMARY TOTALS</TableCell>
+                    <TableCell sx={{ fontWeight: 'bold' }}>{t('reports.viewer.totals', 'Totals')}</TableCell>
                     {headers.slice(1).map((h) => {
                       const totalVal = reportResult.summary_totals[h] || reportResult.summary_totals[h + '_total'] || '-';
                       return (

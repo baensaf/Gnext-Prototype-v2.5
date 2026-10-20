@@ -133,14 +133,11 @@ export function SimulationCenterPage() {
   const ArrowIcon = isRtl ? ArrowBackIcon : ArrowForwardIcon;
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <Box sx={{ pb: 6 }}>
       {/* Breadcrumbs & Header */}
       <CustomBreadcrumbs
         heading={t('simulation.hub.title', 'External Integration Simulation Center')}
-        links={[
-          { name: t('nav.dashboard', 'Home'), href: '/app/dashboard' },
-          { name: t('simulation.breadcrumb', 'Simulation Hub') },
-        ]}
+        links={[]}
         action={
           <Button
             variant="outlined"
@@ -171,7 +168,7 @@ export function SimulationCenterPage() {
       {/* 1. Subsystem Metric Cards */}
       <Grid container spacing={2.5} sx={{ mb: 4 }}>
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <Card sx={{ p: 2.5, borderRadius: 2.5, boxShadow: 2, borderLeft: '4px solid', borderColor: 'primary.main' }}>
+          <Card sx={{ p: 3, borderLeft: '4px solid', borderColor: 'primary.main' }}>
             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
               {t('simulation.hub.stats.totalLogs', 'Logged Events')}
             </Typography>
@@ -181,7 +178,7 @@ export function SimulationCenterPage() {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <Card sx={{ p: 2.5, borderRadius: 2.5, boxShadow: 2, borderLeft: '4px solid', borderColor: '#e91e63' }}>
+          <Card sx={{ p: 3, borderLeft: '4px solid', borderColor: '#e91e63' }}>
             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
               {t('simulation.hub.stats.snappfoodOrders', 'Snappfood Receipts')}
             </Typography>
@@ -191,7 +188,7 @@ export function SimulationCenterPage() {
           </Card>
         </Grid>
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <Card sx={{ p: 2.5, borderRadius: 2.5, boxShadow: 2, borderLeft: '4px solid', borderColor: 'warning.main' }}>
+          <Card sx={{ p: 3, borderLeft: '4px solid', borderColor: 'warning.main' }}>
             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
               {t('simulation.hub.stats.activePrinters', 'Hardware Devices')}
             </Typography>
@@ -203,7 +200,7 @@ export function SimulationCenterPage() {
       </Grid>
 
       {/* 2. Quick Simulator Action Bar */}
-      <Card sx={{ p: 2.5, mb: 4, borderRadius: 3, bgcolor: 'background.neutral' }}>
+      <Card sx={{ p: 3, mb: 4, bgcolor: 'background.neutral' }}>
         <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1.5, flexWrap: 'wrap', gap: 1 }}>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <ElectricBoltIcon color="warning" />
@@ -243,7 +240,7 @@ export function SimulationCenterPage() {
       <Grid container spacing={3} sx={{ mb: 4 }}>
         {/* Card 1: Snappfood */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ p: 3, borderRadius: 3, boxShadow: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <Card sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <Box>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
                 <Typography variant="h6" sx={{ fontWeight: 800, color: '#e91e63' }}>
@@ -273,7 +270,7 @@ export function SimulationCenterPage() {
 
         {/* Card 2: Hardware & POS */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ p: 3, borderRadius: 3, boxShadow: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <Card sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <Box>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
                 <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main' }}>
@@ -303,7 +300,7 @@ export function SimulationCenterPage() {
 
         {/* Card 3: Logs */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ p: 3, borderRadius: 3, boxShadow: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <Card sx={{ p: 3, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
             <Box>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
                 <Typography variant="h6" sx={{ fontWeight: 800, color: 'text.primary' }}>
@@ -333,7 +330,7 @@ export function SimulationCenterPage() {
       </Grid>
 
       {/* 4. Unified Cross-Provider Recent Activity Feed */}
-      <Card sx={{ p: 3, borderRadius: 3, boxShadow: 2 }}>
+      <Card sx={{ p: 3 }}>
         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" sx={{ fontWeight: 800 }}>
             {t('simulation.hub.recentActivity', 'Recent Cross-Provider Integration Events')}

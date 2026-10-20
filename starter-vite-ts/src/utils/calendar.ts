@@ -55,7 +55,7 @@ type Part = 'year' | 'month' | 'day' | 'hour' | 'minute';
 function parts(at: Date, wanted: Part[]): Record<Part, string> {
   const { calendar } = useCalendarStore.getState();
   const persian = i18n.language?.startsWith('fa');
-  const locale = `${persian ? 'fa-IR' : 'en-US'}-u-ca-${calendar === 'JALALI' ? 'persian' : 'gregory'}-nu-${persian ? 'arabext' : 'latn'}`;
+  const locale = `${persian ? 'fa-IR' : 'en-US'}-u-ca-${calendar === 'JALALI' ? 'persian' : 'gregory'}-nu-latn`;
   const formatted = new Intl.DateTimeFormat(locale, {
     timeZone: BUSINESS_TIME_ZONE,
     hourCycle: 'h23',

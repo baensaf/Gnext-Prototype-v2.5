@@ -109,6 +109,7 @@ export function ReportsIndexPage() {
     ? catalog.filter(
         (entry) =>
           entry.name.toLowerCase().includes(term) ||
+          t(`reports.names.${entry.code}`, entry.name).toLowerCase().includes(term) ||
           entry.code.includes(term) ||
           (CATEGORY_LABELS[entry.category] ?? entry.category).toLowerCase().includes(term)
       )
@@ -124,10 +125,7 @@ export function ReportsIndexPage() {
     <DashboardContent>
       <CustomBreadcrumbs
         heading={t('reports.index.heading', 'Reports & Analytics')}
-        links={[
-          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
-          { name: t('reports.index.heading', 'Reports & Analytics') },
-        ]}
+        links={[]}
         sx={{ mb: 3 }}
       />
 
@@ -209,17 +207,14 @@ export function ReportsIndexPage() {
                           >
                             <Box sx={{ minWidth: 0 }}>
                               <Typography variant="subtitle2" sx={{ mb: 0.25 }}>
-                                {entry.name}
+                                {t(`reports.names.${entry.code}`, entry.name)}
                                 {REPORT_LABELS[entry.code] && <VersionTag label={REPORT_LABELS[entry.code]} sx={{ ml: 1 }} />}
                               </Typography>
-                              <Typography
-                                variant="caption"
-                                sx={{ color: 'text.disabled', fontFamily: 'monospace' }}
-                              >
-                                {entry.code}
-                              </Typography>
                             </Box>
-                            <ChevronRightIcon fontSize="small" sx={{ color: 'text.disabled' }} />
+                            <ChevronRightIcon
+                              fontSize="small"
+                              sx={{ color: 'text.disabled', '[dir=rtl] &': { transform: 'scaleX(-1)' } }}
+                            />
                           </Stack>
                         </CardContent>
                       </Card>

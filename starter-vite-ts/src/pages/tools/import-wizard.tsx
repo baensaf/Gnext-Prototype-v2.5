@@ -210,7 +210,7 @@ export function ImportWizardPage() {
 
       {/* STEP 0: Upload & Target Entity */}
       {activeStep === 0 && (
-        <Card sx={{ p: 4 }}>
+        <Card sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
             {t('tools.importWizard.steps.step1', 'Step 1: Select Target Entity & Upload Spreadsheet (.xlsx / .csv)')}
           </Typography>
@@ -260,7 +260,7 @@ export function ImportWizardPage() {
 
       {/* STEP 1: Column Auto-Mapping */}
       {activeStep === 1 && (
-        <Card sx={{ p: 4 }}>
+        <Card sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
             {t('tools.importWizard.steps.step2', 'Step 2: Column Mapping & Auto-Match Engine')}
           </Typography>
@@ -317,7 +317,7 @@ export function ImportWizardPage() {
 
       {/* STEP 2: Value Mapping */}
       {activeStep === 2 && (
-        <Card sx={{ p: 4 }}>
+        <Card sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
             {t('tools.importWizard.steps.step3', 'Step 3: Distinct Spreadsheet Value Mapping')}
           </Typography>
@@ -363,7 +363,7 @@ export function ImportWizardPage() {
 
       {/* STEP 3: Dry-Run Validation */}
       {activeStep === 3 && activeJob && (
-        <Card sx={{ p: 4 }}>
+        <Card sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 1, fontWeight: 600 }}>
             {t('tools.importWizard.steps.step4', 'Step 4: Backend Dry-Run Validation & Row Error Inspection')}
           </Typography>
@@ -405,9 +405,9 @@ export function ImportWizardPage() {
                       <TableCell>{r.row_number}</TableCell>
                       <TableCell>
                         {isError ? (
-                          <Chip label="INVALID" color="error" size="small" />
+                          <Chip label={t('importWizard.rowInvalid', 'Invalid')} color="error" size="small" />
                         ) : (
-                          <Chip label="VALID" color="success" size="small" />
+                          <Chip label={t('importWizard.rowValid', 'Valid')} color="success" size="small" />
                         )}
                       </TableCell>
                       <TableCell><code>{JSON.stringify(r.parsed_data || r.raw_data)}</code></TableCell>
@@ -433,7 +433,7 @@ export function ImportWizardPage() {
 
       {/* STEP 4: Execution & Summary */}
       {activeStep === 4 && importSummary && (
-        <Card sx={{ p: 4, textAlign: 'center' }}>
+        <Card sx={{ p: 3, textAlign: 'center' }}>
           <Iconify icon={'solar:check-circle-bold' as any} width={64} height={64} sx={{ color: 'success.main', mb: 2 }} />
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
             {t('tools.importWizard.importCompleted', 'Import Job Executed Successfully!')}
