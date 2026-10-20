@@ -281,10 +281,10 @@ export function TerminalsPage() {
         </Stack>
       )}
 
-      <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+      <Card>
         <CardContent sx={{ p: 0 }}>
           <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 3 }}>
-            <Table>
+            <Table sx={{ '& th': { whiteSpace: 'nowrap' } }}>
               <TableHead>
                 <TableRow>
                   <TableCell>{t('operations.terminals.colCode', 'Code')}</TableCell>
@@ -318,9 +318,9 @@ export function TerminalsPage() {
                     const branchObj = branches.find((b) => b.id === item.branch_id);
                     return (
                       <TableRow key={item.id} hover>
-                        <TableCell><code>{item.code}</code></TableCell>
-                        <TableCell sx={{ fontWeight: 'bold' }}>{item.name}</TableCell>
-                        <TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}><code>{item.code}</code></TableCell>
+                        <TableCell sx={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>{item.name}</TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
                           <Chip
                             label={t(`operations.terminals.types.${item.terminal_type === 'CASHIER' ? 'POS' : item.terminal_type}`, item.terminal_type)}
                             color={getTypeChipColor(item.terminal_type) as any}
@@ -328,7 +328,7 @@ export function TerminalsPage() {
                             sx={{ fontWeight: 'bold' }}
                           />
                         </TableCell>
-                        <TableCell>{branchObj ? `${branchObj.name} (${branchObj.code})` : '—'}</TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>{branchObj ? branchObj.name : '—'}</TableCell>
                         <TableCell sx={{ minWidth: 200 }}>
                           {/* The one device this register answers to (Toast and Square pair one device each). */}
                           {item.terminal_type !== 'CASHIER' ? (

@@ -266,7 +266,7 @@ export function RolesMatrixPage() {
       </Stack>
 
       {cells.map((group) => (
-        <Card key={group.titleKey} sx={{ mb: 3, borderRadius: 2 }}>
+        <Card key={group.titleKey} sx={{ mb: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 700, p: 2.5, pb: 1.5 }}>
             {t(group.titleKey, group.title)}
           </Typography>
@@ -297,7 +297,7 @@ export function RolesMatrixPage() {
                     </TableCell>
                     {COLUMNS.map((col) => (
                       <TableCell key={col.id} align="center">
-                        {renderCell(row.access[col.id], row.note)}
+                        {renderCell(row.access[col.id], row.note && t(`${row.labelKey}Note`, row.note))}
                       </TableCell>
                     ))}
                   </TableRow>

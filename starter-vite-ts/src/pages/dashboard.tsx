@@ -90,7 +90,7 @@ export function DashboardPage() {
       {/* KPI Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+          <Card>
             <CardContent>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
@@ -110,7 +110,7 @@ export function DashboardPage() {
         </Grid>
 
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+          <Card>
             <CardContent>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
@@ -130,7 +130,7 @@ export function DashboardPage() {
         </Grid>
 
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+          <Card>
             <CardContent>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
@@ -150,7 +150,7 @@ export function DashboardPage() {
         </Grid>
 
         <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-          <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+          <Card>
             <CardContent>
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <Box>
@@ -171,7 +171,7 @@ export function DashboardPage() {
       </Grid>
 
       {/* Branch Status Section */}
-      <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+      <Card>
         <CardContent>
           <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
@@ -198,12 +198,12 @@ export function DashboardPage() {
                     <TableCell><code>{b.code}</code></TableCell>
                     <TableCell sx={{ fontWeight: 'bold' }}>{b.name}</TableCell>
                     <TableCell>
-                      <Chip label={b.is_active ? 'ONLINE' : 'OFFLINE'} color={b.is_active ? 'success' : 'default'} size="small" />
+                      <Chip label={b.is_active ? t('dashboard.branchOnline', 'Online') : t('dashboard.branchOffline', 'Offline')} color={b.is_active ? 'success' : 'default'} size="small" />
                     </TableCell>
                     <TableCell>{b.time_zone || 'Asia/Tehran'}</TableCell>
                     <TableCell>{b.phone || '—'}</TableCell>
                     <TableCell>
-                      <Chip label="HEALTHY" color="info" size="small" />
+                      <Chip label={t('dashboard.agentHealthy', 'Healthy')} color="info" size="small" />
                     </TableCell>
                   </TableRow>
                 ))}

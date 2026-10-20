@@ -272,7 +272,7 @@ export function SimulationPaymentsPrintersPage() {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <Box sx={{ pb: 6 }}>
       <CustomBreadcrumbs
         heading={t('simulation.hardware.title', 'Hardware Failure & Response Simulator')}
         links={[
@@ -331,7 +331,7 @@ export function SimulationPaymentsPrintersPage() {
             {tab === 'POS' && (
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Card variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
+                  <Card variant="outlined" sx={{ p: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                       {t('simulation.hardware.pos.cardTitle', 'Inject POS Terminal Event')}
                     </Typography>
@@ -401,7 +401,7 @@ export function SimulationPaymentsPrintersPage() {
                 </Grid>
 
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Card variant="outlined" sx={{ p: 3, height: '100%', borderRadius: 2 }}>
+                  <Card variant="outlined" sx={{ p: 3, height: '100%' }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                       {t('simulation.hardware.pos.responseTitle', 'Terminal Response & Telemetry')}
                     </Typography>
@@ -440,7 +440,7 @@ export function SimulationPaymentsPrintersPage() {
                     const st = printerStatuses[p.id] || { status: 'ONLINE', paper: true, cover: true };
                     return (
                       <Grid key={p.id} size={{ xs: 12, md: 6, lg: 4 }}>
-                        <Card variant="outlined" sx={{ p: 2.5, borderRadius: 2 }}>
+                        <Card variant="outlined" sx={{ p: 3 }}>
                           <CardHeader
                             title={p.name}
                             subheader={`Code: ${p.code} | Address: ${p.simulated_address || '192.168.1.100'}`}
@@ -505,7 +505,7 @@ export function SimulationPaymentsPrintersPage() {
                 </Grid>
 
                 {printResult && (
-                  <Card variant="outlined" sx={{ p: 3, mt: 2, borderRadius: 2 }}>
+                  <Card variant="outlined" sx={{ p: 3, mt: 2 }}>
                     <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>
                       {t('simulation.hardware.printers.jobResult', 'Print Job Result:')} {printResult.printerName}
                     </Typography>
@@ -520,7 +520,7 @@ export function SimulationPaymentsPrintersPage() {
             {tab === 'GATEWAY' && (
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Card variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
+                  <Card variant="outlined" sx={{ p: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                       {t('simulation.hardware.gateway.title', 'Tara Digital Wallet & IPG Gateway')}
                     </Typography>
@@ -572,7 +572,7 @@ export function SimulationPaymentsPrintersPage() {
                 </Grid>
 
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Card variant="outlined" sx={{ p: 3, height: '100%', borderRadius: 2 }}>
+                  <Card variant="outlined" sx={{ p: 3, height: '100%' }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                       {t('simulation.hardware.gateway.responseTitle', 'Gateway Transaction Log')}
                     </Typography>
@@ -596,7 +596,7 @@ export function SimulationPaymentsPrintersPage() {
                   {t('simulation.hardware.history.title', 'Recent Hardware Simulation Events')}
                 </Typography>
                 {simLogs.map((log, idx) => (
-                  <Card key={idx} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                  <Card key={idx} variant="outlined" sx={{ p: 2 }}>
                     <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
                         {log.scenario || log.printerName || log.action || 'SIMULATION_EVENT'}

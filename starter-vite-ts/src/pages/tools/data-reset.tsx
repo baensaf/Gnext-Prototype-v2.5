@@ -11,7 +11,6 @@ import {
   Paper,
   Button,
   Dialog,
-  Container,
   TextField,
   Typography,
   DialogTitle,
@@ -123,7 +122,7 @@ export function DataResetPage() {
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
+    <Box sx={{ pb: 6 }}>
       <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
         <Box>
           <Typography variant="h4" sx={{ fontWeight: 700 }}>
@@ -160,7 +159,7 @@ export function DataResetPage() {
 
       <Grid container spacing={3}>
         <Grid size={{ xs: 12 }}>
-          <Card sx={{ p: 4, border: '1px solid', borderColor: 'primary.main' }}>
+          <Card sx={{ p: 3, border: '1px solid', borderColor: 'primary.main' }}>
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between' }}>
               <Box>
                 <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 1 }}>
@@ -186,7 +185,7 @@ export function DataResetPage() {
 
         {/* DATA RESET CARD */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ p: 4, height: '100%' }}>
+          <Card sx={{ p: 3, height: '100%' }}>
             <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 2 }}>
               <Iconify icon={"solar:trash-bin-trash-bold" as any} width={32} height={32} sx={{ color: 'error.main' }} />
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -216,7 +215,7 @@ export function DataResetPage() {
 
         {/* SEED PROFILES CARD */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ p: 4, height: '100%' }}>
+          <Card sx={{ p: 3, height: '100%' }}>
             <Stack direction="row" spacing={2} sx={{ alignItems: 'center', mb: 2 }}>
               <Iconify icon={"solar:layers-bold" as any} width={32} height={32} sx={{ color: 'primary.main' }} />
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
@@ -348,6 +347,6 @@ export function DataResetPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </Box>
   );
 }

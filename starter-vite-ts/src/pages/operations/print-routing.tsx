@@ -290,7 +290,7 @@ export function PrintRoutingPage() {
         </Alert>
       ) : (
         <Stack spacing={3}>
-          <Card sx={{ p: 3, borderRadius: 2 }}>
+          <Card sx={{ p: 3 }}>
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' } }}>
               <FormControl sx={{ minWidth: 260 }} size="small">
                 <InputLabel>{t('operations.printRouting.defaultPrinter')}</InputLabel>
@@ -331,7 +331,7 @@ export function PrintRoutingPage() {
             )}
           </Card>
 
-          <Card sx={{ borderRadius: 2 }}>
+          <Card>
             <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ px: 3, borderBottom: 1, borderColor: 'divider' }}>
               <Tab value="printers" label={t('operations.printRouting.tabPrinters')} />
               <Tab value="items" label={t('operations.printRouting.tabItems')} />

@@ -298,7 +298,7 @@ export function CustomersPage() {
             { label: t('credit.totalAvailable'), value: creditSummary.total_available, color: 'primary.main' },
           ].map((f) => (
             <Grid key={f.label} size={{ xs: 12, sm: 4 }}>
-              <Card variant="outlined" sx={{ borderRadius: 2 }}>
+              <Card variant="outlined">
                 <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                   <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                     {f.label}

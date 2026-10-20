@@ -24,9 +24,14 @@ export function ThemeProvider({ themeOverrides, children, ...other }: ThemeProvi
   // MUI's own words - table paging, breadcrumbs, alerts - follow the app's language, so a
   // Persian page does not say "Rows per page".
   const { i18n } = useTranslation();
+  // The layout's direction follows the language on screen. A direction saved separately can
+  // disagree with it (sign-in applies the account's language without touching it), and left
+  // English text laid out right to left.
+  const direction = i18n.language === 'fa' ? 'rtl' : 'ltr';
+  const settingsState = { ...settings.state, direction } as const;
 
   const theme = createTheme({
-    settingsState: settings.state,
+    settingsState,
     themeOverrides,
     localeComponents: i18n.language === 'fa' ? faIR : enUS,
   });
@@ -34,7 +39,7 @@ export function ThemeProvider({ themeOverrides, children, ...other }: ThemeProvi
   return (
     <ThemeVarsProvider disableTransitionOnChange theme={theme} {...other}>
       <CssBaseline />
-      <Rtl direction={settings.state.direction}>{children}</Rtl>
+      <Rtl direction={direction}>{children}</Rtl>
     </ThemeVarsProvider>
   );
 }

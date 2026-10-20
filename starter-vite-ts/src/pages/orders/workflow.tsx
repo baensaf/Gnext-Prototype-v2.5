@@ -980,7 +980,7 @@ export function OrdersWorkflowPage() {
       below = (
         <Typography color="error.main" sx={{ display: 'block', fontWeight: 700 }} variant="caption">
           {/* The total above names the currency. */}
-          <span dir="ltr">{t('orders.table.due', { amount: MoneyUtil.formatCurrency(order.due_amount) })}</span>
+          <span>{t('orders.table.due', { amount: MoneyUtil.formatCurrency(order.due_amount) })}</span>
         </Typography>
       );
     } else if (paidNothing) {
@@ -993,7 +993,7 @@ export function OrdersWorkflowPage() {
     return (
       <Box sx={{ textAlign: 'right' }}>
         <Typography variant="body2" sx={{ fontWeight: 700 }}>
-          <span dir="ltr">{MoneyUtil.formatCurrency(displayTotalOf(order))} {currency}</span>
+          <span><bdi dir="ltr">{MoneyUtil.formatCurrency(displayTotalOf(order))}</bdi> {currency}</span>
         </Typography>
         {below}
       </Box>
@@ -1139,7 +1139,7 @@ export function OrdersWorkflowPage() {
       renderCell: ({ row }) =>
         MoneyUtil.greaterThan(row.due_amount || '0', '0') ? (
           <Typography variant="body2" color="error.main" sx={{ fontWeight: 700 }}>
-            <span dir="ltr">{MoneyUtil.formatCurrency(row.due_amount)} {currency}</span>
+            <span><bdi dir="ltr">{MoneyUtil.formatCurrency(row.due_amount)}</bdi> {currency}</span>
           </Typography>
         ) : null,
     },
@@ -1347,7 +1347,7 @@ export function OrdersWorkflowPage() {
         spacing={3}
         sx={{ alignItems: { md: 'center', xs: 'flex-start' }, justifyContent: 'space-between', mb: 3 }}
       >
-        <Typography variant="h4" sx={{ fontWeight: 800 }}>
+        <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
           {t('orders.title')}
         </Typography>
 
@@ -1844,10 +1844,10 @@ export function OrdersWorkflowPage() {
                                 {MoneyUtil.format(item.quantity, 0)}
                               </TableCell>
                               <TableCell align="right">
-                                <span dir="ltr">{MoneyUtil.formatCurrency(item.unit_price)}</span>
+                                <span><bdi dir="ltr">{MoneyUtil.formatCurrency(item.unit_price)}</bdi></span>
                               </TableCell>
                               <TableCell align="right" sx={{ fontWeight: 700 }}>
-                                <span dir="ltr">{MoneyUtil.formatCurrency(item.total_amount || MoneyUtil.multiply(item.quantity, item.unit_price, 2))} {currency}</span>
+                                <span><bdi dir="ltr">{MoneyUtil.formatCurrency(item.total_amount || MoneyUtil.multiply(item.quantity, item.unit_price, 2))}</bdi> {currency}</span>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -1864,24 +1864,24 @@ export function OrdersWorkflowPage() {
                     <Stack spacing={1}>
                       <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                         <Typography variant="body2" color="text.secondary">{t('orders.drawer.grossSubtotal')}</Typography>
-                        <Typography variant="body2" dir="ltr">{MoneyUtil.formatCurrency(selectedDrawerOrder.subtotal_amount || selectedDrawerOrder.total_amount)} {currency}</Typography>
+                        <Typography variant="body2"><bdi dir="ltr">{MoneyUtil.formatCurrency(selectedDrawerOrder.subtotal_amount || selectedDrawerOrder.total_amount)}</bdi> {currency}</Typography>
                       </Stack>
                       {MoneyUtil.greaterThan(selectedDrawerOrder.discount_amount || '0', '0') && (
                         <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                           <Typography variant="body2" color="success.main">{t('orders.drawer.discountApplied')}</Typography>
-                          <Typography variant="body2" color="success.main" dir="ltr">-{MoneyUtil.formatCurrency(selectedDrawerOrder.discount_amount)} {currency}</Typography>
+                          <Typography variant="body2" color="success.main"><bdi dir="ltr">-{MoneyUtil.formatCurrency(selectedDrawerOrder.discount_amount)}</bdi> {currency}</Typography>
                         </Stack>
                       )}
                       {MoneyUtil.greaterThan(selectedDrawerOrder.delivery_fee || '0', '0') && (
                         <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                           <Typography variant="body2" color="text.secondary">{t('orders.drawer.deliveryFee')}</Typography>
-                          <Typography variant="body2" dir="ltr">+{MoneyUtil.formatCurrency(selectedDrawerOrder.delivery_fee)} {currency}</Typography>
+                          <Typography variant="body2"><bdi dir="ltr">+{MoneyUtil.formatCurrency(selectedDrawerOrder.delivery_fee)}</bdi> {currency}</Typography>
                         </Stack>
                       )}
                       {MoneyUtil.greaterThan(selectedDrawerOrder.tax_amount || '0', '0') && (
                         <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
                           <Typography variant="body2" color="text.secondary">{t('orders.drawer.vat')}</Typography>
-                          <Typography variant="body2" dir="ltr">+{MoneyUtil.formatCurrency(selectedDrawerOrder.tax_amount)} {currency}</Typography>
+                          <Typography variant="body2"><bdi dir="ltr">+{MoneyUtil.formatCurrency(selectedDrawerOrder.tax_amount)}</bdi> {currency}</Typography>
                         </Stack>
                       )}
                       <Divider sx={{ my: 0.5 }} />
@@ -1913,8 +1913,8 @@ export function OrdersWorkflowPage() {
                             {t('orders.table.paidToSnappfood')}
                           </Typography>
                         ) : (
-                          <Typography variant="body2" sx={{ fontWeight: 700, color: MoneyUtil.greaterThan(selectedDrawerOrder.due_amount || '0', '0') ? 'error.main' : 'success.main' }} dir="ltr">
-                            {MoneyUtil.formatCurrency(selectedDrawerOrder.due_amount || '0')} {currency}
+                          <Typography variant="body2" sx={{ fontWeight: 700, color: MoneyUtil.greaterThan(selectedDrawerOrder.due_amount || '0', '0') ? 'error.main' : 'success.main' }}>
+                            <bdi dir="ltr">{MoneyUtil.formatCurrency(selectedDrawerOrder.due_amount || '0')}</bdi> {currency}
                           </Typography>
                         )}
                       </Stack>
@@ -1972,7 +1972,7 @@ export function OrdersWorkflowPage() {
                                   />
                                 </TableCell>
                                 <TableCell align="right" sx={{ fontWeight: 700 }}>
-                                  <span dir="ltr">{MoneyUtil.formatCurrency(payment.amount)} {currency}</span>
+                                  <span><bdi dir="ltr">{MoneyUtil.formatCurrency(payment.amount)}</bdi> {currency}</span>
                                 </TableCell>
                               </TableRow>
                             ))}

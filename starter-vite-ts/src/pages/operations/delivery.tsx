@@ -114,7 +114,7 @@ function DeliveryCard({
   const toCollect = delivery.outstanding_total ?? delivery.grand_total ?? '0';
 
   return (
-    <Card elevation={2} sx={{ borderRadius: 2 }}>
+    <Card elevation={2}>
       <CardContent sx={{ p: 2 }}>
         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
           <Box>
@@ -426,7 +426,7 @@ export function DeliveryPage() {
   const eligibleCouriers = couriers;
 
   return (
-    <Box sx={{ p: 3 }} aria-busy={loading || Boolean(pendingAction)}>
+    <Box sx={{ pb: 6 }} aria-busy={loading || Boolean(pendingAction)}>
 
       {/* Header. No refresh button: the board is pushed live (useLiveRefresh), with a poll as backup. */}
       <Typography variant="h4" sx={{ mb: 3, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -521,7 +521,7 @@ export function DeliveryPage() {
 
       {/* COURIERS TAB */}
       {tab === 'COURIERS' && (
-        <Card sx={{ p: 3, borderRadius: 2 }}>
+        <Card sx={{ p: 3 }}>
           <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('delivery.couriers.title')} ({couriers.length})</Typography>
             {/* A cashier adds a courier too; their pay is still the manager's. */}
@@ -559,7 +559,7 @@ export function DeliveryPage() {
 
       {/* ZONES TAB */}
       {tab === 'ZONES' && (
-        <Card sx={{ p: 3, borderRadius: 2 }}>
+        <Card sx={{ p: 3 }}>
           <Stack direction="row" sx={{ mb: 2, justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6" sx={{ fontWeight: 'bold' }}>{t('delivery.zones.title')} ({zones.length})</Typography>
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setZoneModalOpen(true)}>

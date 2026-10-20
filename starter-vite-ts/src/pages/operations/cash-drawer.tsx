@@ -39,8 +39,8 @@ import { fDate , fTime } from 'src/utils/format-time';
 import { shiftApi } from 'src/api/shiftApi';
 import { tenantApi } from 'src/api/tenantApi';
 import { useAuthStore } from 'src/store/useAuthStore';
+import { isApproverRole } from 'src/config/role-access';
 import { useBranchContext } from 'src/contexts/branch-context';
-import { isApproverRole, homePathForRole } from 'src/config/role-access';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import { OpenShiftDialog } from 'src/components/shift/open-shift-dialog';
@@ -146,7 +146,7 @@ export function CashDrawerPage() {
 
     return (
       <Grid key={term.id} size={{ xs: 12, md: 6, xl: 4 }}>
-        <Card sx={{ height: '100%', borderRadius: 3, borderColor: isThisDevice ? 'primary.main' : undefined }} variant="outlined">
+        <Card sx={{ height: '100%', borderColor: isThisDevice ? 'primary.main' : undefined }} variant="outlined">
           <CardContent>
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1.5, flexWrap: 'wrap' }}>
               <PointOfSaleIcon color={shift ? 'success' : 'disabled'} />
@@ -227,11 +227,7 @@ export function CashDrawerPage() {
     <Box sx={{ pb: 6 }}>
       <CustomBreadcrumbs
         heading={t('shift.page.title', 'Shifts & drawers')}
-        links={[
-          // A cashier opens this page too, and their home is the register.
-          { name: t('nav.home', 'Home'), href: homePathForRole(role) },
-          { name: t('shift.page.title', 'Shifts & drawers') },
-        ]}
+        links={[]}
         action={
           <Button variant="outlined" startIcon={<RefreshIcon />} onClick={refreshAll}>
             {t('common.refresh', 'Refresh')}
@@ -296,7 +292,7 @@ export function CashDrawerPage() {
           <Typography variant="h6" sx={{ mb: 1.5 }}>
             {t('shift.history.title', 'Closed shifts')}
           </Typography>
-          <Card variant="outlined" sx={{ borderRadius: 2 }}>
+          <Card variant="outlined">
             <TableContainer>
               <Table size="small">
                 <TableHead>
@@ -323,8 +319,8 @@ export function CashDrawerPage() {
                         <TableCell align="right" dir="ltr">
                           {MoneyUtil.formatCurrency(s.actual_cash)}
                         </TableCell>
-                        <TableCell align="right" dir="ltr" sx={{ color: MoneyUtil.isZero(variance) ? 'inherit' : 'error.main' }}>
-                          {MoneyUtil.formatCurrency(variance)}
+                        <TableCell align="right" sx={{ color: MoneyUtil.isZero(variance) ? 'inherit' : 'error.main' }}>
+                          <bdi dir="ltr">{MoneyUtil.formatCurrency(variance)}</bdi>
                         </TableCell>
                       </TableRow>
                     );

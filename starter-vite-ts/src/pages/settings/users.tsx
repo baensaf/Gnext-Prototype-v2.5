@@ -156,11 +156,12 @@ export function UsersPage() {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ pb: 6 }}>
       <CustomBreadcrumbs
         heading={t('users.title', 'Users & Roles')}
         links={[
-          { name: t('nav.settingsGroup', 'Settings & System'), href: '/app/settings' },
+          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
+          { name: t('nav.settingsHub', 'Settings'), href: '/app/settings' },
           { name: t('users.title', 'Users & Roles') },
         ]}
         action={
@@ -219,7 +220,7 @@ export function UsersPage() {
                         onClick={() => setViewing(user.id)}
                         sx={{ fontFamily: 'monospace' }}
                       >
-                        {user.username}
+                        <bdi dir="ltr">{user.username}</bdi>
                       </Link>
                     </TableCell>
                     <TableCell>{user.display_name}</TableCell>

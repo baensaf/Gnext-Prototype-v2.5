@@ -29,7 +29,7 @@ export function RegisterNotice({ terminal, mismatch, terminalBranchName, branchN
   if (terminal && !mismatch) return null;
 
   return (
-    <Card sx={{ borderRadius: 3, p: 4, textAlign: 'center' }}>
+    <Card sx={{ p: 3, textAlign: 'center' }}>
       <Stack spacing={2} sx={{ alignItems: 'center' }}>
         <PointOfSaleIcon color="disabled" sx={{ fontSize: 48 }} />
         {!terminal ? (

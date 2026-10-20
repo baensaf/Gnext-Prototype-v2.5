@@ -171,9 +171,7 @@ export function RefundsGrid({
       filterable: false,
       renderCell: ({ row }) => (
         <Typography variant="body2" sx={{ fontWeight: 700, color: 'error.main' }}>
-          <span dir="ltr">
-            -{MoneyUtil.formatCurrency(row.total_refund_amount || row.amount)} {currency}
-          </span>
+          <bdi dir="ltr">-{MoneyUtil.formatCurrency(row.total_refund_amount || row.amount)}</bdi> {currency}
         </Typography>
       ),
     },

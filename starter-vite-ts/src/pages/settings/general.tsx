@@ -118,7 +118,7 @@ export function GeneralSettingsPage() {
       <Grid container spacing={3}>
         {/* Tenant Profile Form */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+          <Card>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
                 {t('settings.generalPage.tenantProfile', 'Tenant Organization Profile')}
@@ -178,7 +178,7 @@ export function GeneralSettingsPage() {
         </Grid>
 
         <Grid size={{ xs: 12, md: 6 }}>
-          <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+          <Card>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
                 {t('settings.generalPage.menuDefaults', 'Menu defaults')}

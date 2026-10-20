@@ -108,7 +108,7 @@ export function ApprovalsSettingsPage() {
     try {
       const d = new Date(dateString);
       const isFa = i18n.language === 'fa';
-      return new Intl.DateTimeFormat(isFa ? 'fa-IR-u-ca-persian' : 'en-US', {
+      return new Intl.DateTimeFormat(isFa ? 'fa-IR-u-ca-persian-nu-latn' : 'en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -125,7 +125,7 @@ export function ApprovalsSettingsPage() {
     try {
       const d = new Date(dateString);
       const isFa = i18n.language === 'fa';
-      return new Intl.DateTimeFormat(isFa ? 'fa-IR-u-ca-persian' : 'en-US', {
+      return new Intl.DateTimeFormat(isFa ? 'fa-IR-u-ca-persian-nu-latn' : 'en-US', {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',

@@ -104,7 +104,7 @@ export function BranchesPage() {
         </Alert>
       )}
 
-      <Card sx={{ borderRadius: 3 }}>
+      <Card>
         <TableContainer>
           <Table>
             <TableHead>

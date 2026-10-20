@@ -20,6 +20,8 @@ export function AppShell() {
       slotProps={{
         nav: {
           data: navData,
+          // The register's product tiles need the width the full menu takes.
+          mini: isRegister,
         },
         main: isRegister ? { sx: { pb: 1 } } : undefined,
       }}

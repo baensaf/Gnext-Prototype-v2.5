@@ -371,7 +371,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
   };
 
   return (
-    <Box sx={{ p: hideHeader ? 0 : 3 }}>
+    <Box sx={{ pb: hideHeader ? 0 : 6 }}>
       {!hideHeader && (
         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box>
@@ -484,13 +484,13 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                       {b.courier_name} ({b.courier_code})
                     </TableCell>
                     <TableCell>{getStatusChip(b.status)}</TableCell>
-                    <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(b.expected_cash_amount || 0)} {currency}</TableCell>
-                    <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(b.actual_cash_amount || 0)} {currency}</TableCell>
-                    <TableCell align="right" dir="ltr" sx={{ color: MoneyUtil.lessThan(b.cash_discrepancy_amount || '0', '0') ? 'error.main' : 'text.primary' }}>
-                      {MoneyUtil.formatCurrency(b.cash_discrepancy_amount || 0)} {currency}
+                    <TableCell align="right"><bdi dir="ltr">{MoneyUtil.formatCurrency(b.expected_cash_amount || 0)}</bdi> {currency}</TableCell>
+                    <TableCell align="right"><bdi dir="ltr">{MoneyUtil.formatCurrency(b.actual_cash_amount || 0)}</bdi> {currency}</TableCell>
+                    <TableCell align="right" sx={{ color: MoneyUtil.lessThan(b.cash_discrepancy_amount || '0', '0') ? 'error.main' : 'text.primary' }}>
+                      <bdi dir="ltr">{MoneyUtil.formatCurrency(b.cash_discrepancy_amount || 0)}</bdi> {currency}
                     </TableCell>
-                    <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(b.expected_pos_amount || 0)} {currency}</TableCell>
-                    <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(b.actual_pos_amount || 0)} {currency}</TableCell>
+                    <TableCell align="right"><bdi dir="ltr">{MoneyUtil.formatCurrency(b.expected_pos_amount || 0)}</bdi> {currency}</TableCell>
+                    <TableCell align="right"><bdi dir="ltr">{MoneyUtil.formatCurrency(b.actual_pos_amount || 0)}</bdi> {currency}</TableCell>
                     <TableCell align="right" dir="ltr" sx={{ fontWeight: 'bold' }}>
                       {MoneyUtil.formatCurrency(b.net_settlement_amount || 0)} {currency}
                     </TableCell>
@@ -685,8 +685,8 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                       <Typography variant="body1" sx={{ fontWeight: 'bold' }} dir="ltr">
                         {MoneyUtil.formatCurrency(activeSettlementDetail.expected_cash_amount || 0)} / {MoneyUtil.formatCurrency(activeSettlementDetail.actual_cash_amount || 0)} {currency}
                       </Typography>
-                      <Typography variant="caption" dir="ltr" color={MoneyUtil.notEqual(activeSettlementDetail.cash_discrepancy_amount || '0', '0') ? 'error.main' : 'success.main'}>
-                        {t('settlements.detailModal.discrepancy')}: {MoneyUtil.formatCurrency(activeSettlementDetail.cash_discrepancy_amount || 0)} {currency}
+                      <Typography variant="caption" color={MoneyUtil.notEqual(activeSettlementDetail.cash_discrepancy_amount || '0', '0') ? 'error.main' : 'success.main'}>
+                        {t('settlements.detailModal.discrepancy')}: <bdi dir="ltr">{MoneyUtil.formatCurrency(activeSettlementDetail.cash_discrepancy_amount || 0)}</bdi> {currency}
                       </Typography>
                     </Paper>
                   </Grid>
@@ -699,8 +699,8 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                       <Typography variant="body1" sx={{ fontWeight: 'bold' }} dir="ltr">
                         {MoneyUtil.formatCurrency(activeSettlementDetail.expected_pos_amount || 0)} / {MoneyUtil.formatCurrency(activeSettlementDetail.actual_pos_amount || 0)} {currency}
                       </Typography>
-                      <Typography variant="caption" dir="ltr" color={MoneyUtil.notEqual(activeSettlementDetail.pos_discrepancy_amount || '0', '0') ? 'error.main' : 'success.main'}>
-                        {t('settlements.detailModal.discrepancy')}: {MoneyUtil.formatCurrency(activeSettlementDetail.pos_discrepancy_amount || 0)} {currency}
+                      <Typography variant="caption" color={MoneyUtil.notEqual(activeSettlementDetail.pos_discrepancy_amount || '0', '0') ? 'error.main' : 'success.main'}>
+                        {t('settlements.detailModal.discrepancy')}: <bdi dir="ltr">{MoneyUtil.formatCurrency(activeSettlementDetail.pos_discrepancy_amount || 0)}</bdi> {currency}
                       </Typography>
                     </Paper>
                   </Grid>
@@ -710,7 +710,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                       <Typography variant="caption" color="text.secondary">
                         {t('settlements.detailModal.adjustments')}
                       </Typography>
-                      <Typography variant="body2" dir="ltr">{t('settlements.detailModal.adj')} {MoneyUtil.formatCurrency(activeSettlementDetail.total_adjustment_amount || 0)} {currency}</Typography>
+                      <Typography variant="body2">{t('settlements.detailModal.adj')} <bdi dir="ltr">{MoneyUtil.formatCurrency(activeSettlementDetail.total_adjustment_amount || 0)}</bdi> {currency}</Typography>
                     </Paper>
                   </Grid>
 
@@ -779,7 +779,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                           </TableCell>
                           <TableCell sx={{ fontWeight: 'bold' }}>{line.order_number}</TableCell>
                           <TableCell>{rideStatusLabel(line.delivery_status)}</TableCell>
-                          <TableCell align="right" dir="ltr">{MoneyUtil.formatCurrency(lineOwed(line))} {currency}</TableCell>
+                          <TableCell align="right"><bdi dir="ltr">{MoneyUtil.formatCurrency(lineOwed(line))}</bdi> {currency}</TableCell>
                           <TableCell align="right">
                             {activeSettlementDetail.status === 'DRAFT' ? (
                               <TextField
@@ -791,7 +791,7 @@ export function CourierSettlementsPage({ hideHeader = false }: CourierSettlement
                                 slotProps={{ htmlInput: { style: { textAlign: 'right', padding: '4px 8px' } } }}
                               />
                             ) : (
-                              <span dir="ltr">{MoneyUtil.formatCurrency(line.actual_cash || 0)} {currency}</span>
+                              <span><bdi dir="ltr">{MoneyUtil.formatCurrency(line.actual_cash || 0)}</bdi> {currency}</span>
                             )}
                           </TableCell>
                           <TableCell align="right" dir="ltr">

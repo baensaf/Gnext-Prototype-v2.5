@@ -172,7 +172,7 @@ export function SnappfoodMenuSync() {
       </Stack>
 
       {/* Step 1: match */}
-      <Card variant="outlined" sx={{ p: 2.5 }}>
+      <Card variant="outlined" sx={{ p: 3 }}>
         <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
           {t('simulation.snappfood.menuSync.matchTitle')}
         </Typography>
@@ -241,7 +241,7 @@ export function SnappfoodMenuSync() {
       </Card>
 
       {/* Step 2: send */}
-      <Card variant="outlined" sx={{ p: 2.5 }}>
+      <Card variant="outlined" sx={{ p: 3 }}>
         <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
           {t('simulation.snappfood.menuSync.sendTitle')}
         </Typography>

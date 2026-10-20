@@ -106,7 +106,7 @@ export function MediaLocalizationDemoPage() {
       <Grid container spacing={3}>
         {/* Media Asset Uploader */}
         <Grid size={{ xs: 12, md: 5 }}>
-          <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+          <Card>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
                 {t('settings.localizationPage.mediaCardTitle', 'Media File Asset Upload (AD-18)')}
@@ -136,7 +136,7 @@ export function MediaLocalizationDemoPage() {
 
         {/* Bilingual Inputs */}
         <Grid size={{ xs: 12, md: 7 }}>
-          <Card sx={{ borderRadius: 3, boxShadow: 2 }}>
+          <Card>
             <CardContent>
               <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
                 {t('settings.localizationPage.bilingualCardTitle', 'Bilingual Localized Content (Persian & English)')}

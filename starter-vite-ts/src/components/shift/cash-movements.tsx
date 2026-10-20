@@ -23,6 +23,10 @@ import { useCurrencyLabel } from 'src/utils/currency';
 
 // ----------------------------------------------------------------------
 
+// References the server writes for its own movements ("Opening Float", "Cash Payment <id>"):
+// the movement's name already says them, and an id means nothing to whoever reads the drawer.
+const SYSTEM_REFERENCE = /^(Opening Float|Shift Close Adjustment|Cash (Payment|Refund) \S+)$/;
+
 /** Every cash movement in a shift's drawer, in the order it happened. */
 export function CashMovements({ movements }: { movements: CashMovement[] }) {
   const { t } = useTranslation();
@@ -41,7 +45,7 @@ export function CashMovements({ movements }: { movements: CashMovement[] }) {
   const ordered = [...movements].sort((a, b) => a.posted_at.localeCompare(b.posted_at));
 
   return (
-    <Card sx={{ borderRadius: 2 }}>
+    <Card>
       <CardHeader avatar={<HistoryIcon color="action" />} title={t('shift.detail.movements', 'Cash movements')} />
       <Divider />
       <TableContainer>
@@ -68,7 +72,7 @@ export function CashMovements({ movements }: { movements: CashMovement[] }) {
                 >
                   {MoneyUtil.formatCurrency(m.amount)}
                 </TableCell>
-                <TableCell>{serverText(m.reason_text, t) || m.reference || '—'}</TableCell>
+                <TableCell>{serverText(m.reason_text, t) || (m.reference && !SYSTEM_REFERENCE.test(m.reference) ? m.reference : '—')}</TableCell>
               </TableRow>
             ))}
             {ordered.length === 0 && (

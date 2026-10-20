@@ -362,7 +362,7 @@ export function SimulationSnappfoodPage() {
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <Box sx={{ pb: 6 }}>
       <CustomBreadcrumbs
         heading={t('simulation.snappfood.title', 'Snappfood Annex v4.3.0 Console')}
         links={[
@@ -405,7 +405,7 @@ export function SimulationSnappfoodPage() {
         </Alert>
 
         {/* Main Tabs */}
-        <Card sx={{ borderRadius: 3, boxShadow: 3 }}>
+        <Card sx={{ boxShadow: 3 }}>
           <Tabs
             value={activeTab}
             onChange={(_, val) => setActiveTab(val)}
@@ -426,7 +426,7 @@ export function SimulationSnappfoodPage() {
             {activeTab === 0 && (
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Card sx={{ p: 3, bgcolor: 'background.neutral', borderRadius: 2 }}>
+                  <Card sx={{ p: 3, bgcolor: 'background.neutral' }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                       {t('simulation.snappfood.oauth.cardTitle', 'OAuth2 Password Grant Simulator')}
                     </Typography>
@@ -456,7 +456,7 @@ export function SimulationSnappfoodPage() {
                 </Grid>
 
                 <Grid size={{ xs: 12, md: 6 }}>
-                  <Card sx={{ p: 3, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+                  <Card sx={{ p: 3, border: '1px solid', borderColor: 'divider' }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                       {t('simulation.snappfood.oauth.responseTitle', 'Token Response Output')}
                     </Typography>
@@ -478,7 +478,7 @@ export function SimulationSnappfoodPage() {
             {activeTab === 1 && (
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, md: 7 }}>
-                  <Card sx={{ p: 3, borderRadius: 2 }}>
+                  <Card sx={{ p: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                       {t('simulation.snappfood.webhook.cardTitle', 'Generate v4.3.0 Order Webhook (HMAC Signed)')}
                     </Typography>
@@ -579,7 +579,7 @@ export function SimulationSnappfoodPage() {
                 </Grid>
 
                 <Grid size={{ xs: 12, md: 5 }}>
-                  <Card sx={{ p: 3, borderRadius: 2 }}>
+                  <Card sx={{ p: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                       {t('simulation.snappfood.webhook.responseTitle', 'Webhook Response & Order Created')}
                     </Typography>
@@ -636,7 +636,7 @@ export function SimulationSnappfoodPage() {
             {/* TAB 2: ORDER LIFECYCLE STEPPER */}
             {activeTab === 2 && (
               <Stack spacing={3}>
-                <Card sx={{ p: 3, borderRadius: 2 }}>
+                <Card sx={{ p: 3 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
                     <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
                       {t('simulation.snappfood.stepper.title', 'Order Status Lifecycle State Machine')}
@@ -747,7 +747,7 @@ export function SimulationSnappfoodPage() {
                 </Card>
 
                 {actionResponse && (
-                  <Card sx={{ p: 3, borderRadius: 2 }}>
+                  <Card sx={{ p: 3 }}>
                     <Typography variant="h6" sx={{ mb: 1, fontWeight: 'bold' }}>
                       {t('simulation.snappfood.stepper.actionResponse', 'Action Response')}
                     </Typography>
@@ -763,7 +763,7 @@ export function SimulationSnappfoodPage() {
             {activeTab === 3 && (
               <Grid container spacing={3}>
                 <Grid size={{ xs: 12, md: 5 }}>
-                  <Card sx={{ p: 3, borderRadius: 2 }}>
+                  <Card sx={{ p: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                       {t('simulation.snappfood.vendorApi.title', 'Vendor Automation API Test Console (v4.3.0)')}
                     </Typography>
@@ -805,7 +805,7 @@ export function SimulationSnappfoodPage() {
                 </Grid>
 
                 <Grid size={{ xs: 12, md: 7 }}>
-                  <Card sx={{ p: 3, borderRadius: 2 }}>
+                  <Card sx={{ p: 3 }}>
                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>
                       {t('simulation.snappfood.vendorApi.response', 'API Response Payload')}
                     </Typography>

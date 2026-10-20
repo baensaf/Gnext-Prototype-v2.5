@@ -228,7 +228,7 @@ export function PaymentSettingsPage() {
         </Alert>
       )}
 
-      <Card sx={{ borderRadius: 2 }}>
+      <Card>
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
@@ -314,16 +314,16 @@ export function PaymentSettingsPage() {
           {t('payments.addAccount', 'Create Account')}
         </Button>
       </Stack>
-      <Card sx={{ borderRadius: 2 }}>
+      <Card>
         <TableContainer component={Paper}>
           <Table>
             <TableHead>
               <TableRow>
-                <TableCell>Account Name</TableCell>
-                <TableCell>Bank</TableCell>
-                <TableCell>Account Number</TableCell>
-                <TableCell>IBAN</TableCell>
-                <TableCell>Status</TableCell>
+                <TableCell>{t('payments.accounts.colName', 'Account name')}</TableCell>
+                <TableCell>{t('payments.accounts.colBank', 'Bank')}</TableCell>
+                <TableCell>{t('payments.accounts.colNumber', 'Account number')}</TableCell>
+                <TableCell>{t('payments.accounts.colIban', 'IBAN (Sheba)')}</TableCell>
+                <TableCell>{t('payments.cardTerminals.colStatus', 'Status')}</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -331,7 +331,7 @@ export function PaymentSettingsPage() {
                 <TableRow>
                   <TableCell colSpan={5} align="center">
                     <Typography variant="body2" color="text.secondary" sx={{ py: 3 }}>
-                      No settlement accounts created yet.
+                      {t('payments.accounts.empty', 'No settlement accounts yet.')}
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -340,10 +340,10 @@ export function PaymentSettingsPage() {
                   <TableRow key={acc.id}>
                     <TableCell sx={{ fontWeight: 'bold' }}>{acc.name}</TableCell>
                     <TableCell>{acc.bank_name || '-'}</TableCell>
-                    <TableCell>{acc.account_number || '-'}</TableCell>
-                    <TableCell>{acc.iban || '-'}</TableCell>
+                    <TableCell><bdi dir="ltr">{acc.account_number || '-'}</bdi></TableCell>
+                    <TableCell><bdi dir="ltr">{acc.iban || '-'}</bdi></TableCell>
                     <TableCell>
-                      <Chip label={acc.is_active ? 'Active' : 'Inactive'} color={acc.is_active ? 'success' : 'default'} size="small" />
+                      <Chip label={acc.is_active ? t('payments.cardTerminals.active', 'Active') : t('payments.cardTerminals.inactive', 'Inactive')} color={acc.is_active ? 'success' : 'default'} size="small" />
                     </TableCell>
                   </TableRow>
                 ))
@@ -356,17 +356,17 @@ export function PaymentSettingsPage() {
       <Drawer anchor="right" open={accDrawerOpen} onClose={() => setAccDrawerOpen(false)}>
         <Box sx={{ width: 400, p: 3 }}>
           <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Create Settlement Account
+            {t('payments.accounts.drawerTitle', 'New settlement account')}
           </Typography>
           <Box component="form" onSubmit={handleCreateAccount}>
             <Stack spacing={2.5}>
-              <TextField label="Account Name" value={accName} onChange={(e) => setAccName(e.target.value)} required fullWidth placeholder="e.g. Mellat Corporate Account" />
-              <TextField label="Bank Name" value={bankName} onChange={(e) => setBankName(e.target.value)} fullWidth placeholder="e.g. Bank Mellat" />
-              <TextField label="Account Number" value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} fullWidth />
-              <TextField label="IBAN (Sheba)" value={iban} onChange={(e) => setIban(e.target.value)} fullWidth placeholder="IR..." />
+              <TextField label={t('payments.accounts.colName', 'Account name')} value={accName} onChange={(e) => setAccName(e.target.value)} required fullWidth placeholder={t('payments.accounts.namePlaceholder', 'e.g. Mellat company account')} />
+              <TextField label={t('payments.accounts.colBank', 'Bank')} value={bankName} onChange={(e) => setBankName(e.target.value)} fullWidth placeholder={t('payments.accounts.bankPlaceholder', 'e.g. Bank Mellat')} />
+              <TextField label={t('payments.accounts.colNumber', 'Account number')} value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} fullWidth />
+              <TextField label={t('payments.accounts.colIban', 'IBAN (Sheba)')} value={iban} onChange={(e) => setIban(e.target.value)} fullWidth placeholder="IR..." />
 
               <Button type="submit" variant="contained" size="large" fullWidth sx={{ mt: 2 }}>
-                Save Account
+                {t('payments.cardTerminals.save', 'Save')}
               </Button>
             </Stack>
           </Box>

@@ -14,7 +14,7 @@ export function IncomingOrdersPage() {
   const [searchParams] = useSearchParams();
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <Box sx={{ pb: 6 }}>
       <OnlineBoard variant="page" highlightId={searchParams.get('order')} />
     </Box>
   );

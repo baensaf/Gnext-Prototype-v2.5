@@ -307,7 +307,7 @@ export function BranchDetailPage() {
         </Alert>
       )}
 
-      <Card sx={{ borderRadius: 3 }}>
+      <Card>
         <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ px: 2, borderBottom: 1, borderColor: 'divider' }}>
           <Tab value="overview" label={t('branchMgmt.tabs.overview', 'Overview')} />
           <Tab value="hours" label={t('branchMgmt.tabs.hours', 'Opening hours')} />

@@ -673,7 +673,7 @@ export function CustomerDrawer({
               ) : (
                 <Stack spacing={1}>
                   {addresses.map((a) => (
-                    <Card key={a.id} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                    <Card key={a.id} variant="outlined" sx={{ p: 2 }}>
                       <Stack
                         direction="row"
                         sx={{ alignItems: 'center', gap: 1, flexWrap: 'wrap' }}

@@ -94,7 +94,7 @@ export function SettingsHubPage() {
       </Stack>
 
       {rows.length === 0 ? (
-        <Card variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
+        <Card variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
           <Typography color="text.secondary" variant="h6">
             {t('settings.hub.noResultsTitle', 'No setting found matching "{{query}}"', { query: searchQuery })}
           </Typography>

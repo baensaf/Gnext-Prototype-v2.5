@@ -270,10 +270,7 @@ export function AgentsPage() {
     <Box sx={{ pb: 6 }}>
       <CustomBreadcrumbs
         heading={t('operations.agents.title', 'Branch Agents')}
-        links={[
-          { name: t('nav.home', 'Home'), href: '/app/dashboard' },
-          { name: t('operations.agents.title', 'Branch Agents') },
-        ]}
+        links={[]}
         action={
           <Stack direction="row" spacing={1.5}>
             <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>

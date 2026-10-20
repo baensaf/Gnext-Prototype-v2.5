@@ -155,7 +155,7 @@ export function SimulationLogsPage() {
   const paginatedLogs = filteredLogs.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
 
   return (
-    <Box sx={{ p: { xs: 2, md: 3 } }}>
+    <Box sx={{ pb: 6 }}>
       <CustomBreadcrumbs
         heading={t('simulation.logs.title', 'Integration Webhook & Audit Explorer')}
         links={[
@@ -187,7 +187,7 @@ export function SimulationLogsPage() {
         {successMsg && <Alert severity="success" onClose={() => setSuccessMsg(null)}>{successMsg}</Alert>}
 
         {/* Filters Bar */}
-        <Card sx={{ p: 2.5, borderRadius: 2 }}>
+        <Card sx={{ p: 3 }}>
           <Grid container spacing={2} sx={{ alignItems: 'center' }}>
             <Grid size={{ xs: 12, sm: 4 }}>
               <TextField
@@ -242,7 +242,7 @@ export function SimulationLogsPage() {
         </Card>
 
         {/* Logs Table */}
-        <Card sx={{ borderRadius: 2 }}>
+        <Card>
           <TableContainer component={Paper} variant="outlined" sx={{ border: 'none' }}>
             <Table size="small">
               <TableHead>

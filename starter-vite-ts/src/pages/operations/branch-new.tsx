@@ -100,7 +100,7 @@ export function BranchNewPage() {
         </Alert>
       )}
 
-      <Card sx={{ borderRadius: 3 }}>
+      <Card>
         <CardContent sx={{ p: { xs: 2, md: 4 } }}>
           <Stack spacing={4} divider={<Divider flexItem />}>
             <Box>
