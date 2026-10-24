@@ -9,6 +9,7 @@ import { RefundAllocation } from '../../entities/RefundAllocation.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
 import { Payment } from '../../entities/Payment.entity';
+import { CashierShift } from '../../entities/CashierShift.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { isAggregatorOrder } from '../../common/utils/snappfood-order.util';
@@ -253,7 +254,7 @@ export class RefundService {
     // Checked before any refund row exists, so the drawer is known to be open when the cash
     // goes back out of it.
     const drawer = legs.some((s) => kindOf(s) === 'CASH')
-      ? await this.shiftService.requireDrawer(tenantId, order.branch_id, order.terminal_id)
+      ? await this.cashDrawerFor(em, tenantId, order, legs, cancelling)
       : null;
     // Money that does not come out of the drawer is still given at a register during its
     // shift: the shift's report lists it with the cash refunds, so the close shows every
@@ -354,6 +355,23 @@ export class RefundService {
    * approval for this order, and the cancel route takes a manager or a manager's PIN. So the
    * refund this runs is released, whatever tender it goes back through.
    */
+  /**
+   * The drawer cash goes back out of: the register's open drawer. A part-paid order cancelled
+   * after the cutoff gives its cash back from the old shift it came into, which takes nothing
+   * else after the cutoff (P-18).
+   */
+  private async cashDrawerFor(em: EntityManager, tenantId: string, order: OrderHeader, legs: PaymentShare[], cancelling: boolean) {
+    try {
+      return await this.shiftService.requireDrawer(tenantId, order.branch_id, order.terminal_id);
+    } catch (err: any) {
+      if (!cancelling || err?.response?.code !== 'SHIFT_BUSINESS_DAY_ENDED') throw err;
+      const shiftId = legs.find((s) => (s.method?.kind || s.payment.method_kind) === 'CASH')?.payment.shift_id;
+      const old = shiftId ? await em.findOne(CashierShift, { where: { id: shiftId, tenant_id: tenantId, state: 'OPEN' } }) : null;
+      if (!old) throw err;
+      return old;
+    }
+  }
+
   async cancelPaidOrder(tenantId: string, orderId: string, dto: PaidOrderCancelDto, userId?: string, correlationId?: string) {
     return await this.dataSource.transaction(async (em) => {
       const order = await em.findOne(OrderHeader, {

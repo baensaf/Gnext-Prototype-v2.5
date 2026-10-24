@@ -1697,18 +1697,6 @@ export class OrderService {
       }
       if (additions.length > 0) decide('ADD_ITEM');
 
-      if (requiresApproval) {
-        if (!dto.approvalRequestId) {
-          throw new ForbiddenException({
-            statusCode: 403,
-            code: 'APPROVAL_REQUIRED',
-            message: `This edit is outside cashier authority and needs an approved request (${escalations.join(', ')})`,
-            escalations,
-          });
-        }
-        await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'EDIT_ORDER', undefined, id);
-      }
-
       // Spec 6.1: removals must carry a reason so void reporting can attribute
       // shrinkage. Additions raise the balance and need no justification.
       for (const removal of removals) {
@@ -1731,20 +1719,33 @@ export class OrderService {
 
       const recalculated = await this.recalculateOrderTotals(tenantId, order, em);
 
-      // Spec 7.9: never leave the grand total below money already collected
-      // without a linked refund. The refund orchestration is the caller's, so
-      // the edit is refused rather than silently creating an unbacked credit.
-      if (MoneyUtil.greaterThan(netPaid, recalculated.grand_total) && !dto.refundPlan) {
+      // Never below money already collected: there are no partial refunds (Y-10), so such a
+      // change is refused and a manager cancels the whole order to ring it again (O-31).
+      if (MoneyUtil.greaterThan(netPaid, recalculated.grand_total)) {
         throw new ConflictException({
           statusCode: 409,
-          code: 'REFUND_PLAN_REQUIRED',
+          code: 'BELOW_AMOUNT_PAID',
           message:
             `This edit lowers the order total to ${recalculated.grand_total}, below the ` +
-            `${netPaid} already collected. Attach a refund plan for the difference.`,
+            `${netPaid} already paid. Cancel the order and ring it again.`,
           netPaid,
           newGrandTotal: recalculated.grand_total,
           refundDue: MoneyUtil.subtract(netPaid, recalculated.grand_total),
         });
+      }
+
+      // Asked only for an edit that can go through, so nobody fetches a manager for a refusal.
+      // The changes above are undone with the transaction if it is refused.
+      if (requiresApproval) {
+        if (!dto.approvalRequestId) {
+          throw new ForbiddenException({
+            statusCode: 403,
+            code: 'APPROVAL_REQUIRED',
+            message: `This edit is outside cashier authority and needs an approved request (${escalations.join(', ')})`,
+            escalations,
+          });
+        }
+        await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'EDIT_ORDER', undefined, id);
       }
 
       recalculated.version += 1;
@@ -2268,13 +2269,13 @@ export class OrderService {
 
       const recalculated = await this.recalculateOrderTotals(tenantId, order, em);
 
-      if (MoneyUtil.greaterThan(netPaid, recalculated.grand_total) && !dto.refundPlan) {
+      if (MoneyUtil.greaterThan(netPaid, recalculated.grand_total)) {
         throw new ConflictException({
           statusCode: 409,
-          code: 'REFUND_PLAN_REQUIRED',
+          code: 'BELOW_AMOUNT_PAID',
           message:
             `This replacement lowers the order total to ${recalculated.grand_total}, below the ` +
-            `${netPaid} already collected. Attach a refund plan for the difference.`,
+            `${netPaid} already paid. Cancel the order and ring it again.`,
           netPaid,
           newGrandTotal: recalculated.grand_total,
           refundDue: MoneyUtil.subtract(netPaid, recalculated.grand_total),
