@@ -26,7 +26,6 @@ import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 interface RolePolicy {
   cashierMaxPct: number;
-  supervisorMaxPct: number;
   managerMaxPct: number;
   adminMaxPct: number;
   /** Categories a friends-and-family discount never touches, such as drinks. */
@@ -46,7 +45,6 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
 
   const [policy, setPolicy] = useState<RolePolicy>({
     cashierMaxPct: 0,
-    supervisorMaxPct: 0,
     managerMaxPct: 100,
     adminMaxPct: 100,
     familyExcludedCategoryIds: [],
@@ -69,7 +67,6 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
 
       setPolicy({
         cashierMaxPct: authSetting.cashierMaxPct ?? 0,
-        supervisorMaxPct: authSetting.supervisorMaxPct ?? 0,
         managerMaxPct: authSetting.managerMaxPct ?? 100,
         adminMaxPct: authSetting.adminMaxPct ?? 100,
         familyExcludedCategoryIds: authSetting.familyExcludedCategoryIds ?? [],
@@ -156,29 +153,6 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                   label={t('authPolicy.maxPct', 'Max Percentage Discount (%)')}
                   value={policy.cashierMaxPct}
                   onChange={(e) => setPolicy({ ...policy, cashierMaxPct: Number(e.target.value) })}
-                  disabled={!isHeadOffice}
-                  helperText={t('authPolicy.defaultPct', 'Default: {{pct}}%', { pct: 0 })}
-                />
-              </Stack>
-            </Card>
-          </Grid>
-
-          {/* Supervisor Limit Card */}
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={{ p: 3 }}>
-              <Typography variant="h6" color="warning.main" sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Iconify icon={'solar:user-id-bold' as any} />
-                {t('authPolicy.supervisorRole', 'Supervisor Role Limits')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                {t('authPolicy.supervisorDesc', 'Authorized limit for floor supervisors entering approval PIN.')}
-              </Typography>
-              <Stack spacing={2}>
-                <TextField
-                  type="number"
-                  label={t('authPolicy.maxPct', 'Max Percentage Discount (%)')}
-                  value={policy.supervisorMaxPct}
-                  onChange={(e) => setPolicy({ ...policy, supervisorMaxPct: Number(e.target.value) })}
                   disabled={!isHeadOffice}
                   helperText={t('authPolicy.defaultPct', 'Default: {{pct}}%', { pct: 0 })}
                 />

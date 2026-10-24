@@ -113,10 +113,11 @@ export class DiscountEvaluationService {
     // every manual discount needs a manager until head office sets a limit.
     const byRole: Record<string, { pct: string }> = {
       CASHIER: { pct: String(authSettings.cashierMaxPct ?? 0) },
-      SUPERVISOR: { pct: String(authSettings.supervisorMaxPct ?? 0) },
       MANAGER: { pct: String(authSettings.managerMaxPct ?? 100) },
       ADMIN: { pct: String(authSettings.adminMaxPct ?? 100) },
     };
+    // A supervisor is the branch manager (R-18): the same limit.
+    byRole.SUPERVISOR = byRole.MANAGER;
     const roleName = (role || 'CASHIER').toUpperCase();
     return {
       role: roleName,
