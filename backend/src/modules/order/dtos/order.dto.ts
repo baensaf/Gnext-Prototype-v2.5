@@ -454,20 +454,3 @@ export class OrderOnlineReportDto {
   comment?: string;
 }
 
-export class OrderReopenDto {
-  @IsOptional()
-  @IsUUID()
-  reasonCodeId?: string;
-
-  @IsOptional()
-  @IsString()
-  reason?: string;
-
-  @IsOptional()
-  @IsUUID()
-  approvalRequestId?: string;
-
-  @IsOptional()
-  @IsInt()
-  version?: number;
-}

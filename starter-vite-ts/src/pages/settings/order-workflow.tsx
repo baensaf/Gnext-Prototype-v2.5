@@ -18,11 +18,9 @@ import {
   Paper,
   Switch,
   Button,
-  Divider,
   MenuItem,
   TextField,
   Typography,
-  FormControlLabel,
   CircularProgress,
 } from '@mui/material';
 
@@ -38,7 +36,7 @@ import { CallNumberRangesCard } from 'src/components/settings/call-number-ranges
  * The cashier windows live in their own group, ORDER_ACTIONS, because that is the one
  * the till enforces. These defaults match the server's when no row has been written.
  */
-const ORDER_ACTION_DEFAULTS = { editWindowMinutes: 10, cancelWindowMinutes: 10 };
+const ORDER_ACTION_DEFAULTS = { editWindowMinutes: 5, cancelWindowMinutes: 5 };
 
 /**
  * Orders from Snappfood, the website and the kiosk, saved as `incomingOrders` in this same
@@ -75,7 +73,6 @@ export function OrderWorkflowSettingsPage() {
   // What the windows were when the page loaded, so saving the workflow toggles at a
   // branch does not also pin that branch's windows to whatever head office has today.
   const [loadedWindows, setLoadedWindows] = useState(ORDER_ACTION_DEFAULTS);
-  const [allowReopenClosedOrders, setAllowReopenClosedOrders] = useState(false);
   const [enableDineIn, setEnableDineIn] = useState(true);
   const [enableTakeaway, setEnableTakeaway] = useState(true);
   const [enableDelivery, setEnableDelivery] = useState(true);
@@ -113,7 +110,6 @@ export function OrderWorkflowSettingsPage() {
         ...storedIncoming,
         acceptance: { ...INCOMING_DEFAULTS.acceptance, ...(storedIncoming.acceptance || {}) },
       });
-      if (workflow.allowReopenClosedOrders !== undefined) setAllowReopenClosedOrders(Boolean(workflow.allowReopenClosedOrders));
       if (workflow.enableDineIn !== undefined) setEnableDineIn(Boolean(workflow.enableDineIn));
       if (workflow.enableTakeaway !== undefined) setEnableTakeaway(Boolean(workflow.enableTakeaway));
       if (workflow.enableDelivery !== undefined) setEnableDelivery(Boolean(workflow.enableDelivery));
@@ -137,7 +133,6 @@ export function OrderWorkflowSettingsPage() {
 
     const payload = {
       incomingOrders: incoming,
-      allowReopenClosedOrders,
       enableDineIn,
       enableTakeaway,
       enableDelivery,
@@ -285,30 +280,6 @@ export function OrderWorkflowSettingsPage() {
                   slotProps={{ htmlInput: { min: 0, max: 120 } }}
                 />
 
-                <Divider />
-
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={allowReopenClosedOrders}
-                      onChange={(e) => setAllowReopenClosedOrders(e.target.checked)}
-                      color="warning"
-                    />
-                  }
-                  label={
-                    <Box>
-                      <Typography variant="subtitle2">
-                        {t('settings.orderWorkflow.allowReopenLabel', 'Allow Reopening Closed Orders')}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {t(
-                          'settings.orderWorkflow.allowReopenHelp',
-                          'When enabled, authorized supervisors can reopen previously settled orders for adjustments.'
-                        )}
-                      </Typography>
-                    </Box>
-                  }
-                />
               </Stack>
             </Card>
           </Grid>

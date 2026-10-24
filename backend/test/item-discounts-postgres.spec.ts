@@ -75,7 +75,8 @@ describe('Automatic item discounts (PostgreSQL)', () => {
       channel: 'POS',
       items,
     } as any);
-    await orders.submitOrder(tenantId, draft.id, dto);
+    // A manager rings it, so the 10% order discount needs nobody's approval (R-16).
+    await orders.submitOrder(tenantId, draft.id, dto, undefined, undefined, 'MANAGER');
     return dataSource.getRepository(OrderHeader).findOneByOrFail({ id: draft.id });
   };
   const lines = (orderId: string) => dataSource.getRepository(OrderItem).find({ where: { order_id: orderId }, order: { line_number: 'ASC' } });

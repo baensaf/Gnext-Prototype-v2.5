@@ -12,6 +12,7 @@ import { Terminal } from '../src/entities/Terminal.entity';
 import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { TaraPurchase, TaraSimPurchase } from '../src/entities/Tara.entity';
+import { Refund } from '../src/entities/Refund.entity';
 import { OrderService } from '../src/modules/order/order.service';
 import { PaymentService } from '../src/modules/payment/payment.service';
 import { RefundService } from '../src/modules/refund/refund.service';
@@ -182,12 +183,14 @@ describe('Tara payments (PostgreSQL)', () => {
     expect(await calls(waiting.id)).toEqual(['Trace:SUCCESS', 'PurchaseRequest:SUCCESS', 'VerifyPurchase:NO_REPLY', 'InquiryPurchase:SUCCESS']);
   });
 
-  it('refunds a same-day Tara sale through ReversePurchase', async () => {
+  // A same-day order is cancelled, not refunded (O-21); the money still goes back through Tara.
+  it('gives a same-day Tara sale back through ReversePurchase when the order is cancelled', async () => {
     const order = await submitted();
     const paid = await payTara(order, '980000000001');
     await dataSource.getRepository(OrderHeader).update({ id: order.id }, { state: 'COMPLETED', status: 'COMPLETED' } as any);
 
-    const [refund] = await refunds.refundOrder(tenantId, order.id, { reason: 'Wrong order' } as any, { userId: cashierId });
+    await refunds.cancelPaidOrder(tenantId, order.id, { reason: 'Wrong order' } as any, cashierId);
+    const refund = await dataSource.getRepository(Refund).findOneByOrFail({ order_id: order.id });
     expect(refund).toMatchObject({ method_kind: 'TARA', amount: '3000000.0000' });
     expect((await dataSource.getRepository(TaraSimPurchase).findOneByOrFail({ reference_number: paid.reference })).status).toBe('REVERSED');
     expect(await dataSource.getRepository(TaraPurchase).findOneByOrFail({ payment_id: paid.id })).toMatchObject({ step: 'REVERSED' });

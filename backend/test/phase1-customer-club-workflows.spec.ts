@@ -150,6 +150,11 @@ describe('Phase 1 Customer Club & Discounts Workflows (Spec)', () => {
   });
 
   describe('Workflow 3: Role-Based Cashier Manual Discounts', () => {
+    // Head office's limits for this chain: a new chain starts its cashiers at 0% (R-16).
+    beforeEach(() => {
+      settingRepo.find.mockResolvedValue([{ key: 'DISCOUNT_AUTHORIZATIONS', value: { cashierMaxPct: 10, managerMaxPct: 30 } }]);
+    });
+
     it('allows Cashier manual discount up to 10%', async () => {
       const quote = await evaluationService.evaluateQuote(tenantId, {
         orderDraft: {

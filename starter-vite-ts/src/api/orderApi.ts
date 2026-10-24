@@ -47,6 +47,8 @@ export interface OrderHeader {
   terminal_id?: string;
   shift_id?: string;
   order_number: string;
+  /** The business day it was sent on, YYYY-MM-DD. */
+  business_date?: string | null;
   /** The branch's number for the order today (123), given as it goes to the kitchen. */
   call_number?: number | null;
   /** AGENT_OFFLINE when the branch took it while offline and its agent uploaded it later. */
@@ -336,18 +338,9 @@ export const orderApi = {
     return res.data;
   },
 
-  /** Reopen a cancelled order. Always requires an approved request. */
-  reopenOrder: async (
-    id: string,
-    reasonCodeId?: string,
-    reason?: string,
-    approvalRequestId?: string,
-  ): Promise<OrderHeader> => {
-    const res = await httpClient.post(`/api/v1/orders/${id}/reopen`, {
-      reasonCodeId,
-      reason,
-      approvalRequestId,
-    });
+  /** A counter order still waiting for its payment goes back to being the till's cart (O-19, O-20). */
+  returnToCart: async (id: string): Promise<OrderHeader> => {
+    const res = await httpClient.post(`/api/v1/orders/${id}/back-to-cart`, {});
     return res.data;
   },
 

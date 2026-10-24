@@ -99,10 +99,15 @@ describe('the overnight business day (PostgreSQL)', () => {
     await orders.submitOrder(tenantId, draft.id, {} as any);
     return (await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: draft.id }))!;
   };
+  // As the payment route does: once paid, a takeaway goes to the kitchen and gets its call number (O-19).
   const payCash = async (order: OrderHeader) => {
     const intent = await payments.createPaymentIntent(tenantId, { orderId: order.id, methodId: cash, amount: order.grand_total } as any);
-    return await payments.processPayment(tenantId, intent.id, {} as any);
+    const paid = await payments.processPayment(tenantId, intent.id, {} as any);
+    await orders.afterPaymentSucceeded(tenantId, order.id);
+    return paid;
   };
+  const callNumberOf = async (order: OrderHeader) =>
+    (await dataSource.getRepository(OrderHeader).findOneByOrFail({ id: order.id })).call_number;
   const closeShift = async (shiftId: string) => {
     const statement: any = await shifts.getShiftStatement(tenantId, shiftId);
     return await shifts.closeShift(tenantId, shiftId, { actualCash: String(statement.expectedCash) } as any, undefined, 'bday-close');
@@ -126,9 +131,9 @@ describe('the overnight business day (PostgreSQL)', () => {
     tehranTime('2026-10-15T03:59:00');
     const last = await sell(tehranTill, tehranBranch, nightShift.id);
     expect(last.business_date).toBe('2026-10-14');
-    // Call numbers keep counting through midnight: one day, one sequence.
-    expect(last.call_number).toBe((first.call_number ?? 0) + 1);
     await payCash(last);
+    // Call numbers keep counting through midnight: one day, one sequence.
+    expect(await callNumberOf(last)).toBe(((await callNumberOf(first)) ?? 0) + 1);
   });
 
   it('refuses a sale on the old shift from 04:00, and says why', async () => {
@@ -157,10 +162,10 @@ describe('the overnight business day (PostgreSQL)', () => {
 
     const sale = await sell(tehranTill, tehranBranch, morning.id);
     expect(sale.business_date).toBe('2026-10-15');
+    await payCash(sale);
     // A new business day starts its call numbers again.
     const firstOfNight = await dataSource.getRepository(OrderHeader).findOne({ where: { tenant_id: tenantId, business_date: '2026-10-14' }, order: { call_number: 'ASC' } });
-    expect(sale.call_number).toBe(firstOfNight!.call_number);
-    await payCash(sale);
+    expect(await callNumberOf(sale)).toBe(firstOfNight!.call_number);
     await closeShift(morning.id);
   });
 

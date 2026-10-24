@@ -482,14 +482,18 @@ export function OrdersWorkflowPage() {
     order.status !== 'OUT_FOR_DELIVERY' &&
     !MoneyUtil.greaterThan(order.due_amount || '0', '0');
 
-  // A waiting order is answered on Incoming Orders, and a finished one is refunded, not cancelled.
-  // Only Snappfood cancels one of its orders; the store reports a problem to Snappfood instead.
-  // Nor once a courier has it: it comes back as a failed delivery, on the delivery hub.
+  // Cancel and refund split by business day, as in Toast (O-21): an order is cancelled on its own
+  // day, paid or not; a completed one from an earlier day is refunded.
+  const fromEarlierDay = (order: OrderHeader) =>
+    !!order.business_date && String(order.business_date).slice(0, 10) < businessToday();
+
+  // A waiting order is answered on Incoming Orders. Only Snappfood cancels one of its orders; the
+  // store reports a problem to Snappfood instead. Nor once a courier has it.
   const canCancel = (order: OrderHeader) =>
     !readOnly &&
     !isSnappfoodOrder(order) &&
     order.status !== 'OUT_FOR_DELIVERY' &&
-    lifecycleOf(order) === 'OPEN';
+    (lifecycleOf(order) === 'OPEN' || (order.status === 'COMPLETED' && !fromEarlierDay(order)));
 
   // A platform collects for its orders, so the till takes no money for one, except a cash order
   // the customer collects: they pay at the counter.
@@ -503,23 +507,29 @@ export function OrdersWorkflowPage() {
   const canRefund = (order: OrderHeader) =>
     !readOnly &&
     order.status === 'COMPLETED' &&
+    fromEarlierDay(order) &&
     !isSnappfoodOrder(order) &&
     MoneyUtil.greaterThan(refundableOf(order), '0');
 
   // A receipt is for money taken; an unpaid order has a guest bill instead.
   const hasReceipt = (order: OrderHeader) => MoneyUtil.greaterThan(order.paid_amount || order.paid_total || '0', '0');
 
-  // Rung up as the wrong kind of order. Not a Snappfood order — that one is theirs — and not
-  // once a courier has it, which the server refuses anyway; hiding the button just saves the
-  // cashier a pointless error.
+  // Only a delivery that has not gone out becomes takeaway or dine-in (O-23), and is then paid
+  // there and then. Not a Snappfood order: that one is theirs.
   const canChangeType = (order: OrderHeader) =>
     !readOnly &&
+    order.order_type === 'DELIVERY' &&
     !isSnappfoodOrder(order) &&
     order.status !== 'OUT_FOR_DELIVERY' &&
     lifecycleOf(order) === 'OPEN';
 
+  // Only a delivery that has not gone out takes line changes (O-22); a counter order is paid as
+  // it is sent, and more items are a new order.
   const canEditLines = (order: OrderHeader) =>
-    !readOnly && !isSnappfoodOrder(order) && !['COMPLETED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(order.status);
+    !readOnly &&
+    order.order_type === 'DELIVERY' &&
+    !isSnappfoodOrder(order) &&
+    !['COMPLETED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(order.status);
 
   // A platform order is reported where it is answered: its card on the Online panel, which
   // offers only what its platform takes, for as long as it takes it.
@@ -718,7 +728,7 @@ export function OrdersWorkflowPage() {
   const handleOpenTypeDialog = (order: OrderHeader) => {
     setTypeOrder(order);
     // Offer something other than what it already is, so the dialog opens on a real choice.
-    setTypeTarget(order.order_type === 'DELIVERY' ? 'TAKEAWAY' : 'DELIVERY');
+    setTypeTarget('TAKEAWAY');
     setTypeAddressId('');
     setTypeZoneId('');
     setTypeReason('');
@@ -738,8 +748,11 @@ export function OrdersWorkflowPage() {
         approvalRequestId,
       });
       setTypeDialogOpen(false);
+      const changed = typeOrder;
       setTypeOrder(null);
       await loadData();
+      // A counter order is paid as it is taken (O-23).
+      handleOpenPayment(changed);
     } catch (err: any) {
       // Past the cashier's window, or once money has landed, the server wants a manager.
       // Same shape as the cancel flow: collect a PIN and retry the identical change.
@@ -2243,7 +2256,7 @@ export function OrdersWorkflowPage() {
               label={t('orders.typeDialog.newType', 'New type')}
               onChange={(e) => setTypeTarget(e.target.value as typeof typeTarget)}
             >
-              {(['DINE_IN', 'TAKEAWAY', 'DELIVERY'] as const)
+              {(['DINE_IN', 'TAKEAWAY'] as const)
                 .filter((option) => option !== typeOrder?.order_type)
                 .map((option) => (
                   <MenuItem key={option} value={option}>

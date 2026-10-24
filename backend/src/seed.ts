@@ -439,7 +439,7 @@ export async function runSeed() {
         tenant_id: tenant.id,
         branch_id: branchExpress.id,
         key: 'ORDER_ACTIONS',
-        value: { ...ORDER_ACTION_DEFAULTS, editWindowMinutes: 5, cancelWindowMinutes: 5 },
+        value: { ...ORDER_ACTION_DEFAULTS },
         schema_version: 1,
       }),
     );

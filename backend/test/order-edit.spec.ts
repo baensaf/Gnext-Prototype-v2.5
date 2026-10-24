@@ -38,7 +38,8 @@ const APPROVAL_ID = '11111111-1111-1111-1111-111111111111';
 
 describe('Order edit command (spec 7.9)', () => {
   let service: OrderService;
-  let approvalService: any;  let printQueueService: any;
+  let approvalService: any;
+  let printQueueService: any;
   let stateEvents: any[];
   let order: any;
   let items: any[];
@@ -62,6 +63,9 @@ describe('Order edit command (spec 7.9)', () => {
       id: ORDER_ID,
       tenant_id: TENANT,
       order_number: 'ORD-100',
+      // Only a delivery that has not gone out takes line changes (O-22).
+      order_type: 'DELIVERY',
+      call_number: 7,
       state: 'CONFIRMED',
       status: 'CONFIRMED',
       submitted_at: minutesAgo(2),
@@ -143,7 +147,8 @@ describe('Order edit command (spec 7.9)', () => {
       getRepository: jest.fn().mockReturnValue({ findOne: jest.fn() }),
     };
 
-    approvalService = { validateApprovedRequest: jest.fn().mockResolvedValue({ status: 'APPROVED' }) };    printQueueService = { enqueueKitchenChangeTicket: jest.fn().mockResolvedValue({ id: 'job-1' }) };
+    approvalService = { validateApprovedRequest: jest.fn().mockResolvedValue({ status: 'APPROVED' }) };
+    printQueueService = { enqueueKitchenChangeTicket: jest.fn().mockResolvedValue({ id: 'job-1' }) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -179,7 +184,8 @@ describe('Order edit command (spec 7.9)', () => {
         { provide: DiscountEvaluationService, useValue: { releaseUsage: jest.fn() } },
         { provide: AuditWriter, useValue: { write: jest.fn(), writeInTransaction: jest.fn() } },
         { provide: OutboxWriter, useValue: { enqueueInTransaction: jest.fn() } },
-        { provide: ApprovalService, useValue: approvalService },        { provide: PrintQueueService, useValue: printQueueService },
+        { provide: ApprovalService, useValue: approvalService },
+        { provide: PrintQueueService, useValue: printQueueService },
         OrderTransitionRecorder,
         { provide: DataSource, useValue: { transaction: jest.fn(async (cb: any) => cb(em)), manager: em } },
       ],
@@ -433,44 +439,16 @@ describe('Order edit command (spec 7.9)', () => {
       expect(order.grand_total).toBe('100000.0000');
     });
 
-    it('puts the zone fee on when a walk-in turns out to be a delivery', async () => {
-      order.order_type = 'TAKEAWAY';
-      order.customer_id = 'cust-1';
-      order.delivery_fee = '0.0000';
-      liveZone();
-
-      await service.changeOrderType(TENANT, ORDER_ID, {
-        orderType: 'DELIVERY',
-        deliveryAddressId: 'addr-1',
-        deliveryZoneId: 'zone-1',
-      });
-
-      expect(order.order_type).toBe('DELIVERY');
-      expect(order.delivery_fee).toBe('25000.0000');
-      expect(order.grand_total).toBe('125000.0000');
-    });
-
-    // Audit OD3: the delivery record was only ever made at submit, so an order the kitchen
-    // already had never reached the delivery board once it became a delivery.
-    it('puts a sent order that becomes a delivery on the delivery board', async () => {
+    // O-23: a sent order changes type only from delivery to the counter.
+    it('refuses to make a sent takeaway a delivery', async () => {
       order.order_type = 'TAKEAWAY';
       order.customer_id = 'cust-1';
       liveZone();
 
-      await service.changeOrderType(TENANT, ORDER_ID, { orderType: 'DELIVERY', deliveryAddressId: 'addr-1', deliveryZoneId: 'zone-1' });
-
-      expect(delivery).toEqual(expect.objectContaining({ order_id: ORDER_ID, state: 'UNASSIGNED', zone_id: 'zone-1', fee: '25000.0000' }));
-    });
-
-    it('brings back the delivery an order had before it stopped being one', async () => {
-      order.order_type = 'TAKEAWAY';
-      order.customer_id = 'cust-1';
-      liveZone();
-      delivery = { id: 'dlv-1', order_id: ORDER_ID, state: 'CANCELLED', courier_id: null, zone_id: 'zone-old' };
-
-      await service.changeOrderType(TENANT, ORDER_ID, { orderType: 'DELIVERY', deliveryAddressId: 'addr-1', deliveryZoneId: 'zone-1' });
-
-      expect(delivery).toEqual(expect.objectContaining({ id: 'dlv-1', state: 'UNASSIGNED', zone_id: 'zone-1' }));
+      await expect(
+        service.changeOrderType(TENANT, ORDER_ID, { orderType: 'DELIVERY', deliveryAddressId: 'addr-1', deliveryZoneId: 'zone-1' }),
+      ).rejects.toMatchObject({ response: { code: 'ORDER_TYPE_LOCKED' } });
+      expect(delivery).toBeNull();
     });
 
     it('leaves a held draft to get its delivery when it is sent', async () => {
@@ -484,7 +462,8 @@ describe('Order edit command (spec 7.9)', () => {
       expect(delivery).toBeNull();
     });
 
-    it('will not make an order a delivery with nowhere to deliver it', async () => {
+    it('will not make a draft a delivery with nowhere to deliver it', async () => {
+      order.state = 'DRAFT';
       order.order_type = 'TAKEAWAY';
       order.customer_id = 'cust-1';
 

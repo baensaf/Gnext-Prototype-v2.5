@@ -24,8 +24,8 @@ const decide = (
 ) => resolveOrderEditDecision(action, ctx(over), ORDER_ACTION_DEFAULTS, NOW, line).decision;
 
 describe('resolveOrderActionConfig', () => {
-  it('defaults to the spec seed of a 10 minute edit and cancel window', () => {
-    expect(resolveOrderActionConfig(null)).toEqual({ editWindowMinutes: 10, cancelWindowMinutes: 10 });
+  it('defaults to a 5 minute edit and cancel window (O-17)', () => {
+    expect(resolveOrderActionConfig(null)).toEqual({ editWindowMinutes: 5, cancelWindowMinutes: 5 });
     expect(resolveOrderActionConfig({})).toEqual(ORDER_ACTION_DEFAULTS);
   });
 
@@ -38,7 +38,7 @@ describe('resolveOrderActionConfig', () => {
 
   it('falls back per key rather than throwing on a malformed row', () => {
     expect(resolveOrderActionConfig({ editWindowMinutes: -5, cancelWindowMinutes: 20 })).toEqual({
-      editWindowMinutes: 10,
+      editWindowMinutes: 5,
       cancelWindowMinutes: 20,
     });
     expect(resolveOrderActionConfig({ editWindowMinutes: 'soon', cancelWindowMinutes: 2.5 })).toEqual(
@@ -64,15 +64,15 @@ describe('minutesSinceSubmission', () => {
 
 describe('order edit policy: cashier window', () => {
   it('allows a cashier edit inside the window', () => {
-    expect(decide('VOID_ITEM', { submittedAt: minutesAgo(9) })).toBe('ALLOW');
+    expect(decide('VOID_ITEM', { submittedAt: minutesAgo(4) })).toBe('ALLOW');
   });
 
   it('treats the exact boundary as outside the window, per spec 7.9', () => {
-    expect(decide('VOID_ITEM', { submittedAt: minutesAgo(10) })).toBe('REQUIRE_APPROVAL');
+    expect(decide('VOID_ITEM', { submittedAt: minutesAgo(5) })).toBe('REQUIRE_APPROVAL');
   });
 
   it('escalates past the window', () => {
-    expect(decide('VOID_ITEM', { submittedAt: minutesAgo(11) })).toBe('REQUIRE_APPROVAL');
+    expect(decide('VOID_ITEM', { submittedAt: minutesAgo(6) })).toBe('REQUIRE_APPROVAL');
     expect(decide('REPLACE_ITEM', { submittedAt: minutesAgo(60) })).toBe('REQUIRE_APPROVAL');
   });
 

@@ -15,9 +15,11 @@ import { OrderService } from '../src/modules/order/order.service';
 import { ReportsService } from '../src/modules/reports/reports.service';
 import { loadBusinessClock } from '../src/common/utils/business-clock';
 import { deleteTenantData } from './utils/tenant-teardown';
+import { deliveryFixture } from './utils/delivery-fixture';
 
 // Sales by day, hour, channel and employee, and voids & cancellations (2026-10-14): one
-// cashier sells two takeaway orders and voids a cola off the first.
+// cashier sells two delivery orders and voids a cola off the first (only a delivery that has not
+// gone out takes line changes, O-22).
 describe('Sales breakdown reports (PostgreSQL)', () => {
   let moduleRef: TestingModule;
   let app: INestApplication;
@@ -46,11 +48,12 @@ describe('Sales breakdown reports (PostgreSQL)', () => {
     const cashier = (await save(AdminUser, { tenant_id: tenantId, username: `sara-${Date.now()}`, display_name: 'Sara', password_hash: 'x', role: 'CASHIER', branch_id: branchId })).id;
     const shiftId = ((await shifts.openShift(tenantId, { terminalId } as any)) as any).id;
     today = (await loadBusinessClock(dataSource.manager, tenantId, branchId)).today();
+    const delivery = await deliveryFixture(dataSource, tenantId, branchId);
 
     const sell = async (items: Array<{ product_id: string; quantity: number }>) => {
       const draft = await orders.createDraft(
         tenantId,
-        { branch_id: branchId, terminal_id: terminalId, shift_id: shiftId, order_type: 'TAKEAWAY', channel: 'POS', items } as any,
+        { branch_id: branchId, terminal_id: terminalId, shift_id: shiftId, ...delivery, channel: 'POS', items } as any,
         cashier,
       );
       await orders.submitOrder(tenantId, draft.id, {} as any, cashier);
@@ -87,7 +90,7 @@ describe('Sales breakdown reports (PostgreSQL)', () => {
 
   it('splits by channel and order type', async () => {
     const report = await run('sales-by-channel');
-    expect(report.rows).toEqual([expect.objectContaining({ channel: 'POS', order_type: 'TAKEAWAY', orders: 2, share_percent: '100.0' })]);
+    expect(report.rows).toEqual([expect.objectContaining({ channel: 'POS', order_type: 'DELIVERY', orders: 2, share_percent: '100.0' })]);
   });
 
   it('credits the cashier who rang the orders up, with the line they voided', async () => {

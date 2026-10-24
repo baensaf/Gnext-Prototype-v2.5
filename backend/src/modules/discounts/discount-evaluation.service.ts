@@ -109,11 +109,13 @@ export class DiscountEvaluationService {
       pickSettingValue(settings.filter((s) => s.key === 'DISCOUNT_AUTHORIZATIONS')) ||
       pickSettingValue(settings.filter((s) => s.key === 'DISCOUNTS')) ||
       {};
-    const byRole: Record<string, { pct: string; maxFixed: string }> = {
-      CASHIER: { pct: String(authSettings.cashierMaxPct ?? 10), maxFixed: String(authSettings.cashierMaxFixed ?? 50000) },
-      SUPERVISOR: { pct: String(authSettings.supervisorMaxPct ?? 20), maxFixed: String(authSettings.supervisorMaxFixed ?? 150000) },
-      MANAGER: { pct: String(authSettings.managerMaxPct ?? 30), maxFixed: String(authSettings.managerMaxFixed ?? 300000) },
-      ADMIN: { pct: String(authSettings.adminMaxPct ?? 100), maxFixed: String(authSettings.adminMaxFixed ?? 10000000) },
+    // A percent per role and nothing in Toman (R-16). A new chain starts its tills at 0%, so
+    // every manual discount needs a manager until head office sets a limit.
+    const byRole: Record<string, { pct: string }> = {
+      CASHIER: { pct: String(authSettings.cashierMaxPct ?? 0) },
+      SUPERVISOR: { pct: String(authSettings.supervisorMaxPct ?? 0) },
+      MANAGER: { pct: String(authSettings.managerMaxPct ?? 100) },
+      ADMIN: { pct: String(authSettings.adminMaxPct ?? 100) },
     };
     const roleName = (role || 'CASHIER').toUpperCase();
     return {
@@ -247,7 +249,6 @@ export class DiscountEvaluationService {
     const userRole = limits.role;
     const currentLimit = limits.own;
     const policyMaxPct = limits.ceiling.pct;
-    const policyMaxFixed = limits.ceiling.maxFixed;
 
     // A0. A one-time coupon (V2), till orders only. When it works it is the order's one
     // discount: the cashier's discount and the friends-and-family rate step aside.
@@ -316,90 +317,57 @@ export class DiscountEvaluationService {
         }
       }
 
+      // The limit is a percent of what the discount works on (R-16, 2026-10-24); an amount
+      // typed in Toman is measured as the percent of that it takes off.
+      const isPercent = manualDiscount.calculation_type === 'PERCENTAGE';
+      const typed = MoneyUtil.format(manualDiscount.value);
+      const requestedAmount = isPercent
+        ? MoneyUtil.multiply(manualEligibleSubtotal, MoneyUtil.divide(typed, '100', 6))
+        : MoneyUtil.greaterThan(typed, manualEligibleSubtotal) ? manualEligibleSubtotal : typed;
+      const pctVal = isPercent
+        ? typed
+        : MoneyUtil.greaterThan(manualEligibleSubtotal, '0')
+          ? MoneyUtil.divide(MoneyUtil.multiply(requestedAmount, '100'), manualEligibleSubtotal, 2)
+          : '100.00';
+      const shown = isPercent ? `${Number(pctVal)}%` : `${typed} (${Number(pctVal)}%)`;
+
       let manualAmount = '0.0000';
-      if (manualDiscount.calculation_type === 'PERCENTAGE') {
-        const pctVal = MoneyUtil.format(manualDiscount.value);
-        if (MoneyUtil.greaterThan(pctVal, policyMaxPct)) {
-          consideredDiscounts.push({
-            source: 'MANUAL',
-            name: 'Manual Discount',
-            discountType: 'PERCENTAGE',
-            status: 'REJECTED',
-            rejectionReason: `Exceeds maximum permitted policy limit of ${policyMaxPct}%`,
-            amount: '0.0000',
-          });
-          warnings.push(`Manual discount ${pctVal}% exceeds maximum policy threshold of ${policyMaxPct}%`);
-        } else {
-          let isValidApproval = true;
-          if (MoneyUtil.greaterThan(pctVal, currentLimit.pct)) {
-            if (!manualDiscount.approvalRequestId) {
-              approvalRequired = true;
-              approvalReason = `Manual discount ${pctVal}% exceeds ${userRole} limit of ${currentLimit.pct}%. Manager approval required.`;
-              isValidApproval = false;
-            } else if (this.approvalRequestRepo) {
-              const appReq = await this.approvalRequestRepo.findOne({
-                where: { id: manualDiscount.approvalRequestId, tenant_id: tenantId },
-              });
-              if (!appReq || appReq.status !== 'APPROVED' || (appReq.expires_at && new Date(appReq.expires_at) < now)) {
-                isValidApproval = false;
-                consideredDiscounts.push({
-                  source: 'MANUAL',
-                  name: 'Manual Discount',
-                  discountType: 'PERCENTAGE',
-                  status: 'REJECTED',
-                  rejectionReason: `Invalid or unapproved escalation approval request ${manualDiscount.approvalRequestId}`,
-                  amount: '0.0000',
-                });
-                warnings.push(`Approval request ${manualDiscount.approvalRequestId} is invalid or not approved`);
-              }
-            }
-          }
-          if (isValidApproval) {
-            const pctDec = MoneyUtil.divide(manualDiscount.value, '100', 6);
-            manualAmount = MoneyUtil.multiply(manualEligibleSubtotal, pctDec);
-          }
-        }
+      if (MoneyUtil.greaterThan(pctVal, policyMaxPct)) {
+        consideredDiscounts.push({
+          source: 'MANUAL',
+          name: 'Manual Discount',
+          discountType: manualDiscount.calculation_type,
+          status: 'REJECTED',
+          rejectionReason: `Exceeds maximum permitted policy limit of ${policyMaxPct}%`,
+          amount: '0.0000',
+        });
+        warnings.push(`Manual discount ${shown} exceeds maximum policy threshold of ${policyMaxPct}%`);
       } else {
-        const fixedVal = MoneyUtil.format(manualDiscount.value);
-        if (MoneyUtil.greaterThan(fixedVal, policyMaxFixed)) {
-          consideredDiscounts.push({
-            source: 'MANUAL',
-            name: 'Manual Discount',
-            discountType: 'FIXED_AMOUNT',
-            status: 'REJECTED',
-            rejectionReason: `Exceeds maximum permitted policy fixed limit of ${policyMaxFixed}`,
-            amount: '0.0000',
-          });
-          warnings.push(`Manual discount amount ${fixedVal} exceeds maximum policy threshold`);
-        } else {
-          let isValidApproval = true;
-          if (MoneyUtil.greaterThan(fixedVal, currentLimit.maxFixed)) {
-            if (!manualDiscount.approvalRequestId) {
-              approvalRequired = true;
-              approvalReason = `Manual discount amount exceeds ${userRole} fixed limit of ${currentLimit.maxFixed}. Manager approval required.`;
+        let isValidApproval = true;
+        if (MoneyUtil.greaterThan(pctVal, currentLimit.pct)) {
+          if (!manualDiscount.approvalRequestId) {
+            approvalRequired = true;
+            approvalReason = `Manual discount ${shown} exceeds ${userRole} limit of ${currentLimit.pct}%. Manager approval required.`;
+            isValidApproval = false;
+          } else if (this.approvalRequestRepo) {
+            const appReq = await this.approvalRequestRepo.findOne({
+              where: { id: manualDiscount.approvalRequestId, tenant_id: tenantId },
+            });
+            if (!appReq || appReq.status !== 'APPROVED' || (appReq.expires_at && new Date(appReq.expires_at) < now)) {
               isValidApproval = false;
-            } else if (this.approvalRequestRepo) {
-              const appReq = await this.approvalRequestRepo.findOne({
-                where: { id: manualDiscount.approvalRequestId, tenant_id: tenantId },
+              consideredDiscounts.push({
+                source: 'MANUAL',
+                name: 'Manual Discount',
+                discountType: manualDiscount.calculation_type,
+                status: 'REJECTED',
+                rejectionReason: `Invalid or unapproved escalation approval request ${manualDiscount.approvalRequestId}`,
+                amount: '0.0000',
               });
-              if (!appReq || appReq.status !== 'APPROVED' || (appReq.expires_at && new Date(appReq.expires_at) < now)) {
-                isValidApproval = false;
-                consideredDiscounts.push({
-                  source: 'MANUAL',
-                  name: 'Manual Discount',
-                  discountType: 'FIXED_AMOUNT',
-                  status: 'REJECTED',
-                  rejectionReason: `Invalid or unapproved escalation approval request ${manualDiscount.approvalRequestId}`,
-                  amount: '0.0000',
-                });
-                warnings.push(`Approval request ${manualDiscount.approvalRequestId} is invalid or not approved`);
-              }
+              warnings.push(`Approval request ${manualDiscount.approvalRequestId} is invalid or not approved`);
             }
           }
-          if (isValidApproval) {
-            manualAmount = MoneyUtil.greaterThan(fixedVal, manualEligibleSubtotal) ? manualEligibleSubtotal : fixedVal;
-          }
         }
+        if (isValidApproval) manualAmount = requestedAmount;
       }
 
       if (MoneyUtil.greaterThan(manualAmount, '0')) {

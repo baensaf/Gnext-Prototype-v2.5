@@ -16,6 +16,7 @@ import { OrderService } from '../src/modules/order/order.service';
 import { CouponsService } from '../src/modules/discounts/coupons.service';
 import { Coupon } from '../src/entities/Coupon.entity';
 import { deleteTenantData } from './utils/tenant-teardown';
+import { deliveryFixture } from './utils/delivery-fixture';
 
 // An order discount on a sent order that is edited afterwards (2026-10-14): a percent stays a
 // percent of what is left, and tax is charged on the lines after their share of the discount,
@@ -32,6 +33,7 @@ describe('Order discount after an edit (PostgreSQL)', () => {
   let shiftId: string;
   let burger: string;
   let cola: string;
+  let delivery: Awaited<ReturnType<typeof deliveryFixture>>;
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -51,6 +53,7 @@ describe('Order discount after an edit (PostgreSQL)', () => {
     burger = (await save(Product, { tenant_id: tenantId, category_id: categoryId, code: 'BURGER', name: 'Burger', base_price: '100000.0000', tax_rate: '0.1000', is_active: true })).id;
     cola = (await save(Product, { tenant_id: tenantId, category_id: categoryId, code: 'COLA', name: 'Cola', base_price: '30000.0000', tax_rate: '0.1000', is_active: true })).id;
     shiftId = ((await shifts.openShift(tenantId, { terminalId } as any)) as any).id;
+    delivery = await deliveryFixture(dataSource, tenantId, branchId);
   }, 60000);
 
   afterAll(async () => {
@@ -58,13 +61,14 @@ describe('Order discount after an edit (PostgreSQL)', () => {
     await app.close();
   });
 
-  /** Two burgers and a cola (230,000 before tax), sent with the given order discount. */
+  /** Two burgers and a cola (230,000 before tax), sent with the given order discount. A delivery,
+   * because only a delivery that has not gone out is edited (O-22). */
   const sentOrder = async (manualDiscount?: { calculation_type: 'PERCENTAGE' | 'FIXED_AMOUNT'; value: string }, couponCode?: string) => {
     const draft = await orders.createDraft(tenantId, {
       branch_id: branchId,
       terminal_id: terminalId,
       shift_id: shiftId,
-      order_type: 'TAKEAWAY',
+      ...delivery,
       channel: 'POS',
       items: [
         { product_id: burger, quantity: 2 },

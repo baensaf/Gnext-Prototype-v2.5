@@ -35,7 +35,8 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
   let service: OrderService;
   let orderRepo: any;
   let itemRepo: any;
-  let em: any;  let simulationService: any;
+  let em: any;
+  let simulationService: any;
   let auditWriter: any;
   let printQueueService: any;
 
@@ -67,7 +68,8 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
       // A shift is open at the branch, so an accept goes through.
       find: jest.fn((entity) => Promise.resolve(entity === CashierShift ? [{ id: 'shift-1', state: 'OPEN' }] : [])),
       getRepository: jest.fn(),
-    };    simulationService = {
+    };
+    simulationService = {
       notifyAccepted: jest.fn().mockResolvedValue({ status: 204, statusCode: 42 }),
       notifyRejected: jest.fn().mockResolvedValue({ status: 204, statusCode: 51 }),
       getDeclineReasons: jest.fn().mockResolvedValue([
@@ -100,7 +102,8 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
         { provide: AuditWriter, useValue: auditWriter },
         { provide: OutboxWriter, useValue: { enqueueInTransaction: jest.fn(), enqueue: jest.fn() } },
         { provide: ApprovalService, useValue: {} },
-        { provide: DataSource, useValue: { transaction: jest.fn(async (cb) => await cb(em)) } },        { provide: PrintQueueService, useValue: printQueueService },
+        { provide: DataSource, useValue: { transaction: jest.fn(async (cb) => await cb(em)) } },
+        { provide: PrintQueueService, useValue: printQueueService },
         { provide: SimulationService, useValue: simulationService },
         OrderTransitionRecorder,
       ],
@@ -230,12 +233,6 @@ describe('a Snappfood order stays within what the annex lets a store do', () => 
 
       expect(lockedOut(await service.transitionState('t-1', 'order-1', 'CANCEL', {}).catch((e) => e))).toBe(true);
       expect(em.save).not.toHaveBeenCalled();
-    });
-
-    it('refuses to reopen one Snappfood cancelled', async () => {
-      orderRepo.findOne.mockResolvedValue(snappfoodOrder({ state: 'CANCELLED', status: 'CANCELLED' }));
-
-      expect(lockedOut(await service.reopenOrder('t-1', 'order-1', { approvalRequestId: 'ap-1' } as any).catch((e) => e))).toBe(true);
     });
 
     it('refuses to change its lines', async () => {
