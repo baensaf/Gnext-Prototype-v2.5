@@ -349,7 +349,7 @@ export const orderApi = {
    * marks the original struck and leaves it on the order, an add appends.
    *
    * Throws 403 APPROVAL_REQUIRED when the change is outside the cashier window,
-   * and 409 REFUND_PLAN_REQUIRED when it would drop the total below money
+   * and 409 BELOW_AMOUNT_PAID when it would drop the total below money
    * already collected. Both carry the detail needed to retry.
    */
   editOrder: async (
@@ -358,7 +358,7 @@ export const orderApi = {
       add?: any[];
       void?: { orderItemId: string; reasonCodeId?: string; reason?: string }[];
     },
-    options?: { approvalRequestId?: string; reasonCodeId?: string; reason?: string; quoteVersion?: string; refundPlan?: any },
+    options?: { approvalRequestId?: string; reasonCodeId?: string; reason?: string; quoteVersion?: string },
   ): Promise<OrderHeader> => {
     const res = await httpClient.post(`/api/v1/orders/${id}/edit`, { changes, ...options });
     return res.data;
@@ -392,7 +392,7 @@ export const orderApi = {
     id: string,
     orderItemId: string,
     replacement: { productId?: string; variantId?: string; quantity?: string; options?: any[]; notes?: string },
-    options?: { reasonCodeId?: string; reason?: string; approvalRequestId?: string; quoteVersion?: string; refundPlan?: any },
+    options?: { reasonCodeId?: string; reason?: string; approvalRequestId?: string; quoteVersion?: string },
   ): Promise<OrderHeader> => {
     const res = await httpClient.post(`/api/v1/orders/${id}/replace-item`, {
       orderItemId,

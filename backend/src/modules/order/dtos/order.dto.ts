@@ -355,9 +355,6 @@ export class OrderEditDto {
   @IsOptional()
   @IsString()
   reason?: string;
-
-  @IsOptional()
-  refundPlan?: any;
 }
 
 export class OrderItemReplaceDto {
@@ -394,9 +391,6 @@ export class OrderItemReplaceDto {
   @IsOptional()
   @IsUUID()
   approvalRequestId?: string;
-
-  @IsOptional()
-  refundPlan?: any;
 }
 
 export class OrderCancelDto {
@@ -412,9 +406,6 @@ export class OrderCancelDto {
   @IsOptional()
   @IsUUID()
   approvalRequestId?: string;
-
-  @IsOptional()
-  refundPlan?: any;
 }
 
 /** The store takes an incoming order. Snappfood caps the promised time at 70 minutes. */

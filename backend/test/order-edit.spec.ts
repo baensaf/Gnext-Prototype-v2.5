@@ -297,7 +297,8 @@ describe('Order edit command (spec 7.9)', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('refuses to drop the total below money collected without a refund plan', async () => {
+    // O-31: no partial refunds, so the whole order is cancelled and rung again instead.
+    it('refuses to drop the total below money already paid', async () => {
       payments.push({ status: 'SUCCEEDED', amount: '100000.0000' });
 
       await expect(
@@ -305,19 +306,7 @@ describe('Order edit command (spec 7.9)', () => {
           changes: { void: [{ orderItemId: 'item-1', reasonCodeId: REASON }] },
           approvalRequestId: APPROVAL_ID,
         }),
-      ).rejects.toThrow(ConflictException);
-    });
-
-    it('allows the same edit once a refund plan is attached', async () => {
-      payments.push({ status: 'SUCCEEDED', amount: '100000.0000' });
-
-      await service.editOrder(TENANT, ORDER_ID, {
-        changes: { void: [{ orderItemId: 'item-1', reasonCodeId: REASON }] },
-        approvalRequestId: APPROVAL_ID,
-        refundPlan: { amount: '60000.0000' },
-      });
-
-      expect(order.grand_total).toBe('40000.0000');
+      ).rejects.toMatchObject({ response: { code: 'BELOW_AMOUNT_PAID' } });
     });
 
     it('counts succeeded refunds against money collected', async () => {

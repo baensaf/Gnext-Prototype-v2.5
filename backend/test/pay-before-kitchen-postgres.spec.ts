@@ -160,4 +160,28 @@ describe('Pay before the kitchen (PostgreSQL)', () => {
     const [refund] = await refunds.refundOrder(tenantId, earlier!.id, { reason: 'Came back the next day' } as any);
     expect(refund).toMatchObject({ amount: '100000.0000' });
   });
+
+  // O-31: no partial refunds, so a change that drops a paid delivery below what was paid is refused.
+  it('refuses to drop an early-paid delivery below what was paid', async () => {
+    const sent = await send({ ...delivery, items: [{ product_id: burger, quantity: 2 }] });
+    await pay(sent!.id, '200000.0000');
+    const line = (await dataSource.query(`SELECT id FROM order_item WHERE order_id = $1 LIMIT 1`, [sent!.id]))[0];
+    await expect(
+      orders.editOrder(tenantId, sent!.id, { changes: { void: [{ orderItemId: line.id, reasonCodeId: randomUUID() }] } } as any),
+    ).rejects.toMatchObject({ response: { code: 'BELOW_AMOUNT_PAID' } });
+  });
+
+  // P-18: after the cutoff the old shift takes no payment, but a manager's cancel of a part-paid
+  // order gives its cash back from that shift. Last here: it ends the shift's business day.
+  it('pays a part-paid order back from the old shift after the cutoff', async () => {
+    const sent = await send();
+    await pay(sent!.id, '40000.0000');
+    await dataSource.query(`UPDATE cashier_shift SET business_date = '2020-01-01' WHERE id = $1`, [shiftId]);
+
+    await expect(pay(sent!.id, '60000.0000')).rejects.toMatchObject({ response: { code: 'SHIFT_BUSINESS_DAY_ENDED' } });
+    await refunds.cancelPaidOrder(tenantId, sent!.id, { reason: 'Left after the cutoff' } as any);
+    expect((await reload(sent!.id)).state).toBe('CANCELLED');
+    const [back] = await dataSource.query(`SELECT amount, shift_id FROM refund WHERE order_id = $1`, [sent!.id]);
+    expect(back).toMatchObject({ amount: '40000.0000', shift_id: shiftId });
+  });
 });
