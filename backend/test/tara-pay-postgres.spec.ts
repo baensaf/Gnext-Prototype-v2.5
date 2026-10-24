@@ -14,6 +14,7 @@ import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { TaraPurchase, TaraSimPurchase } from '../src/entities/Tara.entity';
 import { Refund } from '../src/entities/Refund.entity';
 import { OrderService } from '../src/modules/order/order.service';
+import { ShiftService } from '../src/modules/cashier/shift.service';
 import { PaymentService } from '../src/modules/payment/payment.service';
 import { RefundService } from '../src/modules/refund/refund.service';
 import { TaraService } from '../src/modules/tara/tara.service';
@@ -66,9 +67,12 @@ describe('Tara payments (PostgreSQL)', () => {
     tenantId = (await save(Tenant, { code: `TARA-${tag}`, name: 'Tara', base_currency: 'IRR', default_locale: 'fa', time_zone: 'Asia/Tehran' })).id;
     branchId = (await save(Branch, { tenant_id: tenantId, code: 'TR1', name: 'A', is_active: true, time_zone: 'Asia/Tehran' })).id;
     otherBranchId = (await save(Branch, { tenant_id: tenantId, code: 'TR2', name: 'B', is_active: true, time_zone: 'Asia/Tehran' })).id;
+    const tills: string[] = [];
     for (const code of ['T1', 'T2']) {
-      await save(Terminal, { tenant_id: tenantId, branch_id: branchId, code, name: `Till ${code}`, terminal_type: 'CASHIER', is_active: true });
+      tills.push((await save(Terminal, { tenant_id: tenantId, branch_id: branchId, code, name: `Till ${code}`, terminal_type: 'CASHIER', is_active: true })).id);
     }
+    // Every payment at the till belongs to an open shift, Tara included (Payments PRD).
+    await moduleRef.get(ShiftService).openShift(tenantId, { terminalId: tills[0] } as any);
     cashierId = (
       await save(AdminUser, {
         tenant_id: tenantId, username: `tara_cashier_${tag}`, password_hash: await argon2.hash('x'),

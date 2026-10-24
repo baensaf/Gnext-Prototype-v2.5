@@ -17,6 +17,9 @@ import { PaymentService } from '../src/modules/payment/payment.service';
 import { RefundService } from '../src/modules/refund/refund.service';
 import { deleteTenantData } from './utils/tenant-teardown';
 import { deliveryFixture } from './utils/delivery-fixture';
+import * as argon2 from 'argon2';
+import { AdminUser } from '../src/entities/AdminUser.entity';
+import { ApprovalService } from '../src/modules/approval/approval.service';
 
 // The till rules of 2026-10-24: a takeaway goes to the kitchen once it is paid (O-19) and goes
 // back to the cart while nothing is paid (O-20); a counter order is not edited and never becomes a
@@ -142,6 +145,31 @@ describe('Pay before the kitchen (PostgreSQL)', () => {
     await expect(orders.cancelOrder(tenantId, sent!.id, { reasonCodeId: randomUUID() } as any)).rejects.toMatchObject({
       response: { code: 'CHARGE_UNRESOLVED' },
     });
+  });
+
+  // R-15: a manager approves money going out by signing in on the cashier's screen.
+  it("releases a cashier's refund with a request a manager approved by signing in", async () => {
+    const save = (entity: any, data: any) => dataSource.getRepository(entity).save(dataSource.getRepository(entity).create(data)) as Promise<any>;
+    const tag = Date.now();
+    const cashier = await save(AdminUser, { tenant_id: tenantId, username: `pk-cashier-${tag}`, display_name: 'Cashier', role: 'CASHIER', password_hash: 'x', is_active: true, branch_id: branchId });
+    const manager = await save(AdminUser, {
+      tenant_id: tenantId, username: `pk-manager-${tag}`, display_name: 'Manager', role: 'MANAGER',
+      password_hash: await argon2.hash('Manager!1'), is_active: true, branch_id: branchId,
+    });
+    const approvals = moduleRef.get(ApprovalService);
+    const orderId = randomUUID();
+    const request = await approvals.createRequest(tenantId, cashier.id, { action: 'REFUND_ORDER', entity_type: 'ORDER', entity_id: orderId }, 'test');
+
+    await expect(
+      approvals.approveRequest(tenantId, request.id, cashier.id, '', undefined, 'test', null, { username: manager.username, password: 'wrong' }),
+    ).rejects.toMatchObject({ response: { code: 'APPROVAL_SIGN_IN_FAILED' } });
+    await approvals.approveRequest(tenantId, request.id, cashier.id, '', undefined, 'test', null, { username: manager.username, password: 'Manager!1' });
+
+    const releasedBy = await approvals.authorizeMoneyOut(tenantId, 'REFUND_ORDER', { id: cashier.id, role: 'CASHIER', branchId }, undefined, null, {
+      requestId: request.id,
+      entityId: orderId,
+    });
+    expect(releasedBy).toBe(manager.id);
   });
 
   it('refunds only an order from an earlier business day, and cancels only one from today', async () => {

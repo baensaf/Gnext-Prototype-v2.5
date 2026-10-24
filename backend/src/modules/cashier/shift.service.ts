@@ -287,7 +287,7 @@ export class ShiftService {
       throw new ConflictException({
         code: 'NO_OPEN_SHIFT',
         title: 'No Cash Drawer Open',
-        detail: 'Cash cannot be taken or returned while no shift is open at this register. Open a shift first.',
+        detail: 'Money cannot be taken or returned while no shift is open at this register. Open a shift first.',
       });
     }
     return shift;

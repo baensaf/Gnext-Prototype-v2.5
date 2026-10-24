@@ -16,6 +16,8 @@ import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { PaymentDevice } from '../src/entities/PaymentDevice.entity';
 import { Payment } from '../src/entities/Payment.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
+import { Terminal } from '../src/entities/Terminal.entity';
+import { ShiftService } from '../src/modules/cashier/shift.service';
 import { AgentRegistryService } from '../src/modules/agent-gateway/agent-registry.service';
 import { AgentSessionsService } from '../src/modules/agent-gateway/agent-sessions.service';
 import { OrderService } from '../src/modules/order/order.service';
@@ -101,6 +103,9 @@ describe('branch agent journey (PostgreSQL)', () => {
 
     // One Saman terminal, driven by the agent.
     cardMethodId = (await save(PaymentMethod, { tenant_id: tenantId, code: 'CARD_POS', name: 'Bank card', kind: 'CARD_POS', is_active: true })).id;
+    // Every payment at the till belongs to an open shift, card included (Payments PRD).
+    const till = await save(Terminal, { tenant_id: tenantId, branch_id: branchId, code: 'JRN-TILL', name: 'Till 1', terminal_type: 'CASHIER', is_active: true });
+    await moduleRef.get(ShiftService).openShift(tenantId, { terminalId: till.id } as any);
     terminalId = (await save(PaymentDevice, { tenant_id: tenantId, branch_id: branchId, code: 'JRN-POS', name: 'Counter terminal', kind: 'POS' })).id;
     await payments.setDeviceAgent(tenantId, terminalId, { agentConnection: { kind: 'tcp', host: '192.168.1.60', port: 8888 }, agentDriver: 'sep' });
 

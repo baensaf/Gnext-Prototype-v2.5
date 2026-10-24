@@ -91,6 +91,8 @@ describe('Refunds & Paid-Order Cancellation Suite (R16, simplified 2026-10-10)',
         if (entityClass === PaymentMethod) return await methodRepo.findOne(options);
         return null;
       }),
+      // No card charge waiting for the terminal (Y-16).
+      count: jest.fn().mockResolvedValue(0),
       find: jest.fn(async (entityClass, options) => {
         if (entityClass === Payment) return await paymentRepo.find(options);
         if (entityClass === Refund) return await refundRepo.find(options);

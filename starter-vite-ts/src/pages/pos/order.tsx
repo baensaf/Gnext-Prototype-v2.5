@@ -1113,9 +1113,9 @@ export function PosOrderPage() {
     }
 
     if (overOwnLimit) {
-      // Prompt Manager PIN authorization immediately
+      // A manager signs in on this screen to approve it (R-15).
       setApprovalReason(
-        `Manual discount ${manualCalcType === 'PERCENTAGE' ? `${manualValue}%` : `${MoneyUtil.formatCurrency(manualValue)} ${currency}`} exceeds your limit (${discountLimits.own.pct}%). Manager PIN authorization required.`
+        `Manual discount ${manualCalcType === 'PERCENTAGE' ? `${manualValue}%` : `${MoneyUtil.formatCurrency(manualValue)} ${currency}`} exceeds your limit (${discountLimits.own.pct}%). A manager approves it.`
       );
       setManualDiscountModalOpen(false);
       setApprovalModalOpen(true);

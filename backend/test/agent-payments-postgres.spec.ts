@@ -15,6 +15,8 @@ import { PaymentAttempt } from '../src/entities/PaymentAttempt.entity';
 import { PaymentAllocation } from '../src/entities/PaymentAllocation.entity';
 import { AuditEvent } from '../src/entities/AuditEvent.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
+import { Terminal } from '../src/entities/Terminal.entity';
+import { ShiftService } from '../src/modules/cashier/shift.service';
 import { AgentCommand } from '../src/entities/AgentCommand.entity';
 import { AgentEnrolmentService } from '../src/modules/agent-gateway/agent-enrolment.service';
 import { AgentRegistryService } from '../src/modules/agent-gateway/agent-registry.service';
@@ -152,6 +154,9 @@ describe('card payments via the branch agent (PostgreSQL)', () => {
       await save(Product, { tenant_id: tenantId, category_id: category.id, code: 'APY-BURGER', name: 'Burger', base_price: '250000.0000', tax_rate: '0.0900' })
     ).id;
     cardMethodId = (await save(PaymentMethod, { tenant_id: tenantId, code: 'CARD_POS', name: 'Bank card', kind: 'CARD_POS', is_active: true })).id;
+    // Every payment at the till belongs to an open shift, card included (Payments PRD).
+    const till = await save(Terminal, { tenant_id: tenantId, branch_id: branchId, code: 'APY-TILL', name: 'Till 1', terminal_type: 'CASHIER', is_active: true });
+    await moduleRef.get(ShiftService).openShift(tenantId, { terminalId: till.id } as any);
     const terminal = await save(PaymentDevice, { tenant_id: tenantId, branch_id: branchId, code: 'POS1', name: 'Till 1 terminal', kind: 'POS' });
     terminalId = terminal.id;
     await payments.setDeviceAgent(tenantId, terminalId, {
@@ -386,14 +391,13 @@ describe('card payments via the branch agent (PostgreSQL)', () => {
     expect(await paymentRow(second.intent.id)).toMatchObject({ status: 'PROCESSING', needs_terminal_check: true });
   });
 
-  it('fails a charge the agent never received, without asking anyone', async () => {
+  // Y-14: with the agent offline the charge fails at once and nothing waits to run on reconnect.
+  it('fails a charge at once when the branch agent is offline, and queues nothing', async () => {
     const { order, intent } = await cardIntent();
-    const processing = await payments.processPayment(tenantId, intent.id, {}, cashierId);
-    expect(processing.status).toBe('PROCESSING');
-
-    await commands.tick(new Date(Date.now() + 61_000), tenantId);
-    await until(async () => (await paymentRow(intent.id)).status === 'FAILED');
+    const failed = await payments.processPayment(tenantId, intent.id, {}, cashierId);
+    expect(failed.status).toBe('FAILED');
     expect(await paymentRow(intent.id)).toMatchObject({ failure_code: 'AGENT_OFFLINE', needs_terminal_check: false });
+    expect(await dataSource.getRepository(AgentCommand).count({ where: { tenant_id: tenantId, type: 'payment.charge', status: 'QUEUED' } as any })).toBe(0);
     expect(order.id).toBeTruthy();
   });
 

@@ -44,6 +44,9 @@ const CASHIER_PATHS = [
   // them, as on the agent's own page before (2026-10-19). Changes are the manager's; enrolment
   // codes and revoking stay with head office, on the same page.
   '/app/operations/agents',
+  // The branch's payments, to read: the cashier resolves an unanswered card charge alone, and
+  // its mark stays here until then (Y-11, Y-17).
+  '/app/payments',
 ];
 
 /** A branch manager runs one site: its people, its money, its menu, its reports. */

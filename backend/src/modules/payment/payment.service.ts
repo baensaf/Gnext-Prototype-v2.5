@@ -95,6 +95,8 @@ export class PaymentService {
         'p.posted_at AS posted_at',
         't.awaiting AS tara_awaiting',
         't.stuck AS tara_stuck',
+        // Charged by hand on another reader (Y-12): still a card, shown apart.
+        `EXISTS (SELECT 1 FROM payment_attempt pa WHERE pa.payment_id = p.id AND pa.adapter = 'MANUAL') AS other_reader`,
       ])
       .orderBy('COALESCE(p.posted_at, p.initiated_at)', 'DESC')
       .addOrderBy('p.payment_number', 'DESC')
@@ -238,9 +240,11 @@ export class PaymentService {
       // The drawer at the register taking the money, which is not always the one the order
       // was rung up on. Cash is refused here, before the intent exists, when there is no
       // such drawer — a PENDING cash intent that can never capture blocks every other
-      // tender on the order. Card and credit only note the shift they happened in.
+      // tender on the order. Every payment at the till belongs to an open shift on its business
+      // day, card included, and is refused before any terminal is asked (Payments PRD). A kiosk
+      // or platform order has no till shift.
       const openShift =
-        method.kind === 'CASH'
+        method.kind === 'CASH' || order.channel === 'POS'
           ? await this.shiftService.requireDrawer(tenantId, order.branch_id, order.terminal_id)
           : await this.shiftService.resolveDrawer(tenantId, order.branch_id, order.terminal_id);
       const currentShiftId: string | null = openShift?.id ?? null;

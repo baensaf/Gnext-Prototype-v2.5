@@ -325,8 +325,17 @@ export class ApprovalService {
     requester: { id: string; role?: string; branchId?: string | null },
     pin?: string,
     approverId?: string | null,
+    approved?: { requestId: string; entityId?: string },
   ): Promise<string | null> {
     if (isApprover(requester.role)) return null;
+    // A request a manager approved by signing in on this screen (R-15).
+    if (approved?.requestId) {
+      await this.validateApprovedRequest(tenantId, approved.requestId, actionName, undefined, approved.entityId);
+      const decision = await this.decisionRepo.findOne({
+        where: { tenant_id: tenantId, request_id: approved.requestId, decision: 'APPROVED' },
+      });
+      return decision?.approver_user_id ?? null;
+    }
     const result = await this.verifyApproverPin(
       tenantId,
       pin || '',
@@ -550,9 +559,19 @@ export class ApprovalService {
     note?: string,
     correlationId?: string,
     pickedApproverId?: string | null,
+    signIn?: { username: string; password: string },
   ) {
-    // The pin decides who is approving, not the id the client sent.
-    approverUserId = await this.resolveApprover(tenantId, approverUserId, pin, 'APPROVE_REQUEST', pickedApproverId);
+    // The sign-in, or the pin, decides who is approving, not the id the client sent. With a
+    // sign-in, the id the client sent is the person asking (R-15).
+    if (signIn) {
+      const requester = await this.userRepo.findOne({ where: { id: approverUserId, tenant_id: tenantId } });
+      const signedIn = await this.verifyApproverSignIn(
+        tenantId, signIn.username, signIn.password, 'APPROVE_REQUEST', approverUserId, requester?.branch_id ?? null,
+      );
+      approverUserId = signedIn.approver_user_id;
+    } else {
+      approverUserId = await this.resolveApprover(tenantId, approverUserId, pin, 'APPROVE_REQUEST', pickedApproverId);
+    }
 
     const ds = AppDataSource.isInitialized ? AppDataSource : this.dataSource;
 
