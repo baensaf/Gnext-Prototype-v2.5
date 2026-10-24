@@ -81,6 +81,11 @@ export const approvalApi = {
     const res = await httpClient.post(`/api/v1/approvals/requests/${id}/approve`, { pin, note, approverId });
     return res.data;
   },
+  /** A manager approves a request by signing in on the cashier's screen (R-15). */
+  approveRequestBySignIn: async (id: string, username: string, password: string): Promise<ApprovalRequest> => {
+    const res = await httpClient.post(`/api/v1/approvals/requests/${id}/approve`, { username, password });
+    return res.data;
+  },
   rejectRequest: async (id: string, pin: string, note?: string): Promise<ApprovalRequest> => {
     const res = await httpClient.post(`/api/v1/approvals/requests/${id}/reject`, { pin, note });
     return res.data;

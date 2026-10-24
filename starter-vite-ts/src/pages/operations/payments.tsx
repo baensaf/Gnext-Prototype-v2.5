@@ -134,7 +134,7 @@ export function PaymentsPage() {
                 <TableRow key={tx.id}>
                   <TableCell><code>{tx.payment_number}</code></TableCell>
                   <TableCell><code>{tx.order_number}</code></TableCell>
-                  <TableCell><Chip label={tx.method_kind} size="small" variant="outlined" /></TableCell>
+                  <TableCell><Chip label={tx.other_reader ? t('payments.otherReader') : tx.method_kind} size="small" variant="outlined" /></TableCell>
                   <TableCell>
                     <strong><bdi dir="ltr">{MoneyUtil.formatCurrency(tx.amount)}</bdi> {moneyUnit(tx.currency_code, i18n.language)}</strong>
                   </TableCell>

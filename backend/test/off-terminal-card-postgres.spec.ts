@@ -11,6 +11,8 @@ import { Product } from '../src/entities/Product.entity';
 import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { OrderService } from '../src/modules/order/order.service';
+import { ShiftService } from '../src/modules/cashier/shift.service';
+import { Terminal } from '../src/entities/Terminal.entity';
 import { PaymentService } from '../src/modules/payment/payment.service';
 import { deleteTenantData } from './utils/tenant-teardown';
 
@@ -50,6 +52,9 @@ describe('card charged on another reader (PostgreSQL)', () => {
     const categoryId = (await save(Category, { tenant_id: tenantId, code: 'OT-MAINS', name: 'Mains', is_active: true })).id;
     productId = (await save(Product, { tenant_id: tenantId, category_id: categoryId, code: 'OT-P', name: 'Burger', base_price: '100000.0000', tax_rate: '0.0000', is_active: true })).id;
     cardMethodId = (await save(PaymentMethod, { tenant_id: tenantId, code: 'CARD', name: 'Card', kind: 'CARD_POS', is_active: true })).id;
+    // Every payment at the till belongs to an open shift, card included (Payments PRD).
+    const till = await save(Terminal, { tenant_id: tenantId, branch_id: branchId, code: 'OT-TILL', name: 'Till 1', terminal_type: 'CASHIER', is_active: true });
+    await moduleRef.get(ShiftService).openShift(tenantId, { terminalId: till.id } as any);
   }, 120000);
 
   afterAll(async () => {

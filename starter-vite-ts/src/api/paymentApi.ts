@@ -99,6 +99,8 @@ export interface PaymentListRow {
   /** Tara: the call still waiting for an answer, and whether the server gave up asking. */
   tara_awaiting?: string | null;
   tara_stuck?: boolean | null;
+  /** A card charged by hand on another reader (Y-12). */
+  other_reader?: boolean | null;
 }
 
 /** How long the till waits for the customer and the bank at the card terminal. */

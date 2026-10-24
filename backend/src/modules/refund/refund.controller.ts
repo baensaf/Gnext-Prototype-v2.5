@@ -21,7 +21,7 @@ export class RefundController {
    * Returns who released it: the approver whose pin was given, or null for an approver
    * acting on their own authority.
    */
-  private async authorize(req: Request, action: string, pin?: string, approverId?: string) {
+  private async authorize(req: Request, action: string, pin?: string, approverId?: string, approved?: { requestId: string; entityId?: string }) {
     return await this.approvalService.authorizeMoneyOut(
       (req as any).tenantId,
       action,
@@ -32,6 +32,7 @@ export class RefundController {
       },
       pin,
       approverId,
+      approved,
     );
   }
 
@@ -53,7 +54,8 @@ export class RefundController {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
-    const approver = await this.authorize(req, 'REFUND_ORDER', body.pin, body.approverId);
+    const approver = await this.authorize(req, 'REFUND_ORDER', body.pin, body.approverId,
+      body.approvalRequestId ? { requestId: body.approvalRequestId, entityId: orderId } : undefined);
     return await this.refundService.refundOrder(tenantId, orderId, body, {
       userId,
       correlationId,
@@ -71,8 +73,9 @@ export class RefundController {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
-    await this.authorize(req, 'CANCEL_PAID_ORDER', body.pin, body.approverId);
-    // The PIN released this, so an approval id the client sent proves nothing and is not kept.
+    await this.authorize(req, 'CANCEL_PAID_ORDER', body.pin, body.approverId,
+      body.approvalRequestId ? { requestId: body.approvalRequestId, entityId: orderId } : undefined);
+    // Checked above; the service does not check it again.
     return await this.refundService.cancelPaidOrder(
       tenantId,
       orderId,

@@ -258,8 +258,12 @@ export class RefundService {
       : null;
     // Money that does not come out of the drawer is still given at a register during its
     // shift: the shift's report lists it with the cash refunds, so the close shows every
-    // refund the till made.
-    const tillShift = drawer ?? (await this.shiftService.resolveDrawer(tenantId, order.branch_id, order.terminal_id));
+    // refund the till made. A till order's pay-back needs that open shift, like its payment.
+    const tillShift =
+      drawer ??
+      (order.channel === 'POS'
+        ? await this.cashDrawerFor(em, tenantId, order, legs, cancelling)
+        : await this.shiftService.resolveDrawer(tenantId, order.branch_id, order.terminal_id));
 
     const refunds: Refund[] = [];
     let total = '0.0000';
@@ -365,7 +369,7 @@ export class RefundService {
       return await this.shiftService.requireDrawer(tenantId, order.branch_id, order.terminal_id);
     } catch (err: any) {
       if (!cancelling || err?.response?.code !== 'SHIFT_BUSINESS_DAY_ENDED') throw err;
-      const shiftId = legs.find((s) => (s.method?.kind || s.payment.method_kind) === 'CASH')?.payment.shift_id;
+      const shiftId = (legs.find((s) => (s.method?.kind || s.payment.method_kind) === 'CASH') ?? legs[0])?.payment.shift_id;
       const old = shiftId ? await em.findOne(CashierShift, { where: { id: shiftId, tenant_id: tenantId, state: 'OPEN' } }) : null;
       if (!old) throw err;
       return old;
@@ -382,6 +386,14 @@ export class RefundService {
 
       if (order.state === 'CANCELLED') {
         return order;
+      }
+      // Whether a card was charged decides what goes back (Y-16).
+      const unanswered = await em.count(Payment, { where: { tenant_id: tenantId, order_id: orderId, status: 'PROCESSING' as any } });
+      if (unanswered > 0) {
+        throw new ConflictException({
+          code: 'CHARGE_UNRESOLVED',
+          message: `Order ${order.order_number} has a card charge the terminal never answered. Mark it charged or not charged before cancelling.`,
+        });
       }
 
       const shares = await this.paymentShares(tenantId, orderId, em);

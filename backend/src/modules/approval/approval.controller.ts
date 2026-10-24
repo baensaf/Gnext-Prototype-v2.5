@@ -132,7 +132,7 @@ export class ApprovalController {
   @Post('requests/:id/approve')
   async approveRequest(
     @Param('id') id: string,
-    @Body() body: { approverUserId?: string; pin: string; note?: string; approverId?: string },
+    @Body() body: { approverUserId?: string; pin?: string; note?: string; approverId?: string; username?: string; password?: string },
     @Req() req: Request,
   ) {
     const tenantId = (req as any).tenantId;
@@ -140,14 +140,16 @@ export class ApprovalController {
     if (!approverUserId) throw new UnauthorizedException('User session required');
     const correlationId = (req as any).correlationId;
     // `approverId` is the approver the cashier picked in the PIN dialog.
+    // A manager signing in on the cashier's screen (R-15); the PIN stays for V2 (R-14).
     return await this.approvalService.approveRequest(
       tenantId,
       id,
       approverUserId,
-      body.pin,
+      body.pin || '',
       body.note,
       correlationId,
       body.approverId ?? null,
+      body.username ? { username: body.username, password: body.password || '' } : undefined,
     );
   }
 

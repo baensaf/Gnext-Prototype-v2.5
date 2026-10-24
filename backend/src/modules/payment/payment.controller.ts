@@ -54,8 +54,8 @@ export class PaymentController {
     return await this.paymentService.createPaymentIntent(tenantId, body, userId, correlationId);
   }
 
-  /** The Payments page: one page of the money taken, newest first. A branch account only ever sees its own. */
-  @Roles(...MANAGER_AND_ABOVE)
+  /** The Payments page: one page of the money taken, newest first. A branch account only ever sees
+   * its own; a cashier reads it too (Y-17). */
   @Get('payments')
   async listPayments(@Query() query: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

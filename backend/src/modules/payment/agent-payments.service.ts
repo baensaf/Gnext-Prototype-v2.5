@@ -130,6 +130,15 @@ export class AgentPaymentsService implements OnApplicationBootstrap, OnApplicati
 
   /** Sends the charge to the agent. The payment stays PROCESSING until the terminal answers. */
   async startCharge(em: EntityManager, payment: Payment, order: OrderHeader, device: PaymentDevice, actor: PaymentActor) {
+    // With the branch agent away the charge is not sent and fails at once: the customer was not
+    // charged. Nothing is queued, so it can't run on the terminal when the agent comes back (Y-14).
+    if (!this.sessions.forBranch(payment.tenant_id, order.branch_id)) {
+      payment.status = 'FAILED';
+      payment.device_id = device.id;
+      payment.failure_code = 'AGENT_OFFLINE';
+      payment.failure_message = 'The branch agent is offline, so the card terminal was not charged.';
+      return await em.save(Payment, payment);
+    }
     const amount = wholeRials(payment.amount);
     const attemptNo = (await em.count(PaymentAttempt, { where: { payment_id: payment.id } })) + 1;
     const attempt = await em.save(

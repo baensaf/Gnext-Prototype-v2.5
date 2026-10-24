@@ -18,6 +18,11 @@ export class RefundCreateDto {
   @IsOptional()
   @IsUUID()
   approverId?: string;
+
+  /** A request a manager approved by signing in on the cashier's screen (R-15). */
+  @IsOptional()
+  @IsUUID()
+  approvalRequestId?: string;
 }
 
 export class PaidOrderCancelDto {
