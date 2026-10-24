@@ -1369,8 +1369,9 @@ export function PosOrderPage() {
       const submitted = await orderApi.submitOrder(draftId, buildSubmitPayload(), { idempotencyKey });
 
       setPlacedOrder(submitted);
-      if (orderType === 'DELIVERY') {
-        // Paid when the courier's settlement closes (O-16).
+      // A delivery is paid when the courier's settlement closes (O-16); an order with nothing to
+      // pay is done as it is sent (O-26). Only a counter order still owing opens the pay dialog.
+      if (!awaitingPayment(submitted)) {
         toast.success(t('pos.orderSubmitted', { number: submitted.call_number || submitted.order_number || '' }));
       } else {
         sentCartRef.current = counterCart;

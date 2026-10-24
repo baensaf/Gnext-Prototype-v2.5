@@ -1057,6 +1057,12 @@ export class OrderService {
       }
     }
 
+    // A counter order with nothing to pay (free items, a 100% discount) is done as it is sent (O-26).
+    if (res && res.channel === 'POS' && res.state !== 'SUBMITTED' && COMPLETES_WHEN_PAID.includes(res.order_type)
+        && !MoneyUtil.greaterThan(res.grand_total || '0.0000', '0.0000')) {
+      return (await this.completeWhenPaidInFull(tenantId, res.id, userId, correlationId)) ?? res;
+    }
+
     return res;
   }
 
@@ -2349,6 +2355,18 @@ export class OrderService {
       throw new ConflictException({
         code: 'REFUND_INSTEAD',
         message: `Order ${order.order_number} is from business day ${String(order.business_date).slice(0, 10)}. Refund it instead of cancelling.`,
+      });
+    }
+
+    // Whether a card was charged decides what goes back, so an unanswered charge is resolved
+    // from the terminal's slip first (Y-16).
+    const unanswered = await this.dataSource.manager.count(Payment, {
+      where: { tenant_id: tenantId, order_id: id, status: 'PROCESSING' as any },
+    });
+    if (unanswered > 0) {
+      throw new ConflictException({
+        code: 'CHARGE_UNRESOLVED',
+        message: `Order ${order.order_number} has a card charge the terminal never answered. Mark it charged or not charged before cancelling.`,
       });
     }
 

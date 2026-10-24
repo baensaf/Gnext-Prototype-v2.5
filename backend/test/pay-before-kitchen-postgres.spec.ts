@@ -33,6 +33,7 @@ describe('Pay before the kitchen (PostgreSQL)', () => {
   let terminalId: string;
   let shiftId: string;
   let burger: string;
+  let water: string;
   let cash: string;
   let delivery: Awaited<ReturnType<typeof deliveryFixture>>;
 
@@ -51,6 +52,7 @@ describe('Pay before the kitchen (PostgreSQL)', () => {
     terminalId = (await save(Terminal, { tenant_id: tenantId, branch_id: branchId, code: 'PK-1', name: 'Till 1', terminal_type: 'CASHIER', is_active: true })).id;
     const categoryId = (await save(Category, { tenant_id: tenantId, code: 'PK-MAINS', name: 'Mains', is_active: true })).id;
     burger = (await save(Product, { tenant_id: tenantId, category_id: categoryId, code: 'BURGER', name: 'Burger', base_price: '100000.0000', tax_rate: '0.0000', is_active: true })).id;
+    water = (await save(Product, { tenant_id: tenantId, category_id: categoryId, code: 'WATER', name: 'Free water', base_price: '0.0000', tax_rate: '0.0000', is_active: true })).id;
     cash = (await save(PaymentMethod, { tenant_id: tenantId, code: 'CASH', name: 'Cash', kind: 'CASH', currency_code: 'IRR', is_active: true })).id;
     shiftId = ((await moduleRef.get(ShiftService).openShift(tenantId, { terminalId } as any)) as any).id;
     delivery = await deliveryFixture(dataSource, tenantId, branchId);
@@ -117,6 +119,28 @@ describe('Pay before the kitchen (PostgreSQL)', () => {
     ).rejects.toMatchObject({ response: { code: 'COUNTER_ORDER_NOT_EDITED' } });
     await expect(orders.changeOrderType(tenantId, sent!.id, { orderType: 'DELIVERY', ...delivery } as any)).rejects.toMatchObject({
       response: { code: 'ORDER_TYPE_LOCKED' },
+    });
+  });
+
+  // O-26: nothing to pay, so it is done as it is sent.
+  it('sends and completes a counter order with nothing to pay', async () => {
+    const sent = await send({ order_type: 'TAKEAWAY', items: [{ product_id: water, quantity: 1 }] });
+    const done = await reload(sent!.id);
+    expect(done.state).toBe('COMPLETED');
+    expect(done.call_number).toEqual(expect.any(Number));
+    expect(await kitchenTickets(sent!.id)).toBe(1);
+  });
+
+  // Y-16: what goes back depends on whether the card was charged.
+  it('refuses to cancel while a card charge is unanswered', async () => {
+    const sent = await send({ ...delivery });
+    await dataSource.query(
+      `INSERT INTO payment (id, tenant_id, order_id, payment_number, method_kind, amount, status, currency_code)
+       VALUES ($1, $2, $3, $4, 'NETWORK_POS', '100000.0000', 'PROCESSING', 'IRR')`,
+      [randomUUID(), tenantId, sent!.id, `PAY-${Date.now()}`],
+    );
+    await expect(orders.cancelOrder(tenantId, sent!.id, { reasonCodeId: randomUUID() } as any)).rejects.toMatchObject({
+      response: { code: 'CHARGE_UNRESOLVED' },
     });
   });
 
