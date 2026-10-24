@@ -14,8 +14,6 @@ import {
   CircularProgress,
 } from '@mui/material';
 
-import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
-
 import { catalogApi } from 'src/api/catalogApi';
 import { httpClient as axios } from 'src/api/httpClient';
 import { DashboardContent } from 'src/layouts/dashboard';
@@ -28,13 +26,9 @@ import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 
 interface RolePolicy {
   cashierMaxPct: number;
-  cashierMaxFixed: number;
   supervisorMaxPct: number;
-  supervisorMaxFixed: number;
   managerMaxPct: number;
-  managerMaxFixed: number;
   adminMaxPct: number;
-  adminMaxFixed: number;
   /** Categories a friends-and-family discount never touches, such as drinks. */
   familyExcludedCategoryIds: string[];
 }
@@ -44,7 +38,6 @@ interface DiscountAuthorizationsPageProps {
 }
 
 export default function DiscountAuthorizationsPage({ isEmbedded = false }: DiscountAuthorizationsPageProps) {
-  const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
   // DISCOUNT_AUTHORIZATIONS is not on the overridable list, so this is the chain's single
   // policy and the server refuses a branch account writing it.
@@ -52,14 +45,10 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
   const { selectedBranch } = useBranchContext();
 
   const [policy, setPolicy] = useState<RolePolicy>({
-    cashierMaxPct: 10,
-    cashierMaxFixed: 50000,
-    supervisorMaxPct: 20,
-    supervisorMaxFixed: 150000,
-    managerMaxPct: 30,
-    managerMaxFixed: 300000,
+    cashierMaxPct: 0,
+    supervisorMaxPct: 0,
+    managerMaxPct: 100,
     adminMaxPct: 100,
-    adminMaxFixed: 10000000,
     familyExcludedCategoryIds: [],
   });
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
@@ -79,14 +68,10 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
       const authSetting = data?.DISCOUNT_AUTHORIZATIONS || data?.DISCOUNTS || {};
 
       setPolicy({
-        cashierMaxPct: authSetting.cashierMaxPct ?? 10,
-        cashierMaxFixed: authSetting.cashierMaxFixed ?? 50000,
-        supervisorMaxPct: authSetting.supervisorMaxPct ?? 20,
-        supervisorMaxFixed: authSetting.supervisorMaxFixed ?? 150000,
-        managerMaxPct: authSetting.managerMaxPct ?? 30,
-        managerMaxFixed: authSetting.managerMaxFixed ?? 300000,
+        cashierMaxPct: authSetting.cashierMaxPct ?? 0,
+        supervisorMaxPct: authSetting.supervisorMaxPct ?? 0,
+        managerMaxPct: authSetting.managerMaxPct ?? 100,
         adminMaxPct: authSetting.adminMaxPct ?? 100,
-        adminMaxFixed: authSetting.adminMaxFixed ?? 10000000,
         familyExcludedCategoryIds: authSetting.familyExcludedCategoryIds ?? [],
       });
     } catch (err: any) {
@@ -172,15 +157,7 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                   value={policy.cashierMaxPct}
                   onChange={(e) => setPolicy({ ...policy, cashierMaxPct: Number(e.target.value) })}
                   disabled={!isHeadOffice}
-                  helperText={t('authPolicy.defaultPct', 'Default: {{pct}}%', { pct: 10 })}
-                />
-                <TextField
-                  type="number"
-                  label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction ({{currency}})', { currency: currencyLabel })}
-                  value={toToman(policy.cashierMaxFixed)}
-                  onChange={(e) => setPolicy({ ...policy, cashierMaxFixed: Number(fromToman(e.target.value)) })}
-                  disabled={!isHeadOffice}
-                  helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} {{currency}}', { currency: currencyLabel, amount: '50,000' })}
+                  helperText={t('authPolicy.defaultPct', 'Default: {{pct}}%', { pct: 0 })}
                 />
               </Stack>
             </Card>
@@ -203,15 +180,7 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                   value={policy.supervisorMaxPct}
                   onChange={(e) => setPolicy({ ...policy, supervisorMaxPct: Number(e.target.value) })}
                   disabled={!isHeadOffice}
-                  helperText={t('authPolicy.defaultPct', 'Default: {{pct}}%', { pct: 20 })}
-                />
-                <TextField
-                  type="number"
-                  label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction ({{currency}})', { currency: currencyLabel })}
-                  value={toToman(policy.supervisorMaxFixed)}
-                  onChange={(e) => setPolicy({ ...policy, supervisorMaxFixed: Number(fromToman(e.target.value)) })}
-                  disabled={!isHeadOffice}
-                  helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} {{currency}}', { currency: currencyLabel, amount: '150,000' })}
+                  helperText={t('authPolicy.defaultPct', 'Default: {{pct}}%', { pct: 0 })}
                 />
               </Stack>
             </Card>
@@ -234,15 +203,7 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                   value={policy.managerMaxPct}
                   onChange={(e) => setPolicy({ ...policy, managerMaxPct: Number(e.target.value) })}
                   disabled={!isHeadOffice}
-                  helperText={t('authPolicy.defaultPct', 'Default: {{pct}}%', { pct: 30 })}
-                />
-                <TextField
-                  type="number"
-                  label={t('authPolicy.maxFixed', 'Max Fixed Amount Deduction ({{currency}})', { currency: currencyLabel })}
-                  value={toToman(policy.managerMaxFixed)}
-                  onChange={(e) => setPolicy({ ...policy, managerMaxFixed: Number(fromToman(e.target.value)) })}
-                  disabled={!isHeadOffice}
-                  helperText={t('authPolicy.defaultAmount', 'Default: {{amount}} {{currency}}', { currency: currencyLabel, amount: '300,000' })}
+                  helperText={t('authPolicy.defaultPct', 'Default: {{pct}}%', { pct: 100 })}
                 />
               </Stack>
             </Card>

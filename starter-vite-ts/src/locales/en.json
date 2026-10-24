@@ -361,6 +361,7 @@
     "receiptFailed": "The receipt could not be sent to a printer",
     "orderPlaced": "Order placed",
     "callNumber": "Number",
+    "payRest": "Part of this order is paid. Take the rest, or a manager cancels it.",
     "orderSubmitted": "Order {{number}} sent to the kitchen",
     "orderSubmittedPaid": "Order {{number}} paid and sent to the kitchen",
     "customerSearch": {
@@ -2046,7 +2047,7 @@
   },
   "authPolicy": {
     "title": "Cashier Manual Discount Authorizations",
-    "subtitle": "Configure role-based percentage and fixed-amount manual discount thresholds and escalation PIN approvals.",
+    "subtitle": "The most each role may take off an order by hand, as a percent. Above it, a manager approves.",
     "cashierRole": "Cashier Role Limits",
     "cashierDesc": "Maximum discount a standard POS cashier can apply without manager approval.",
     "supervisorRole": "Supervisor Role Limits",
@@ -2059,7 +2060,7 @@
     "defaultAmount": "Default: {{amount}} {{currency}}",
     "enforcementTitle": "Backend Policy Enforcement",
     "enforcementDesc": "Discounts exceeding a user’s role threshold are blocked at the quote level and require a manager PIN (seeded PIN 2468) to proceed.",
-    "auditNotice": "Discounts exceeding maximum manager policy limit (30%) are rejected outright by server-side evaluation. All requests write immutable audit trails.",
+    "auditNotice": "A discount typed as an amount counts as the percent of the order it takes off. Nobody can give more than the manager's limit.",
     "savedSuccess": "Role-based manual discount authorization policy saved successfully.",
     "failedToLoad": "Failed to load discount authorization policy",
     "failedToSave": "Failed to save discount authorization settings",

@@ -308,12 +308,17 @@ export function PosOrderPage() {
   // defaults are the server's own until they load.
   const [discountLimits, setDiscountLimits] = useState<ManualDiscountLimits>({
     role: 'CASHIER',
-    own: { pct: '10', maxFixed: '50000' },
-    ceiling: { pct: '30', maxFixed: '300000' },
+    own: { pct: '0' },
+    ceiling: { pct: '100' },
   });
-  const overOwnLimit =
-    (manualCalcType === 'PERCENTAGE' && Number(manualValue) > Number(discountLimits.own.pct)) ||
-    (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > Number(discountLimits.own.maxFixed));
+  // A limit is a percent (R-16): an amount is measured as the share of the cart it takes off.
+  // The server measures it on what is left after item discounts and has the last word.
+  const percentOfCart = (value: string) => {
+    const base = Number(cart.reduce((sum, item) => MoneyUtil.add(sum, item.lineSubtotal, 2), '0'));
+    if (manualCalcType === 'PERCENTAGE') return Number(value);
+    return base > 0 ? (Number(value) * 100) / base : 100;
+  };
+  const overOwnLimit = Number(manualValue) > 0 && percentOfCart(manualValue) > Number(discountLimits.own.pct);
 
   useEffect(() => {
     discountsApi
@@ -680,6 +685,10 @@ export function PosOrderPage() {
   };
 
   const addToCart = async (product: Product, variant: ProductVariant | undefined, options: OptionItem[], hasChoices = false) => {
+    if (awaitingPayment(placedOrder)) {
+      toast.warning(t('pos.payRest'));
+      return;
+    }
     if (placedOrder) setPlacedOrder(null);
     const quote = await quoteLine(product, variant, options);
 
@@ -890,6 +899,13 @@ export function PosOrderPage() {
   const handleResumeOrder = (held: HeldCart) => {
     const current = snapshotCart();
     saveHeldCarts([...heldCarts.filter((c) => c.id !== held.id), ...(current ? [current] : [])]);
+    loadCart(held);
+    setHeldOrdersDrawerOpen(false);
+    toast.success(t('pos.cartBar.resumedToast'));
+  };
+
+  // Puts a saved cart back on the register, at the prices its lines were added at.
+  const loadCart = (held: HeldCart) => {
     handleClearCart();
     deliveryRestoreRef.current = {
       customerId: held.customer?.id,
@@ -911,8 +927,28 @@ export function PosOrderPage() {
         return { ...back, lineSubtotal: lineTotal(back) };
       })
     );
-    setHeldOrdersDrawerOpen(false);
-    toast.success(t('pos.cartBar.resumedToast'));
+  };
+
+  // A takeaway or dine-in order goes to the kitchen once it is paid (O-19). Until then the cart
+  // it came from is kept, so closing the pay dialog unpaid puts it back on the register.
+  const sentCartRef = React.useRef<HeldCart | null>(null);
+  const awaitingPayment = (order: OrderHeader | null) =>
+    !!order && order.order_type !== 'DELIVERY' && order.state === 'SUBMITTED' && !order.call_number;
+
+  const handleCheckoutClosed = async () => {
+    setCheckoutModalOpen(false);
+    const order = placedOrder;
+    if (!awaitingPayment(order) || !order) return;
+    try {
+      await orderApi.returnToCart(order.id);
+      setPlacedOrder(null);
+      if (sentCartRef.current) loadCart(sentCartRef.current);
+      setActiveDraftOrderId(order.id);
+      sentCartRef.current = null;
+    } catch (err: any) {
+      // Part of it is paid (O-20): it stays here until the rest is taken or a manager cancels it.
+      showErrorToast(err, err.detail || err.message || t('pos.payRest'));
+    }
   };
 
   // Discard: nothing was ordered or printed, so it goes in one tap with no reason.
@@ -1069,15 +1105,8 @@ export function PosOrderPage() {
       return;
     }
 
-    if (manualCalcType === 'PERCENTAGE' && Number(manualValue) > Number(discountLimits.ceiling.pct)) {
-      const msg = `Percentage discount exceeds maximum policy ceiling of ${discountLimits.ceiling.pct}%`;
-      setError(msg);
-      toast.error(msg);
-      return;
-    }
-
-    if (manualCalcType === 'FIXED_AMOUNT' && Number(manualValue) > Number(discountLimits.ceiling.maxFixed)) {
-      const msg = `Fixed discount exceeds maximum policy ceiling of ${MoneyUtil.formatCurrency(discountLimits.ceiling.maxFixed)} ${currency}`;
+    if (percentOfCart(manualValue) > Number(discountLimits.ceiling.pct)) {
+      const msg = `Discount exceeds maximum policy ceiling of ${discountLimits.ceiling.pct}%`;
       setError(msg);
       toast.error(msg);
       return;
@@ -1086,7 +1115,7 @@ export function PosOrderPage() {
     if (overOwnLimit) {
       // Prompt Manager PIN authorization immediately
       setApprovalReason(
-        `Manual discount ${manualCalcType === 'PERCENTAGE' ? `${manualValue}%` : `${MoneyUtil.formatCurrency(manualValue)} ${currency}`} exceeds your limit (${discountLimits.own.pct}% / ${MoneyUtil.formatCurrency(discountLimits.own.maxFixed)} ${currency}). Manager PIN authorization required.`
+        `Manual discount ${manualCalcType === 'PERCENTAGE' ? `${manualValue}%` : `${MoneyUtil.formatCurrency(manualValue)} ${currency}`} exceeds your limit (${discountLimits.own.pct}%). Manager PIN authorization required.`
       );
       setManualDiscountModalOpen(false);
       setApprovalModalOpen(true);
@@ -1214,6 +1243,7 @@ export function PosOrderPage() {
       }
 
       const submitPayload = buildSubmitPayload();
+      sentCartRef.current = snapshotCart();
       submitted = await orderApi.submitOrder(draftId, submitPayload, { idempotencyKey });
 
       // Instantly query active payment methods to find POS / CARD
@@ -1249,7 +1279,8 @@ export function PosOrderPage() {
         setPlacedOrder(paidOrder || submitted);
         setCheckoutModalOpen(true);
       }
-      toast.success(t('pos.orderSubmittedPaid', { number: submitted.call_number || submitted.order_number || '' }));
+      const callNumber = paidOrder?.call_number || submitted.call_number;
+      if (callNumber || paidOrder) toast.success(t('pos.orderSubmittedPaid', { number: callNumber || submitted.order_number || '' }));
       handleClearCart();
       setError(null);
     } catch (err: any) {
@@ -1334,11 +1365,17 @@ export function PosOrderPage() {
         setActiveDraftOrderId(draft.id);
       }
 
+      const counterCart = orderType === 'DELIVERY' ? null : snapshotCart();
       const submitted = await orderApi.submitOrder(draftId, buildSubmitPayload(), { idempotencyKey });
 
       setPlacedOrder(submitted);
-      setCheckoutModalOpen(true);
-      toast.success(t('pos.orderSubmitted', { number: submitted.call_number || submitted.order_number || '' }));
+      if (orderType === 'DELIVERY') {
+        // Paid when the courier's settlement closes (O-16).
+        toast.success(t('pos.orderSubmitted', { number: submitted.call_number || submitted.order_number || '' }));
+      } else {
+        sentCartRef.current = counterCart;
+        setCheckoutModalOpen(true);
+      }
       handleClearCart();
       setError(null);
     } catch (err: any) {
@@ -1429,7 +1466,7 @@ export function PosOrderPage() {
         e.preventDefault();
         if (placedOrder) {
           setCheckoutModalOpen(true);
-        } else if (cart.length > 0) {
+        } else if (cart.length > 0 && orderType !== 'DELIVERY') {
           handleDirectTerminalPay();
         }
         return;
@@ -2103,12 +2140,16 @@ export function PosOrderPage() {
                         <bdi><code>{placedOrder.order_number}</code></bdi> · <bdi>{MoneyUtil.formatCurrency(placedOrder.total_amount)} {currency}</bdi>
                       </Typography>
                       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                        <Button size="small" variant="outlined" color="success" onClick={() => setCheckoutModalOpen(true)} sx={{ fontWeight: 'bold' }}>
-                          {t('pos.cartBar.payNow')}
-                        </Button>
-                        <IconButton size="small" aria-label={t('common.close', 'Close')} onClick={() => setPlacedOrder(null)}>
-                          <ClearIcon fontSize="small" />
-                        </IconButton>
+                        {placedOrder.order_type !== 'DELIVERY' && MoneyUtil.greaterThan(placedOrder.due_amount || placedOrder.outstanding_total || '0', '0') && (
+                          <Button size="small" variant="outlined" color="success" onClick={() => setCheckoutModalOpen(true)} sx={{ fontWeight: 'bold' }}>
+                            {t('pos.cartBar.payNow')}
+                          </Button>
+                        )}
+                        {!awaitingPayment(placedOrder) && (
+                          <IconButton size="small" aria-label={t('common.close', 'Close')} onClick={() => setPlacedOrder(null)}>
+                            <ClearIcon fontSize="small" />
+                          </IconButton>
+                        )}
                       </Stack>
                     </Stack>
                   ) : (
@@ -2381,7 +2422,7 @@ export function PosOrderPage() {
                   variant="contained"
                   color="primary"
                   size="large"
-                  disabled={cart.length === 0 || terminalPayLoading}
+                  disabled={cart.length === 0 || terminalPayLoading || orderType === 'DELIVERY'}
                   onClick={handleDirectTerminalPay}
                   aria-keyshortcuts="F9"
                   startIcon={terminalPayLoading ? <CircularProgress size={20} color="inherit" /> : <PointOfSaleIcon sx={{ fontSize: 22 }} />}
@@ -2509,7 +2550,7 @@ export function PosOrderPage() {
                         label={`${MoneyUtil.formatCurrency(amt)}`}
                         size="small"
                         variant={manualValue === amt ? 'filled' : 'outlined'}
-                        color={Number(amt) > Number(discountLimits.own.maxFixed) ? 'warning' : 'primary'}
+                        color={percentOfCart(amt) > Number(discountLimits.own.pct) ? 'warning' : 'primary'}
                         onClick={() => {
                           handleSelectPreset(amt);
                           setError(null);
@@ -2944,7 +2985,7 @@ export function PosOrderPage() {
       <CheckoutModal
         open={checkoutModalOpen}
         orderId={placedOrder?.id || null}
-        onClose={() => setCheckoutModalOpen(false)}
+        onClose={handleCheckoutClosed}
         // A paid order leaves the register at once (after the change is handed back): the receipt
         // has printed, and the next customer is waiting.
         onPaymentComplete={() => {

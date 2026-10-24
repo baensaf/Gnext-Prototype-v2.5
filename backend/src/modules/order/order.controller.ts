@@ -13,7 +13,6 @@ import {
   OrderTypeChangeDto,
   OrderItemReplaceDto,
   OrderCancelDto,
-  OrderReopenDto,
   OrderAcceptDto,
   OrderRejectDto,
   OrderOnlineReportDto,
@@ -28,7 +27,7 @@ import { RequireIdempotency } from '../../common/decorators/idempotency.decorato
 
 // Every :id on this controller is an order id, and an order belongs to the shop that
 // took it. Marking the class covers the transitions too — a branch may not confirm,
-// cancel or reopen another shop's order by quoting its id. Routes that name no order
+// cancel another shop's order by quoting its id. Routes that name no order
 // (the list, the draft create) are unaffected.
 @BranchOwned(OrderHeader)
 @Controller('api/v1/orders')
@@ -280,12 +279,13 @@ export class OrdersController {
     return await this.orderService.cancelOrder(tenantId, id, body, userId, correlationId);
   }
 
-  @Post(':id/reopen')
-  async reopenOrder(@Param('id') id: string, @Body() body: OrderReopenDto, @Req() req: Request) {
+  /** A counter order still waiting for its payment goes back to being the till's cart (O-19, O-20). */
+  @Post(':id/back-to-cart')
+  async returnToCart(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
-    return await this.orderService.reopenOrder(tenantId, id, body, userId, correlationId);
+    return await this.orderService.returnToCart(tenantId, id, userId, correlationId);
   }
 
   @Get(':id/history')

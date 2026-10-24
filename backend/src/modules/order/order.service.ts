@@ -92,7 +92,6 @@ import {
   OrderTypeChangeDto,
   OrderItemReplaceDto,
   OrderCancelDto,
-  OrderReopenDto,
   OrderAcceptDto,
   OrderRejectDto,
   OrderOnlineReportDto,
@@ -156,6 +155,11 @@ const PAID_TAKEAWAY_COMPLETES_FROM: OrderState[] = ['SUBMITTED', 'CONFIRMED'];
  * courier to come back.
  */
 const COMPLETES_WHEN_PAID = ['TAKEAWAY', 'DINE_IN', 'PICKUP'];
+
+/** A counter order with something to pay goes to the kitchen only once it is paid (O-19). */
+function waitsForPaymentBeforeKitchen(orderType: string, grandTotal: string | null | undefined): boolean {
+  return COMPLETES_WHEN_PAID.includes(orderType) && MoneyUtil.greaterThan(grandTotal || '0.0000', '0.0000');
+}
 
 /** States in which the kitchen has the order and has not yet handed it over. */
 const KITCHEN_HOLDS_ORDER_STATES: OrderState[] = ['SUBMITTED', 'CONFIRMED'];
@@ -964,12 +968,17 @@ export class OrderService {
         order.business_date = today;
       }
 
+      // A takeaway or dine-in order at the till goes to the kitchen once it is paid in full
+      // (O-19), as a kiosk order does: until then it waits, unnumbered, for its payment.
+      const waitsForPayment = order.channel === 'POS' && waitsForPaymentBeforeKitchen(order.order_type, quoteRes.grandTotal);
       // Determine state transition: POS/KIOSK can move directly to CONFIRMED
-      const targetState: OrderState = (order.channel === 'POS' || order.channel === 'KIOSK') ? 'CONFIRMED' : 'SUBMITTED';
+      const targetState: OrderState = waitsForPayment
+        ? 'SUBMITTED'
+        : (order.channel === 'POS' || order.channel === 'KIOSK') ? 'CONFIRMED' : 'SUBMITTED';
       const fromState = order.state;
       order.state = targetState;
       order.status = targetState;
-      // The first send decides the after-hours mark; sending a reopened order again keeps it.
+      // The first send decides the after-hours mark.
       const firstSend = !order.submitted_at;
       order.submitted_at = new Date();
       // Outside its hours a branch still sells; the order is only marked, once, as it is sent.
@@ -978,7 +987,7 @@ export class OrderService {
       await em.save(OrderHeader, order);
       // The number the counter calls it by, given as it goes to the kitchen so an abandoned
       // cart does not use one up.
-      await assignCallNumber(em, order);
+      if (!waitsForPayment) await assignCallNumber(em, order);
 
       if (deliveryContext) {
         await this.openDelivery(em, tenantId, order, deliveryContext, userId, 'Delivery order submitted');
@@ -1038,7 +1047,8 @@ export class OrderService {
       });
     });
 
-    if (this.printQueueService) {
+    // A counter order still waiting for its payment prints nothing yet.
+    if (this.printQueueService && res?.state !== 'SUBMITTED') {
       try {
         await this.printQueueService.enqueueOrderPrintJobs(tenantId, id, 'KITCHEN_TICKET', false, undefined, userId);
         await this.printCustomerPaperwork(tenantId, id, userId);
@@ -1074,14 +1084,17 @@ export class OrderService {
   }
 
   /**
-   * A kiosk order waits for its guest's card before the kitchen sees it. Once it is paid in
-   * full it is confirmed, numbered and fired, whether the card went through the branch's
-   * terminal (the agent answers later) or the kiosk's simulator. One that the branch wants
-   * staff to accept keeps waiting; accepting it does the same.
+   * A kiosk order, and a takeaway or dine-in order at the till (O-19), waits for its payment
+   * before the kitchen sees it. Once it is paid in full it is confirmed, numbered and fired,
+   * whether the card went through the branch's terminal (the agent answers later) or a
+   * simulator. A kiosk order the branch wants staff to accept keeps waiting; accepting it does
+   * the same.
    */
-  private async sendPaidKioskOrderToKitchen(tenantId: string, orderId: string, correlationId?: string) {
+  private async sendPaidOrderToKitchen(tenantId: string, orderId: string, correlationId?: string) {
     const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
-    if (!order || order.channel !== 'KIOSK' || order.state !== 'SUBMITTED') return;
+    if (!order || order.state !== 'SUBMITTED') return;
+    const tillCounterOrder = order.channel === 'POS' && COMPLETES_WHEN_PAID.includes(order.order_type) && !order.call_number;
+    if (order.channel !== 'KIOSK' && !tillCounterOrder) return;
     if (MoneyUtil.greaterThan(order.outstanding_total || '0.0000', '0.0000')) return;
 
     order.state = 'CONFIRMED';
@@ -1103,9 +1116,9 @@ export class OrderService {
    */
   async afterPaymentSucceeded(tenantId: string, orderId: string, userId?: string, correlationId?: string) {
     try {
-      await this.sendPaidKioskOrderToKitchen(tenantId, orderId, correlationId);
+      await this.sendPaidOrderToKitchen(tenantId, orderId, correlationId);
     } catch (err) {
-      console.error(`Kiosk order ${orderId} could not be sent to the kitchen after payment`, err);
+      console.error(`Order ${orderId} could not be sent to the kitchen after payment`, err);
     }
     try {
       await this.printCustomerPaperwork(tenantId, orderId, userId);
@@ -1248,7 +1261,7 @@ export class OrderService {
       // Once the store has accepted a Snappfood order, only Snappfood cancels it, and a
       // cancelled one stays cancelled. The store reports a problem to Snappfood instead.
       if (targetState === 'CANCELLED' || order.state === 'CANCELLED') {
-        this.refuseSnappfoodChange(order, 'cancel or reopen it');
+        this.refuseSnappfoodChange(order, 'cancel it');
       }
       const allowedNextStates = ALLOWED_TRANSITIONS[order.state] || [];
 
@@ -1597,6 +1610,18 @@ export class OrderService {
   }
 
   /**
+   * Only a delivery order that has not gone out takes line changes (O-22). A takeaway or dine-in
+   * order is paid as it is sent, so more items are a new order.
+   */
+  private refuseCounterOrderEdit(order: OrderHeader) {
+    if (order.state === 'DRAFT' || order.order_type === 'DELIVERY') return;
+    throw new ConflictException({
+      code: 'COUNTER_ORDER_NOT_EDITED',
+      message: `Order ${order.order_number} is a ${String(order.order_type || 'counter').toLowerCase().replace('_', '-')} order and is not changed once sent. Ring the extra items as a new order.`,
+    });
+  }
+
+  /**
    * Apply line changes to an order past DRAFT, per spec 7.9.
    *
    * Lines are never mutated or deleted: a removal flips the original to VOID
@@ -1619,6 +1644,7 @@ export class OrderService {
       });
       if (!order) throw new NotFoundException(`Order ${id} not found`);
       this.refuseSnappfoodChange(order, 'change its lines');
+      this.refuseCounterOrderEdit(order);
 
       const items = await em.find(OrderItem, { where: { order_id: id, tenant_id: tenantId } });
 
@@ -1830,6 +1856,13 @@ export class OrderService {
       this.refuseSnappfoodChange(order, 'change what kind of order it is');
       if (from === to) {
         throw new BadRequestException(`Order ${order.order_number} is already a ${to} order`);
+      }
+      // A sent order changes type only from delivery to the counter, before it goes out (O-23).
+      if (order.state !== 'DRAFT' && (from !== 'DELIVERY' || to === 'DELIVERY')) {
+        throw new ConflictException({
+          code: 'ORDER_TYPE_LOCKED',
+          message: `Order ${order.order_number} is a ${from} order; only a delivery order can become takeaway or dine-in once sent`,
+        });
       }
 
       // Same staleness rule as a line edit: the cashier must be acting on the totals they
@@ -2102,7 +2135,7 @@ export class OrderService {
   async stopKitchenForPlatformCancel(tenantId: string, order: OrderHeader, stateBefore: OrderState) {
     if (!order.accepted_at || !KITCHEN_HOLDS_ORDER_STATES.includes(stateBefore)) return order;
     const items = await this.itemRepo.find({ where: { tenant_id: tenantId, order_id: order.id, state: ACTIVE_LINE_STATE } });
-    await this.stopKitchenAfterCancel(tenantId, order.id, stateBefore, items.map((i) => i.id), `Cancelled by ${platformOf(order) ?? 'the platform'}`);
+    await this.stopKitchenAfterCancel(tenantId, order.id, true, items.map((i) => i.id), `Cancelled by ${platformOf(order) ?? 'the platform'}`);
     return this.raiseOnlineAlert(order, 'PLATFORM_CANCELLED');
   }
 
@@ -2114,12 +2147,12 @@ export class OrderService {
   private async stopKitchenAfterCancel(
     tenantId: string,
     orderId: string,
-    stateBeforeCancel: OrderState,
+    kitchenHasIt: boolean,
     activeItemIds: string[],
     reason?: string,
     userId?: string,
   ) {
-    if (!KITCHEN_HOLDS_ORDER_STATES.includes(stateBeforeCancel) || activeItemIds.length === 0) return;
+    if (!kitchenHasIt || activeItemIds.length === 0) return;
 
     if (this.printQueueService) {
       await this.printQueueService.enqueueKitchenChangeTicket(tenantId, orderId, { kind: 'CANCELLED', reason }, userId);
@@ -2146,6 +2179,7 @@ export class OrderService {
       });
       if (!order) throw new NotFoundException(`Order ${id} not found`);
       this.refuseSnappfoodChange(order, 'change its lines');
+      this.refuseCounterOrderEdit(order);
 
       const item = await em.findOne(OrderItem, {
         where: { id: dto.orderItemId, tenant_id: tenantId, order_id: id },
@@ -2308,6 +2342,16 @@ export class OrderService {
     }
     this.refuseSnappfoodChange(order, 'cancel it');
 
+    // Cancel and refund split by business day, as in Toast (O-21): an order is cancelled on its
+    // own day; a completed one from an earlier day is refunded instead.
+    const today = (await loadBusinessClock(this.dataSource.manager, tenantId, order.branch_id)).today();
+    if (order.state === 'COMPLETED' && order.business_date && String(order.business_date).slice(0, 10) < today) {
+      throw new ConflictException({
+        code: 'REFUND_INSTEAD',
+        message: `Order ${order.order_number} is from business day ${String(order.business_date).slice(0, 10)}. Refund it instead of cancelling.`,
+      });
+    }
+
     const netPaid = await this.calculateNetPaid(tenantId, id, this.dataSource.manager);
     const config = await this.getOrderActionConfig(tenantId, this.dataSource.manager, order.branch_id);
     const decision = resolveOrderEditDecision(
@@ -2340,7 +2384,9 @@ export class OrderService {
     // discarding an empty held draft stays a one-click action.
     // Captured before the cancel runs: after it, the order reads CANCELLED and no
     // longer says whether the kitchen ever had it.
-    const stateBeforeCancel = order.state;
+    // The kitchen has the order once it was given its call number; a counter order waiting for its
+    // payment never reached it. A paid counter order completes at once but is still being made.
+    const kitchenHasIt = !!order.call_number && ['SUBMITTED', 'CONFIRMED', 'COMPLETED'].includes(order.state);
     const activeItemIds = (order.items || []).filter(isActiveLine).map((i) => i.id);
     if (activeItemIds.length > 0 && !dto.reasonCodeId) {
       throw new BadRequestException('Cancelling an order with items requires a reason code');
@@ -2375,7 +2421,7 @@ export class OrderService {
     await this.stopKitchenAfterCancel(
       tenantId,
       id,
-      stateBeforeCancel,
+      kitchenHasIt,
       activeItemIds,
       await this.reasonText(tenantId, dto.reason, dto.reasonCodeId),
       userId,
@@ -2388,53 +2434,67 @@ export class OrderService {
   }
 
   /**
-   * Reopen a cancelled order back to SUBMITTED, per spec 6.1.
-   *
-   * Always an approved action, never available once money moved, and confined
-   * to the business day it was cancelled on so a reopen cannot reach back into
-   * a closed and reconciled day.
+   * A counter order waiting for its payment goes back to being the till's cart: the card was
+   * declined, or the cashier closed the pay dialog to change it. Once any payment on it went
+   * through, or is still being charged, it stays and is paid or cancelled (O-20).
    */
-  async reopenOrder(tenantId: string, id: string, dto: OrderReopenDto, userId?: string, correlationId?: string) {
-    const order = await this.orderRepo.findOne({ where: { id, tenant_id: tenantId } });
-    if (!order) throw new NotFoundException(`Order ${id} not found`);
-    this.refuseSnappfoodChange(order, 'reopen it');
-
-    if (!dto.approvalRequestId) {
-      throw new ForbiddenException({
-        statusCode: 403,
-        code: 'APPROVAL_REQUIRED',
-        message: 'Reopening a cancelled order requires an approved request',
+  async returnToCart(tenantId: string, id: string, userId?: string, correlationId?: string) {
+    const back = await this.dataSource.transaction(async (em) => {
+      const order = await em.findOne(OrderHeader, {
+        where: { id, tenant_id: tenantId },
+        lock: { mode: 'pessimistic_write' },
       });
-    }
-    await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'REOPEN_ORDER', undefined, id);
+      if (!order) throw new NotFoundException(`Order ${id} not found`);
+      if (order.state === 'DRAFT') return order;
 
-    const everPaid = await this.dataSource.manager.count(Payment, {
-      where: [
-        { tenant_id: tenantId, order_id: id, status: 'SUCCEEDED' as any },
-        { tenant_id: tenantId, order_id: id, status: 'COMPLETED' as any },
-      ],
+      const waiting =
+        order.channel === 'POS' && order.state === 'SUBMITTED' && COMPLETES_WHEN_PAID.includes(order.order_type) && !order.call_number;
+      if (!waiting) {
+        throw new ConflictException({
+          code: 'ORDER_ALREADY_SENT',
+          message: `Order ${order.order_number} is already with the kitchen and cannot go back to the cart`,
+        });
+      }
+      const payments = await em.count(Payment, {
+        where: ['SUCCEEDED', 'COMPLETED', 'PENDING', 'PROCESSING'].map((status) => ({
+          tenant_id: tenantId,
+          order_id: id,
+          status: status as any,
+        })),
+      });
+      if (payments > 0) {
+        throw new ConflictException({
+          code: 'CART_HAS_PAYMENT',
+          message: `Part of order ${order.order_number} is paid. Take the rest, or a manager cancels it and the money goes back.`,
+        });
+      }
+
+      // The discounts are priced again when it is sent again.
+      await em.delete(OrderAdjustment, { tenant_id: tenantId, order_id: id });
+      const fromState = order.state;
+      order.state = 'DRAFT' as OrderState;
+      order.status = 'DRAFT';
+      order.submitted_at = null as any;
+      order.business_date = null as any;
+      order.after_hours = false;
+      order.quote_version = String(Date.now());
+      await em.save(OrderHeader, order);
+      await em.save(
+        OrderStateEvent,
+        em.create(OrderStateEvent, {
+          tenant_id: tenantId,
+          order_id: id,
+          from_state: fromState,
+          to_state: 'DRAFT',
+          action: 'BACK_TO_CART',
+          occurred_by: userId || null,
+        }),
+      );
+      return order;
     });
-    if (everPaid > 0) {
-      throw new BadRequestException(
-        `Order ${order.order_number} took payment before it was cancelled and cannot be reopened. Raise a new order instead.`,
-      );
-    }
-
-    const today = (await loadBusinessClock(this.dataSource.manager, tenantId, order.branch_id)).today();
-    if (order.business_date && String(order.business_date) !== String(today)) {
-      throw new BadRequestException(
-        `Order ${order.order_number} belongs to business day ${order.business_date} and cannot be reopened on ${today}.`,
-      );
-    }
-
-    return await this.transitionState(
-      tenantId,
-      id,
-      'REOPEN',
-      { reasonCodeId: dto.reasonCodeId, reasonText: dto.reason, approvalRequestId: dto.approvalRequestId },
-      userId,
-      correlationId,
-    );
+    // A coupon taken as it was sent works again.
+    await this.coupons?.releaseForOrder(tenantId, id);
+    return back;
   }
 
   async getOrderHistory(tenantId: string, id: string) {
@@ -2664,8 +2724,6 @@ export class OrderService {
         return 'CONFIRMED';
       case 'REJECT':
         return 'REJECTED';
-      case 'REOPEN':
-        return 'SUBMITTED';
       default:
         throw new BadRequestException(`Unknown order state action: ${action}`);
     }

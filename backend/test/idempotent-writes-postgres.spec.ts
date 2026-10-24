@@ -20,6 +20,7 @@ import { Payment } from '../src/entities/Payment.entity';
 import { PrintJob } from '../src/entities/PrintJob.entity';
 import { IdempotencyRecord } from '../src/entities/IdempotencyRecord.entity';
 import { deleteTenantData } from './utils/tenant-teardown';
+import { deliveryFixture } from './utils/delivery-fixture';
 
 // A branch agent repeats a write whose answer was lost (agent-protocol §19.11). The routes the
 // register's Place and cash payment use must then do their work once and answer the repeat with
@@ -52,6 +53,9 @@ describe('idempotent writes (PostgreSQL)', () => {
     channel: 'POS',
     items: [{ product_id: burger, quantity }],
   });
+  // A delivery goes to the kitchen as it is sent; a takeaway waits for its payment (O-19).
+  let delivery: Awaited<ReturnType<typeof deliveryFixture>>;
+  const sentBody = (quantity = '1') => ({ ...draftBody(quantity), ...delivery });
   const save = (entity: any, data: any) => dataSource.getRepository(entity).save(dataSource.getRepository(entity).create(data)) as Promise<any>;
   const orderRows = () => dataSource.getRepository(OrderHeader).count({ where: { tenant_id: tenantId } });
   const paymentRows = (orderId: string) => dataSource.getRepository(Payment).count({ where: { tenant_id: tenantId, order_id: orderId } });
@@ -72,6 +76,7 @@ describe('idempotent writes (PostgreSQL)', () => {
     branchId = (await save(Branch, { tenant_id: tenantId, code: 'IDM', name: 'Idempotent branch', is_active: true, time_zone: 'Asia/Tehran' })).id;
     const terminalId = (await save(Terminal, { tenant_id: tenantId, branch_id: branchId, code: 'IDM-1', name: 'Till 1', terminal_type: 'CASHIER', is_active: true })).id;
     await save(Printer, { tenant_id: tenantId, branch_id: branchId, code: 'K-00', name: 'Kitchen', printer_type: 'KITCHEN_IMPACT', is_active: true });
+    delivery = await deliveryFixture(dataSource, tenantId, branchId);
     const categoryId = (await save(Category, { tenant_id: tenantId, code: 'IDM-MAINS', name: 'Mains', is_active: true })).id;
     burger = (await save(Product, { tenant_id: tenantId, category_id: categoryId, code: 'BURGER', name: 'Burger', base_price: '100000.0000', tax_rate: '0.0000', is_active: true })).id;
     cash = (await save(PaymentMethod, { tenant_id: tenantId, code: 'CASH', name: 'Cash', kind: 'CASH', currency_code: 'IRR', is_active: true })).id;
@@ -103,9 +108,9 @@ describe('idempotent writes (PostgreSQL)', () => {
     const createKey = newKey();
     const submitKey = newKey();
 
-    const created = await call('post', '/api/v1/orders', draftBody(), createKey);
+    const created = await call('post', '/api/v1/orders', sentBody(), createKey);
     expect(created.status).toBe(201);
-    const again = await call('post', '/api/v1/orders', draftBody(), createKey);
+    const again = await call('post', '/api/v1/orders', sentBody(), createKey);
     expect(again.status).toBe(created.status);
     expect(again.body).toEqual(created.body);
     expect(again.headers['x-cache-replay']).toBe('true');
@@ -131,7 +136,7 @@ describe('idempotent writes (PostgreSQL)', () => {
     expect(row.call_number).toBe(first.body.call_number);
 
     // The repeats did not use a call number up: the next order is the next one.
-    const next = await call('post', '/api/v1/orders', draftBody());
+    const next = await call('post', '/api/v1/orders', sentBody());
     const nextSubmitted = await call('post', `/api/v1/orders/${next.body.id}/submit`, {});
     expect(nextSubmitted.body.call_number).toBe(first.body.call_number + 1);
 
@@ -145,10 +150,10 @@ describe('idempotent writes (PostgreSQL)', () => {
   it('answers the same key with another body 409, and does nothing', async () => {
     const key = newKey();
     const before = await orderRows();
-    const first = await call('post', '/api/v1/orders', draftBody('1'), key);
+    const first = await call('post', '/api/v1/orders', sentBody('1'), key);
     expect(first.status).toBe(201);
 
-    const other = await call('post', '/api/v1/orders', draftBody('2'), key);
+    const other = await call('post', '/api/v1/orders', sentBody('2'), key);
     expect(other.status).toBe(409);
     expect(other.body.code).toBe('IDEMPOTENCY_CONFLICT');
     expect(await orderRows()).toBe(before + 1);
@@ -167,7 +172,8 @@ describe('idempotent writes (PostgreSQL)', () => {
     const placed = await call('post', `/api/v1/orders/${draft.body.id}/submit`, {}, shared);
     expect(draft.status).toBe(201);
     expect(placed.status).toBe(201);
-    expect(placed.body.state).toBe('CONFIRMED');
+    // A takeaway waits for its payment before the kitchen sees it (O-19).
+    expect(placed.body).toMatchObject({ state: 'SUBMITTED', call_number: null });
   });
 
   it('updates a draft once for the same key', async () => {

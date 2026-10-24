@@ -650,7 +650,9 @@ describe('Specification §16.3 Acceptance Workflows Suite', () => {
     expect(MoneyUtil.format(account.current_balance)).toBe('-300000.0000');
 
     // Step 5: Refund - the whole order goes back, each payment by the method it was paid with:
-    // the credit tender returns to the account, the card tender is paid back as card.
+    // the credit tender returns to the account, the card tender is paid back as card. The
+    // customer comes back another day: a same-day order is cancelled instead (O-21).
+    await dataSource.getRepository(OrderHeader).update({ id: submittedOrder.id }, { business_date: '2020-01-01' } as any);
     const refunds = await refundService.refundOrder(
       tenantId,
       submittedOrder.id,

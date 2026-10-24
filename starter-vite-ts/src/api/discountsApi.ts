@@ -105,8 +105,8 @@ export interface DiscountQuoteResult {
 /** What the signed-in account may discount without a pin, and the ceiling nobody passes. */
 export interface ManualDiscountLimits {
   role: string;
-  own: { pct: string; maxFixed: string };
-  ceiling: { pct: string; maxFixed: string };
+  own: { pct: string };
+  ceiling: { pct: string };
 }
 
 /** Where an item discount runs: in store (the till and the kiosk), on Snappfood, or both. */

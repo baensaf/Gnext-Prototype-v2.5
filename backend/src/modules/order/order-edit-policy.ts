@@ -31,10 +31,10 @@ export interface OrderActionConfig {
   cancelWindowMinutes: number;
 }
 
-/** Spec 12: default seed is a 10 minute edit window and a 10 minute cancel window. */
+/** A new chain gets 5 minutes to edit and 5 to cancel, the window Iran Burger sets in HAMI (O-17). */
 export const ORDER_ACTION_DEFAULTS: OrderActionConfig = {
-  editWindowMinutes: 10,
-  cancelWindowMinutes: 10,
+  editWindowMinutes: 5,
+  cancelWindowMinutes: 5,
 };
 
 export interface OrderEditContext {

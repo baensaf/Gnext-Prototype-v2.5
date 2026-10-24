@@ -65,7 +65,7 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
     const drink = { productId: 'p-2', categoryId: 'cat-drinks', unitPrice: '50000.0000', quantity: '1' };
     const drinksExcluded = () =>
       settingRepo.find.mockImplementation(async ({ where }: any) =>
-        where?.key === 'DISCOUNT_AUTHORIZATIONS' ? [{ key: 'DISCOUNT_AUTHORIZATIONS', value: { familyExcludedCategoryIds: ['cat-drinks'] } }] : [],
+        !where?.key || where.key === 'DISCOUNT_AUTHORIZATIONS' ? [{ key: 'DISCOUNT_AUTHORIZATIONS', value: { cashierMaxPct: 10, familyExcludedCategoryIds: ['cat-drinks'] } }] : [],
       );
     const discount = (fields: Record<string, unknown> = {}) => ({
       id: 'd-1',
@@ -218,6 +218,7 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
 
     it("gives way to the cashier's own discount, and only one of them applies", async () => {
       offers({});
+      settingRepo.find.mockResolvedValue([{ key: 'DISCOUNT_AUTHORIZATIONS', value: { cashierMaxPct: 10 } }]);
 
       const result = await evaluationService.evaluateQuote(
         't-1',
@@ -262,8 +263,8 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
       expect(result.grandTotal).toBe('190750.0000');
     });
 
-    // The register read its own copy of these (10% / 50,000 and a 30% / 300,000 ceiling), so a
-    // change at head office left the POS and the server disagreeing.
+    // The register read its own copy of these, so a change at head office left the POS and the
+    // server disagreeing. A limit is a percent only (R-16); old Toman caps are ignored.
     it("answers the caller's own limit and the ceiling from head office's Discount Authorizations", async () => {
       settingRepo.find.mockResolvedValue([
         { key: 'DISCOUNT_AUTHORIZATIONS', branch_id: null, value: { cashierMaxPct: 5, cashierMaxFixed: 20000, managerMaxPct: 40, managerMaxFixed: 2000000 } },
@@ -271,10 +272,10 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
 
       await expect(evaluationService.getManualDiscountLimits('t-1', 'cashier')).resolves.toEqual({
         role: 'CASHIER',
-        own: { pct: '5', maxFixed: '20000' },
-        ceiling: { pct: '40', maxFixed: '2000000' },
+        own: { pct: '5' },
+        ceiling: { pct: '40' },
       });
-      await expect(evaluationService.getManualDiscountLimits('t-1', 'MANAGER')).resolves.toMatchObject({ own: { pct: '40', maxFixed: '2000000' } });
+      await expect(evaluationService.getManualDiscountLimits('t-1', 'MANAGER')).resolves.toMatchObject({ own: { pct: '40' } });
       // A system administrator or owner is head office, not a register.
       await expect(evaluationService.getManualDiscountLimits('t-1', 'SUPER_ADMIN')).resolves.toMatchObject({ own: { pct: '100' } });
       await expect(evaluationService.getManualDiscountLimits('t-1', 'OWNER')).resolves.toMatchObject({ own: { pct: '100' } });
@@ -294,6 +295,29 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
       expect(manager.discountTotal).toBe('20000.0000');
     });
 
+    // R-16: a new chain starts its cashiers at 0%, so every manual discount needs a manager.
+    it('starts a new chain with cashiers at 0% and managers at 100%', async () => {
+      await expect(evaluationService.getManualDiscountLimits('t-1', 'CASHIER')).resolves.toEqual({
+        role: 'CASHIER',
+        own: { pct: '0' },
+        ceiling: { pct: '100' },
+      });
+    });
+
+    it('measures an amount as the percent of the order it takes off', async () => {
+      settingRepo.find.mockResolvedValue([{ key: 'DISCOUNT_AUTHORIZATIONS', value: { cashierMaxPct: 10 } }]);
+      const quote = (value: string) =>
+        evaluationService.evaluateQuote('t-1', {
+          orderDraft: { items: [{ productId: 'p-1', unitPrice: '200000.0000', quantity: '1' }] },
+          manualDiscount: { calculation_type: 'FIXED_AMOUNT', value },
+        }, 'CASHIER');
+
+      // 20,000 of 200,000 is 10%: the cashier's own.
+      expect((await quote('20000.0000')).discountTotal).toBe('20000.0000');
+      // 30,000 is 15%: a manager approves.
+      expect((await quote('30000.0000')).approvalRequired).toBe(true);
+    });
+
     it('spreads a fixed deduction over the discountable lines and leaves NEVER_DISCOUNT lines whole', async () => {
       const result = await evaluationService.evaluateQuote('t-1', {
         orderDraft: {
@@ -304,7 +328,7 @@ describe('Discounts & Evaluation Engine Suite (R11)', () => {
           ],
         },
         manualDiscount: { calculation_type: 'FIXED_AMOUNT', value: '30000.0000' },
-      });
+      }, 'MANAGER');
 
       expect(result.discountTotal).toBe('30000.0000');
       expect(result.items.map((i) => i.discountTotal)).toEqual(['10000.0000', '20000.0000', '0.0000']);

@@ -233,6 +233,13 @@ export class RefundService {
     }
 
     const businessDate = (await loadBusinessClock(em, tenantId, order.branch_id)).today();
+    // An order of today's business day is cancelled, not refunded (O-21).
+    if (!cancelling && order.business_date && String(order.business_date).slice(0, 10) >= businessDate) {
+      throw new ConflictException({
+        code: 'CANCEL_INSTEAD',
+        message: `Order ${order.order_number} is from today's business day. Cancel it instead of refunding.`,
+      });
+    }
     // Tara takes a sale back itself (ReversePurchase) on the day it was made. A Tara sale from an
     // earlier day is paid back in cash from the drawer, like any refund Tara no longer covers.
     const cashMethod = legs.some((s) => (s.method?.kind || s.payment.method_kind) === TARA_KIND && s.payment.business_date !== businessDate)
