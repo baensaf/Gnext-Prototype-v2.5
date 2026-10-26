@@ -168,7 +168,7 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                 {t('authPolicy.managerRole', 'Manager Role Limits')}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                {t('authPolicy.managerDesc', 'Maximum policy limit permitted by store manager PIN approval.')}
+                {t('authPolicy.managerDesc', 'The most a branch manager may take off an order. Nobody gives more.')}
               </Typography>
               <Stack spacing={2}>
                 <TextField
@@ -215,7 +215,7 @@ export default function DiscountAuthorizationsPage({ isEmbedded = false }: Disco
                 {t('authPolicy.enforcementTitle', 'Backend Policy Enforcement')}
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {t('authPolicy.enforcementDesc', 'Discounts exceeding a user’s role threshold are blocked at the quote level and require a manager PIN (seeded PIN 2468) to proceed.')}
+                {t('authPolicy.enforcementDesc', "A discount above a role's limit is not given until a manager signs in on the cashier's screen to approve it.")}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 {t('authPolicy.auditNotice', 'Discounts exceeding maximum manager policy limit (30%) are rejected outright by server-side evaluation. All requests write immutable audit trails.')}

@@ -479,16 +479,13 @@ describe('Order edit command (spec 7.9)', () => {
       expect(delivery.state).toBe('CANCELLED');
     });
 
-    it('refuses a conversion that would drop the total below what was collected', async () => {
+    it('refuses a conversion that would drop the total below what was paid, before asking a manager (O-31)', async () => {
       asDelivery();
       payments.push({ id: 'pay-1', status: 'SUCCEEDED', amount: '125000.0000' });
 
       await expect(
-        service.changeOrderType(TENANT, ORDER_ID, {
-          orderType: 'TAKEAWAY',
-          approvalRequestId: APPROVAL_ID,
-        }),
-      ).rejects.toMatchObject({ response: { code: 'REFUND_REQUIRED' } });
+        service.changeOrderType(TENANT, ORDER_ID, { orderType: 'TAKEAWAY' }),
+      ).rejects.toMatchObject({ response: { code: 'BELOW_AMOUNT_PAID' } });
     });
 
     it('needs an approval once money has landed', async () => {

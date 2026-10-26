@@ -1190,6 +1190,8 @@ export function PosOrderPage() {
   const [terminalPayLoading, setTerminalPayLoading] = useState(false);
 
   const handleDirectTerminalPay = useCallback(async () => {
+    // A delivery is sent unpaid and paid at the courier's settlement (O-16).
+    if (orderType === 'DELIVERY') return;
     if (cart.length === 0) {
       toast.warning(t('pos.cartEmpty', 'Cart is empty. Add items first.'));
       return;
@@ -1212,10 +1214,6 @@ export function PosOrderPage() {
         branch_id: selectedBranchId,
         order_type: orderType,
         customer_id: selectedCustomerId || undefined,
-        delivery_address_id: orderType === 'DELIVERY' ? selectedDeliveryAddressId : undefined,
-        delivery_zone_id: orderType === 'DELIVERY' ? selectedDeliveryZoneId : undefined,
-        // Null goes back to the zone's fee on a draft that had a typed one.
-        delivery_fee: orderType === 'DELIVERY' ? typedDeliveryFee : undefined,
         notes: orderNotes.trim() || undefined,
         items: cart.map((ci) => ({
           product_id: ci.product.id,

@@ -115,6 +115,14 @@ describe('Pay before the kitchen (PostgreSQL)', () => {
     expect((await reload(again!.id)).call_number).toBeNull();
   });
 
+  it('puts a cart back over a payment that never reached the drawer or a terminal', async () => {
+    const sent = await send();
+    const refused = await payments.createPaymentIntent(tenantId, { orderId: sent!.id, methodId: cash, amount: '100000.0000' } as any);
+    const back = await orders.returnToCart(tenantId, sent!.id);
+    expect(back.state).toBe('DRAFT');
+    expect((await payments.getPaymentById(tenantId, refused.id)).status).toBe('CANCELLED');
+  });
+
   it('does not edit a counter order, nor make it a delivery', async () => {
     const sent = await send({ order_type: 'DINE_IN' });
     await expect(

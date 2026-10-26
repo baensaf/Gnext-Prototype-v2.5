@@ -1897,17 +1897,6 @@ export class OrderService {
           `Cannot change the type of order ${order.order_number} in state ${order.state} (${decision.reason})`,
         );
       }
-      if (decision.decision === 'REQUIRE_APPROVAL') {
-        if (!dto.approvalRequestId) {
-          throw new ForbiddenException({
-            statusCode: 403,
-            code: 'APPROVAL_REQUIRED',
-            message: `Changing this order from ${from} to ${to} is outside cashier authority and needs an approved request (${decision.reason})`,
-            escalations: [`CHANGE_ORDER_TYPE:${decision.reason}`],
-          });
-        }
-        await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'EDIT_ORDER', undefined, id);
-      }
 
       // A courier holding the food outranks everything above: there is no honest way to
       // call it a takeaway while it is on a motorbike.
@@ -1955,18 +1944,33 @@ export class OrderService {
       const recalculated = await this.recalculateOrderTotals(tenantId, order, em);
 
       // Dropping the delivery fee can take the total below what the guest already handed
-      // over. Same rule as a line edit: the money owed back is settled deliberately, not
-      // left as a negative balance nobody reconciles.
+      // over. Same rule as a line edit (O-31): refused, and a manager cancels the whole order
+      // to ring it again, since there are no partial refunds.
       if (MoneyUtil.greaterThan(netPaid, recalculated.grand_total)) {
         throw new ConflictException({
           statusCode: 409,
-          code: 'REFUND_REQUIRED',
+          code: 'BELOW_AMOUNT_PAID',
           message:
             `Changing this order to ${to} lowers its total to ${recalculated.grand_total}, ` +
-            `below the ${netPaid} already collected. Refund the difference first.`,
+            `below the ${netPaid} already paid. Cancel the order and ring it again.`,
+          netPaid,
           newGrandTotal: recalculated.grand_total,
           refundDue: MoneyUtil.subtract(netPaid, recalculated.grand_total),
         });
+      }
+
+      // Asked only for a change that can go through, so nobody fetches a manager for a refusal.
+      // The changes above are undone with the transaction if it is refused.
+      if (decision.decision === 'REQUIRE_APPROVAL') {
+        if (!dto.approvalRequestId) {
+          throw new ForbiddenException({
+            statusCode: 403,
+            code: 'APPROVAL_REQUIRED',
+            message: `Changing this order from ${from} to ${to} is outside cashier authority and needs an approved request (${decision.reason})`,
+            escalations: [`CHANGE_ORDER_TYPE:${decision.reason}`],
+          });
+        }
+        await this.approvalService.validateApprovedRequest(tenantId, dto.approvalRequestId, 'EDIT_ORDER', undefined, id);
       }
 
       recalculated.version += 1;
@@ -2474,8 +2478,11 @@ export class OrderService {
           message: `Order ${order.order_number} is already with the kitchen and cannot go back to the cart`,
         });
       }
+      // A payment still PENDING never reached a terminal or the drawer (it was refused on the
+      // way, say for a terminal that can't be picked): nothing was taken, so it is dropped.
+      await em.update(Payment, { tenant_id: tenantId, order_id: id, status: 'PENDING' as any }, { status: 'CANCELLED' as any });
       const payments = await em.count(Payment, {
-        where: ['SUCCEEDED', 'COMPLETED', 'PENDING', 'PROCESSING'].map((status) => ({
+        where: ['SUCCEEDED', 'COMPLETED', 'PROCESSING'].map((status) => ({
           tenant_id: tenantId,
           order_id: id,
           status: status as any,

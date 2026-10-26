@@ -370,7 +370,7 @@ export const orderApi = {
    *
    * The delivery fee moves with the type, so this goes through the same authority as a line
    * edit: 403 APPROVAL_REQUIRED past the cashier window or once money has landed, and 409
-   * REFUND_REQUIRED when dropping the fee would take the total below what was collected.
+   * BELOW_AMOUNT_PAID when dropping the fee would take the total below what was paid (O-31).
    */
   changeOrderType: async (
     id: string,
