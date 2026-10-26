@@ -488,11 +488,10 @@ export function OrdersWorkflowPage() {
     !!order.business_date && String(order.business_date).slice(0, 10) < businessToday();
 
   // A waiting order is answered on Incoming Orders. Only Snappfood cancels one of its orders; the
-  // store reports a problem to Snappfood instead. Nor once a courier has it.
+  // store reports a problem to Snappfood instead. Once a courier has it, a manager approves (O-25).
   const canCancel = (order: OrderHeader) =>
     !readOnly &&
     !isSnappfoodOrder(order) &&
-    order.status !== 'OUT_FOR_DELIVERY' &&
     (lifecycleOf(order) === 'OPEN' || (order.status === 'COMPLETED' && !fromEarlierDay(order)));
 
   // A platform collects for its orders, so the till takes no money for one, except a cash order
@@ -2220,7 +2219,9 @@ export function OrdersWorkflowPage() {
         detailsText={
           cancelEscalation === 'CANCEL_AGAINST_PAID_ORDER'
             ? t('orders.cancelDialog.approvalDetailsPaid')
-            : t('orders.cancelDialog.approvalDetails', 'Cancellation outside the cashier window')
+            : cancelEscalation === 'OUT_FOR_DELIVERY_CANCEL_NEEDS_APPROVAL'
+              ? t('orders.cancelDialog.approvalDetailsOut')
+              : t('orders.cancelDialog.approvalDetails', 'Cancellation outside the cashier window')
         }
         createRequest
       />
