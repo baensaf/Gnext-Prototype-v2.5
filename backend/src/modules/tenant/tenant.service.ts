@@ -336,7 +336,7 @@ export class TenantService {
          SELECT 'ORDER', o.order_number, 2 FROM order_header o
           WHERE o.tenant_id = $1 AND o.branch_id = $2
             AND (o.status IN ('PENDING_ACCEPTANCE', ${OPEN_STATUSES.map((s) => `'${s}'`).join(', ')})
-                 OR (o.status NOT IN ('DRAFT', 'CANCELLED', 'REJECTED', 'REFUNDED') AND o.outstanding_total > 0))
+                 OR (o.status NOT IN ('DRAFT', 'ABANDONED', 'CANCELLED', 'REJECTED', 'REFUNDED') AND o.outstanding_total > 0))
          UNION ALL
          SELECT 'REFUND_DUE', o.order_number, 3 FROM order_header o
           WHERE o.tenant_id = $1 AND o.branch_id = $2 AND o.status IN ('CANCELLED', 'REJECTED')

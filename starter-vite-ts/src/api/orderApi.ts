@@ -55,7 +55,7 @@ export interface OrderHeader {
   source?: string | null;
   order_type: 'DINE_IN' | 'TAKEAWAY' | 'DELIVERY' | 'AGGREGATOR';
   channel?: string;
-  state: 'DRAFT' | 'PENDING_ACCEPTANCE' | 'SUBMITTED' | 'CONFIRMED' | 'OUT_FOR_DELIVERY' | 'COMPLETED' | 'CANCELLED' | 'REJECTED';
+  state: 'DRAFT' | 'PENDING_ACCEPTANCE' | 'SUBMITTED' | 'CONFIRMED' | 'OUT_FOR_DELIVERY' | 'COMPLETED' | 'CANCELLED' | 'ABANDONED' | 'REJECTED';
   status: string; // legacy alias
   currency_code: string;
   quote_version: string;
@@ -341,6 +341,12 @@ export const orderApi = {
   /** A counter order still waiting for its payment goes back to being the till's cart (O-19, O-20). */
   returnToCart: async (id: string): Promise<OrderHeader> => {
     const res = await httpClient.post(`/api/v1/orders/${id}/back-to-cart`, {});
+    return res.data;
+  },
+
+  /** The cart of an order sent back to it is discarded: the order closes as Abandoned (O-37). */
+  abandon: async (id: string): Promise<OrderHeader> => {
+    const res = await httpClient.post(`/api/v1/orders/${id}/abandon`, {});
     return res.data;
   },
 

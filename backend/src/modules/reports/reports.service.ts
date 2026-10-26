@@ -542,6 +542,27 @@ export class ReportsService {
         this.applyBranchViaOrder(refundQb, 'r', branchId);
         const refunds = await refundQb.getMany();
 
+        // A card charged by hand on another reader (Y-12) is still a card, but shown on a row of
+        // its own, with the pay-backs of those payments beside it, as on the Payments page.
+        const otherReaderPayments = new Set<string>();
+        const otherReaderRefunds = new Set<string>();
+        if (payments.length > 0) {
+          const marked: { payment_id: string }[] = await this.paymentRepo.manager.query(
+            `SELECT DISTINCT payment_id FROM payment_attempt WHERE adapter = 'MANUAL' AND payment_id = ANY($1::uuid[])`,
+            [payments.map((p) => p.id)],
+          );
+          marked.forEach((m) => otherReaderPayments.add(m.payment_id));
+        }
+        if (refunds.length > 0) {
+          const marked: { refund_id: string }[] = await this.paymentRepo.manager.query(
+            `SELECT DISTINCT ra.refund_id FROM refund_allocation ra
+               JOIN payment_attempt pa ON pa.payment_id = ra.payment_id AND pa.adapter = 'MANUAL'
+              WHERE ra.refund_id = ANY($1::uuid[])`,
+            [refunds.map((r) => r.id)],
+          );
+          marked.forEach((m) => otherReaderRefunds.add(m.refund_id));
+        }
+
         let totalSucceeded = '0.00';
         let totalReversed = '0.00';
         let totalRefunded = '0.00';
@@ -560,7 +581,7 @@ export class ReportsService {
           };
 
         payments.forEach((p) => {
-          const key = p.method_kind || 'CASH';
+          const key = otherReaderPayments.has(p.id) ? 'CARD_OTHER_READER' : p.method_kind || 'CASH';
           const existing = methodRow(key);
           const amtStr = MoneyUtil.format(p.amount || '0', 2);
           existing.count += 1;
@@ -579,7 +600,7 @@ export class ReportsService {
         });
 
         refunds.forEach((r) => {
-          const key = r.method_kind || 'CASH';
+          const key = otherReaderRefunds.has(r.id) ? 'CARD_OTHER_READER' : r.method_kind || 'CASH';
           const existing = methodRow(key);
           const refStr = MoneyUtil.format(r.amount || '0', 2);
           existing.refunded = MoneyUtil.add(existing.refunded, refStr, 2);

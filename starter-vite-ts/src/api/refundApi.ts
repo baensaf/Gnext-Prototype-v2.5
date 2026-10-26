@@ -99,6 +99,14 @@ export const refundApi = {
     return (Array.isArray(res.data) ? res.data : [res.data]).map(toRecord);
   },
 
+  /**
+   * Whether all of an order's money can go back now (Y-18), asked before a manager is fetched.
+   * Rejects with the reason (no open shift for the cash, an unanswered card charge...).
+   */
+  checkPayBack: async (orderId: string, cancel = false): Promise<void> => {
+    await httpClient.get(`/api/v1/orders/${orderId}/pay-back-check`, { params: { cancel: cancel ? '1' : '0' } });
+  },
+
   cancelPaidOrder: async (orderId: string, reason?: string, approvalRequestId?: string): Promise<any> => {
     const res = await httpClient.post(`/api/v1/orders/${orderId}/cancel-paid`, {
       reason: reason || 'Paid order cancellation',

@@ -82,7 +82,7 @@ export class BusinessDayAutoCloseService implements OnApplicationBootstrap, OnMo
        UNION ALL
        SELECT 1 FROM order_header
         WHERE tenant_id = $1 AND branch_id = $2 AND business_date = $3 AND deleted_at IS NULL
-          AND state NOT IN ('DRAFT')
+          AND state NOT IN ('DRAFT', 'ABANDONED')
        LIMIT 1`,
       [tenantId, branchId, date],
     );

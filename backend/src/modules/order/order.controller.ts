@@ -288,6 +288,14 @@ export class OrdersController {
     return await this.orderService.returnToCart(tenantId, id, userId, correlationId);
   }
 
+  /** A cart whose order was sent back is thrown away: the order closes as Abandoned (O-37). */
+  @Post(':id/abandon')
+  async abandonDraft(@Param('id') id: string, @Req() req: Request) {
+    const tenantId = (req as any).tenantId;
+    const userId = (req as any).user?.id || (req as any).userId;
+    return await this.orderService.abandonDraft(tenantId, id, userId);
+  }
+
   @Get(':id/history')
   async getOrderHistory(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

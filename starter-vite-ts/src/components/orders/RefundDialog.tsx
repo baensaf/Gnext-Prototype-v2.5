@@ -87,9 +87,21 @@ export function RefundDialog({ order, orderRef, onClose, onRefunded }: Props) {
     }
   };
 
-  const handleSubmitClick = () => {
-    if (canApprove) submit();
-    else setPinOpen(true);
+  // The refund and its pay-backs go together or not at all (Y-18): a pay-back that can't be
+  // made is shown here, before a manager is asked to sign in for it.
+  const handleSubmitClick = async () => {
+    if (canApprove) {
+      submit();
+      return;
+    }
+    if (!order) return;
+    setError(null);
+    try {
+      await refundApi.checkPayBack(order.id);
+      setPinOpen(true);
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || err.detail || err.message || t('refunds.createFailed'));
+    }
   };
 
   return (

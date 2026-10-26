@@ -142,7 +142,8 @@ describe('Order edit command (spec 7.9)', () => {
         if (entityClass === Refund) return refunds;
         return [];
       }),
-      count: jest.fn(async () => payments.filter((p) => p.status === 'SUCCEEDED').length),
+      // Counts payments in the status asked for (a charge still out is PROCESSING, O-38).
+      count: jest.fn(async (_entity: any, opts?: any) => payments.filter((p) => p.status === (opts?.where?.status ?? 'SUCCEEDED')).length),
       delete: jest.fn(),
       getRepository: jest.fn().mockReturnValue({ findOne: jest.fn() }),
     };

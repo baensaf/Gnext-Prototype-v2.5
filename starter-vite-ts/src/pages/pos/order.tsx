@@ -952,10 +952,23 @@ export function PosOrderPage() {
     }
   };
 
+  // A cart whose order was placed and sent back keeps that order on the server; discarding the
+  // cart closes it as Abandoned (O-37). Nothing was printed or paid, so no reason is asked.
+  const abandonPlacedOrder = (draftOrderId?: string | null) => {
+    if (!draftOrderId) return;
+    orderApi.abandon(draftOrderId).catch((err: any) => showErrorToast(err, err.detail || err.message));
+  };
+
   // Discard: nothing was ordered or printed, so it goes in one tap with no reason.
   const handleDiscardHeldOrder = (held: HeldCart) => {
     saveHeldCarts(heldCarts.filter((c) => c.id !== held.id));
+    abandonPlacedOrder(held.draftOrderId);
     toast.info(t('pos.heldDrawer.discarded'));
+  };
+
+  const handleDiscardCart = () => {
+    abandonPlacedOrder(activeDraftOrderId);
+    handleClearCart();
   };
 
   // Platform orders are answered on the Incoming orders page (2026-10-12: no Online tab on the
@@ -1878,7 +1891,7 @@ export function PosOrderPage() {
                       size="small"
                       color="error"
                       startIcon={<DeleteIcon fontSize="small" />}
-                      onClick={handleClearCart}
+                      onClick={handleDiscardCart}
                       sx={{ textTransform: 'none', py: 0.25, px: 1 }}
                     >
                       {t('pos.clearCart')}

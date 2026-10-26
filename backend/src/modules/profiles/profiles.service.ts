@@ -154,7 +154,7 @@ export class ProfilesService {
    * Drafts are carts nobody sent, so they are neither counted nor listed.
    */
   private async orderSummary(tenantId: string, filter: string, params: any[]) {
-    const where = `o.tenant_id = $1 AND o.deleted_at IS NULL AND o.state <> 'DRAFT' AND (${filter})`;
+    const where = `o.tenant_id = $1 AND o.deleted_at IS NULL AND o.state NOT IN ('DRAFT', 'ABANDONED') AND (${filter})`;
     const [stats, orders] = await Promise.all([
       this.dataSource.query(
         `SELECT COUNT(*)::int AS order_count,

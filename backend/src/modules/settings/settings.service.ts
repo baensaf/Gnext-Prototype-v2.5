@@ -16,6 +16,8 @@ import { canActOnBranch, isHeadOfficeUser, UserScope } from '../../common/utils/
 import { BUSINESS_DAY_SETTING_KEY, businessDaySettingProblem } from '../../common/utils/business-day';
 import { CATALOG_SETTING_KEY, catalogSettingProblem } from '../../common/utils/default-tax';
 import { nextCode, typedCode } from '../../common/utils/next-code.util';
+import { businessToday } from '../../common/utils/business-clock';
+import { CALL_NUMBER_SETTING_KEY, callNumberRangesProblem, callNumberSettingToSave } from '../order/call-number';
 
 @Injectable()
 export class SettingsService {
@@ -107,6 +109,9 @@ export class SettingsService {
       if (problem) throw new BadRequestException(problem);
     } else if (group === BUSINESS_DAY_SETTING_KEY) {
       const problem = businessDaySettingProblem(value);
+      if (problem) throw new BadRequestException(problem);
+    } else if (group === CALL_NUMBER_SETTING_KEY) {
+      const problem = callNumberRangesProblem(value);
       if (problem) throw new BadRequestException(problem);
     } else if (group === 'DISCOUNTS') {
       if (value.cashierMaxDiscountPercent !== undefined) {
@@ -240,6 +245,11 @@ export class SettingsService {
       where: { tenant_id: tenantId, key, branch_id: branchId ?? IsNull() },
     });
     const before = setting ? { ...setting } : null;
+
+    // New call-number ranges start with the next business day; today keeps its own (O-39).
+    if (key.toUpperCase() === CALL_NUMBER_SETTING_KEY) {
+      value = callNumberSettingToSave(setting?.value, value, await businessToday(this.settingRepo.manager, tenantId));
+    }
 
     if (!setting) {
       setting = this.settingRepo.create({
