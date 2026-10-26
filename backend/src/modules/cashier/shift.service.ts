@@ -11,7 +11,8 @@ import { CashierShift, ShiftState } from '../../entities/CashierShift.entity';
 import { CashMovement, CashMovementType } from '../../entities/CashMovement.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { Payment } from '../../entities/Payment.entity';
-import { OrderHeader } from '../../entities/OrderHeader.entity';
+import { OrderHeader, OrderState } from '../../entities/OrderHeader.entity';
+import { abandonOrder } from '../order/abandon-order';
 import { Branch } from '../../entities/Branch.entity';
 import { Refund } from '../../entities/Refund.entity';
 import { AdminUser } from '../../entities/AdminUser.entity';
@@ -42,8 +43,8 @@ import {
  */
 const TILL_OPEN_ORDER_ISSUES: OpenOrderIssue[] = ['UNPAID', 'AWAITING_ACCEPTANCE'];
 
-/** Orders that never became a sale: never sent, waiting to be accepted, cancelled or turned down. */
-const UNSOLD_ORDER_STATES: string[] = ['DRAFT', 'PENDING_ACCEPTANCE', 'CANCELLED', 'REJECTED'];
+/** Orders that never became a sale: never sent, abandoned, waiting to be accepted, cancelled or turned down. */
+const UNSOLD_ORDER_STATES: string[] = ['DRAFT', 'ABANDONED', 'PENDING_ACCEPTANCE', 'CANCELLED', 'REJECTED'];
 
 /** What one register did in a shift, for the cashier to read on screen. */
 export interface ShiftSalesSummary {
@@ -545,6 +546,15 @@ export class ShiftService {
           detail: `${leftBehind.openOrders.length} order(s) are unpaid or waiting to be accepted. Settle them before closing the shift.`,
           context: { openOrders: leftBehind.openOrders },
         });
+      }
+
+      // Held carts end with the shift. An order sent back to its cart and still on this register,
+      // on the till or held, closes as Abandoned: never sent again, not a sale (O-37).
+      if (shift.terminal_id) {
+        const backOnTill = await em.find(OrderHeader, {
+          where: { tenant_id: tenantId, branch_id: shift.branch_id, terminal_id: shift.terminal_id, channel: 'POS', state: 'DRAFT' as OrderState },
+        });
+        for (const order of backOnTill) await abandonOrder(em, order, userId || null, 'SHIFT_ENDED');
       }
 
       // Calculate expected cash strictly from persisted CashMovement rows

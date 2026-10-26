@@ -413,6 +413,8 @@ export function OrdersWorkflowPage() {
     switch (status) {
       case 'REJECTED':
         return t('orders.statuses.rejected');
+      case 'ABANDONED':
+        return t('orders.statuses.abandoned');
       default:
         break;
     }
@@ -744,18 +746,19 @@ export function OrdersWorkflowPage() {
     setTypeSubmitting(true);
     setTypeError(null);
     try {
-      await orderApi.changeOrderType(typeOrder.id, typeTarget, {
+      const result = await orderApi.changeOrderType(typeOrder.id, typeTarget, {
         deliveryAddressId: typeAddressId || undefined,
         deliveryZoneId: typeZoneId || undefined,
         reason: typeReason || undefined,
         approvalRequestId,
       });
       setTypeDialogOpen(false);
-      const changed = typeOrder;
+      const changed = result || typeOrder;
       setTypeOrder(null);
       await loadData();
-      // A counter order is paid as it is taken (O-23).
-      handleOpenPayment(changed);
+      // A counter order is paid as it is taken (O-23). One already paid in full at the till
+      // completed with its receipt when its delivery fee came off: there is nothing to take.
+      if (MoneyUtil.greaterThan(changed.outstanding_total || '0', '0')) handleOpenPayment(changed);
     } catch (err: any) {
       // Past the cashier's window, or once money has landed, the server wants a manager.
       // Same shape as the cancel flow: collect a PIN and retry the identical change.

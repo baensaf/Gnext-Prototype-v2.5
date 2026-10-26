@@ -313,6 +313,13 @@ export class PaymentService {
       });
       if (!order) throw new NotFoundException(`Order ${payment.order_id} not found`);
 
+      // A new collection at the till belongs to its drawer's business day, card included: after
+      // the cutoff the old shift takes nothing more (P-17). Cash checks its drawer below. A
+      // charge already sent and answered late is recorded by its own path, not here (Y-19).
+      if (payment.method_kind !== 'CASH' && order.channel === 'POS' && payment.shift_id) {
+        await this.shiftService.requireOpenShiftById(tenantId, payment.shift_id, em);
+      }
+
       const methodKind = payment.method_kind;
 
       if (methodKind === 'CASH') {

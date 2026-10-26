@@ -14,6 +14,9 @@ export type OrderState =
   | 'OUT_FOR_DELIVERY'
   | 'COMPLETED'
   | 'CANCELLED'
+  // Placed, sent back to the cart and never sent again: the cart was discarded or its shift
+  // ended (O-37). Final, not a sale, and in no Orders tab or report.
+  | 'ABANDONED'
   // The store turned down an incoming order. Final, and kept apart from CANCELLED
   // because aggregators track a store's rejection rate.
   | 'REJECTED';

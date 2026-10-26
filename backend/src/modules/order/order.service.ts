@@ -44,6 +44,7 @@ import { CreditService } from '../customer/credit.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { ReasonCode } from '../../entities/ReasonCode.entity';
 import { assignCallNumber } from './call-number';
+import { abandonOrder } from './abandon-order';
 import {
   LIFECYCLE_SQL,
   LIFECYCLE_GROUPS,
@@ -140,6 +141,8 @@ const ALLOWED_TRANSITIONS: Record<OrderState, OrderState[]> = {
   OUT_FOR_DELIVERY: ['COMPLETED', 'CANCELLED'],
   COMPLETED: [],
   CANCELLED: ['SUBMITTED'],
+  // Final (O-37): reached only by discarding its cart or ending its shift, never by a transition.
+  ABANDONED: [],
   REJECTED: [],
 };
 
@@ -1077,7 +1080,7 @@ export class OrderService {
   private async printCustomerPaperwork(tenantId: string, orderId: string, userId?: string) {
     if (!this.printQueueService) return;
     const order = await this.orderRepo.findOne({ where: { id: orderId, tenant_id: tenantId } });
-    if (!order || ['DRAFT', 'PENDING_ACCEPTANCE', 'CANCELLED', 'REJECTED'].includes(order.state)) return;
+    if (!order || ['DRAFT', 'ABANDONED', 'PENDING_ACCEPTANCE', 'CANCELLED', 'REJECTED'].includes(order.state)) return;
 
     // A Snappfood order the store delivers itself needs the slip too: it is typed AGGREGATOR,
     // and only its expedition says whose rider is coming.
@@ -1641,6 +1644,19 @@ export class OrderService {
   }
 
   /**
+   * No edit or change to the counter while a card charge on the order is out, answered or not
+   * (O-38): the charge was for the old total, and there is no partial refund to put it right.
+   */
+  private async refuseWhileChargeOut(em: EntityManager, order: OrderHeader) {
+    const out = await em.count(Payment, { where: { tenant_id: order.tenant_id, order_id: order.id, status: 'PROCESSING' as any } });
+    if (out === 0) return;
+    throw new ConflictException({
+      code: 'CHARGE_IN_PROGRESS',
+      message: `Order ${order.order_number} has a card charge waiting for the terminal. Wait for its answer, or mark it charged or not charged, before changing the order.`,
+    });
+  }
+
+  /**
    * Apply line changes to an order past DRAFT, per spec 7.9.
    *
    * Lines are never mutated or deleted: a removal flips the original to VOID
@@ -1664,6 +1680,7 @@ export class OrderService {
       if (!order) throw new NotFoundException(`Order ${id} not found`);
       this.refuseSnappfoodChange(order, 'change its lines');
       this.refuseCounterOrderEdit(order);
+      await this.refuseWhileChargeOut(em, order);
 
       const items = await em.find(OrderItem, { where: { order_id: id, tenant_id: tenantId } });
 
@@ -1874,6 +1891,7 @@ export class OrderService {
       const to = dto.orderType;
 
       this.refuseSnappfoodChange(order, 'change what kind of order it is');
+      await this.refuseWhileChargeOut(em, order);
       if (from === to) {
         throw new BadRequestException(`Order ${order.order_number} is already a ${to} order`);
       }
@@ -2057,6 +2075,19 @@ export class OrderService {
         // The slip is reprinted from the order; the conversion stands.
       }
     }
+    // A delivery paid at the till before that became a counter order may owe nothing now the
+    // fee is off: it completes and its receipt prints once, with no payment and no second
+    // kitchen send (O-12, Till and Orders §9).
+    if (
+      changed &&
+      changed.order_type !== 'DELIVERY' &&
+      changed.state !== 'DRAFT' &&
+      MoneyUtil.greaterThan(changed.paid_total || '0.0000', '0.0000') &&
+      !MoneyUtil.greaterThan(changed.outstanding_total || '0.0000', '0.0000')
+    ) {
+      await this.afterPaymentSucceeded(tenantId, id, userId, correlationId);
+      return await this.orderRepo.findOne({ where: { id, tenant_id: tenantId }, relations: ['items', 'items.options', 'adjustments', 'stateEvents'] });
+    }
     return changed;
   }
 
@@ -2204,6 +2235,7 @@ export class OrderService {
       if (!order) throw new NotFoundException(`Order ${id} not found`);
       this.refuseSnappfoodChange(order, 'change its lines');
       this.refuseCounterOrderEdit(order);
+      await this.refuseWhileChargeOut(em, order);
 
       const item = await em.findOne(OrderItem, {
         where: { id: dto.orderItemId, tenant_id: tenantId, order_id: id },
@@ -2402,6 +2434,9 @@ export class OrderService {
     // transitionState: it goes to cancelPaidOrder below, so a cashier's plain cancel on a
     // paid takeaway was refunding it with no approval at all.
     const returnsMoney = MoneyUtil.greaterThan(netPaid, '0.0000');
+    // The cancel and its pay-backs go together or not at all (Y-18): a pay-back that can't be
+    // made is refused here, before anyone fetches a manager for it.
+    if (returnsMoney) await this.refundService.checkPayBack(tenantId, id, true);
     if (decision.decision === 'REQUIRE_APPROVAL' || returnsMoney) {
       const reason = decision.decision === 'REQUIRE_APPROVAL' ? decision.reason : 'CANCEL_AGAINST_PAID_ORDER';
       if (!dto.approvalRequestId) {
@@ -2534,6 +2569,25 @@ export class OrderService {
     // A coupon taken as it was sent works again.
     await this.coupons?.releaseForOrder(tenantId, id);
     return back;
+  }
+
+  /**
+   * The cart of an order sent back to it is discarded (O-37): the order closes as Abandoned.
+   * Only an order back on the till can go this way; one the kitchen has is cancelled instead.
+   */
+  async abandonDraft(tenantId: string, id: string, userId?: string) {
+    return await this.dataSource.transaction(async (em) => {
+      const order = await em.findOne(OrderHeader, { where: { id, tenant_id: tenantId }, lock: { mode: 'pessimistic_write' } });
+      if (!order) throw new NotFoundException(`Order ${id} not found`);
+      if (order.state === 'ABANDONED') return order;
+      if (order.state !== 'DRAFT') {
+        throw new ConflictException({
+          code: 'ORDER_ALREADY_SENT',
+          message: `Order ${order.order_number} was sent and can't be discarded. Cancel it instead.`,
+        });
+      }
+      return await abandonOrder(em, order, userId || null, 'DISCARD_CART');
+    });
   }
 
   async getOrderHistory(tenantId: string, id: string) {

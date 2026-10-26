@@ -49,6 +49,45 @@ export function readCallNumberRanges(value: any): Record<CallChannelGroup, CallN
   return ranges;
 }
 
+/**
+ * Why head office's ranges can't be saved, or null. Each counts upwards and none shares a
+ * number with another channel's, or two orders could be called by the same number (O-39).
+ */
+export function callNumberRangesProblem(value: any): string | null {
+  const list = (Object.keys(DEFAULT_CALL_NUMBER_RANGES) as CallChannelGroup[]).map((group) => {
+    const r = value?.ranges?.[group] ?? DEFAULT_CALL_NUMBER_RANGES[group];
+    return { group, start: Number(r?.start), end: Number(r?.end) };
+  });
+  const bad = list.find((r) => !Number.isInteger(r.start) || !Number.isInteger(r.end) || r.start < 1 || r.end < r.start || r.end > 99999);
+  if (bad) return `The ${bad.group} call-number range must start at 1 or more and end at or after its start.`;
+  const overlap = list.some((a, i) => list.some((b, j) => i < j && a.start <= b.end && b.start <= a.end));
+  return overlap ? 'The call-number ranges overlap, so two orders could get the same number.' : null;
+}
+
+/**
+ * The ranges a business day counts in. A change applies from the next business day (O-39):
+ * until then the day keeps the ranges it started with, so numbers already called out stay
+ * apart from the ones still to come.
+ */
+export function callNumberRangesFor(value: any, businessDate: string): Record<CallChannelGroup, CallNumberRange> {
+  if (value?.previous && value?.changed_on && businessDate <= String(value.changed_on)) {
+    return readCallNumberRanges({ ranges: value.previous });
+  }
+  return readCallNumberRanges(value);
+}
+
+/**
+ * The setting to store when head office saves new ranges on `today`: the new ranges, and the
+ * ones today keeps (what was in force today, even if they were changed earlier today).
+ */
+export function callNumberSettingToSave(stored: any, incoming: any, today: string) {
+  return {
+    ranges: readCallNumberRanges(incoming),
+    previous: callNumberRangesFor(stored, today),
+    changed_on: today,
+  };
+}
+
 /** The n-th number handed out today in a range, wrapping back to its start when it runs out. */
 export function nthInRange(n: number, range: CallNumberRange): number {
   const size = range.end - range.start + 1;
@@ -72,7 +111,7 @@ export async function assignCallNumber(em: EntityManager, order: OrderHeader): P
   const setting = await em.findOne(TenantSetting, {
     where: { tenant_id: order.tenant_id, key: CALL_NUMBER_SETTING_KEY, branch_id: IsNull() },
   });
-  const range = readCallNumberRanges(setting?.value)[group];
+  const range = callNumberRangesFor(setting?.value, businessDate)[group];
 
   const rows = await em.query(
     `INSERT INTO "order_call_counter" ("tenant_id", "branch_id", "business_date", "channel_group", "last_value")

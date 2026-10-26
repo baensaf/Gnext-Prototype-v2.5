@@ -100,8 +100,9 @@ export function applyOrderFilters(
 ) {
   const { withGroup = true, currentAnyDate = false } = options;
   // A draft is a Place that did not finish sending, not an order anyone looks up. A cart on hold
-  // never reaches the server at all: it lives in its register's browser.
-  qb.andWhere("o.status <> 'DRAFT'");
+  // never reaches the server at all: it lives in its register's browser. An abandoned one was
+  // never sent again (O-37).
+  qb.andWhere("o.status NOT IN ('DRAFT', 'ABANDONED')");
 
   const branchVal = query.branch || query.branch_id || query.branchId;
   if (branchVal) qb.andWhere('o.branch_id = :branch', { branch: branchVal });

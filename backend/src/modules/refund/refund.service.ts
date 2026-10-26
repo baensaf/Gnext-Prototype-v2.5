@@ -28,6 +28,17 @@ interface PaymentShare {
   remaining: string;
 }
 
+/** What giving an order's money back takes, worked out before anything is written. */
+interface PayBackPlan {
+  order: OrderHeader;
+  legs: PaymentShare[];
+  businessDate: string;
+  cashMethod: PaymentMethod | null;
+  kindOf: (s: PaymentShare) => string;
+  drawer: CashierShift | null;
+  tillShift: CashierShift | null;
+}
+
 /** Who is doing it and who released the money, for the refund's audit events. */
 interface RefundContext {
   userId?: string;
@@ -203,9 +214,41 @@ export class RefundService {
     em: EntityManager,
     cancelling: boolean,
   ): Promise<Refund[]> {
+    if (!input.reason) {
+      throw new BadRequestException('Refund requires a mandatory reason');
+    }
+    const plan = await this.planPayBack(em, tenantId, orderId, cancelling, true);
+    return await this.recordPayBacks(em, tenantId, plan, input, ctx);
+  }
+
+  /**
+   * Whether every payment on the order can go back now, checked before a manager is asked
+   * (Y-18): the cancel or refund and all its pay-backs happen together or not at all, so a
+   * refusal here is the same one the pay-back would meet. Throws the reason; writes nothing.
+   */
+  async checkPayBack(tenantId: string, orderId: string, cancelling: boolean): Promise<{ ok: true }> {
+    await this.dataSource.transaction(async (em) => {
+      // Whether a card was charged decides what goes back (Y-16).
+      const unanswered = await em.count(Payment, { where: { tenant_id: tenantId, order_id: orderId, status: 'PROCESSING' as any } });
+      if (unanswered > 0) {
+        throw new ConflictException({
+          code: 'CHARGE_UNRESOLVED',
+          message: 'This order has a card charge the terminal never answered. Mark it charged or not charged first.',
+        });
+      }
+      await this.planPayBack(em, tenantId, orderId, cancelling, false);
+    });
+    return { ok: true };
+  }
+
+  /**
+   * What giving an order's money back would take, or the refusal: the payments left to give
+   * back, the business day, and the drawer and shift they go back through.
+   */
+  private async planPayBack(em: EntityManager, tenantId: string, orderId: string, cancelling: boolean, lock: boolean): Promise<PayBackPlan> {
     const order = await em.findOne(OrderHeader, {
       where: { id: orderId, tenant_id: tenantId },
-      lock: { mode: 'pessimistic_write' },
+      ...(lock ? { lock: { mode: 'pessimistic_write' as const } } : {}),
     });
     if (!order) throw new NotFoundException(`Order ${orderId} not found`);
 
@@ -221,10 +264,6 @@ export class RefundService {
       throw new BadRequestException(
         `Refunds are permitted only on COMPLETED orders. Current state: ${order.state}. To undo payments on open orders, use payment reversal/correction.`,
       );
-    }
-
-    if (!input.reason) {
-      throw new BadRequestException('Refund requires a mandatory reason');
     }
 
     const shares = await this.paymentShares(tenantId, orderId, em);
@@ -265,6 +304,18 @@ export class RefundService {
         ? await this.cashDrawerFor(em, tenantId, order, legs, cancelling)
         : await this.shiftService.resolveDrawer(tenantId, order.branch_id, order.terminal_id));
 
+    return { order, legs, businessDate, cashMethod, kindOf, drawer, tillShift };
+  }
+
+  /** Records one refund per payment in the plan and moves the money back. */
+  private async recordPayBacks(
+    em: EntityManager,
+    tenantId: string,
+    plan: PayBackPlan,
+    input: { reason: string; reasonCodeId?: string; approvalRequestId?: string },
+    ctx: RefundContext,
+  ): Promise<Refund[]> {
+    const { order, legs, businessDate, cashMethod, kindOf, drawer, tillShift } = plan;
     const refunds: Refund[] = [];
     let total = '0.0000';
     for (const share of legs) {
@@ -365,15 +416,14 @@ export class RefundService {
    * else after the cutoff (P-18).
    */
   private async cashDrawerFor(em: EntityManager, tenantId: string, order: OrderHeader, legs: PaymentShare[], cancelling: boolean) {
-    try {
-      return await this.shiftService.requireDrawer(tenantId, order.branch_id, order.terminal_id);
-    } catch (err: any) {
-      if (!cancelling || err?.response?.code !== 'SHIFT_BUSINESS_DAY_ENDED') throw err;
+    // P-18 first, whichever register does it: the cash goes back from the old shift it came
+    // into, not from a new-day drawer that never held it.
+    if (cancelling) {
       const shiftId = (legs.find((s) => (s.method?.kind || s.payment.method_kind) === 'CASH') ?? legs[0])?.payment.shift_id;
       const old = shiftId ? await em.findOne(CashierShift, { where: { id: shiftId, tenant_id: tenantId, state: 'OPEN' } }) : null;
-      if (!old) throw err;
-      return old;
+      if (old && (await this.shiftService.shiftBusinessDayEnded(old, em))) return old;
     }
+    return await this.shiftService.requireDrawer(tenantId, order.branch_id, order.terminal_id);
   }
 
   async cancelPaidOrder(tenantId: string, orderId: string, dto: PaidOrderCancelDto, userId?: string, correlationId?: string) {

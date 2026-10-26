@@ -61,6 +61,7 @@ const ORDER_STATE_COLOR: Record<string, 'success' | 'error' | 'warning' | 'info'
   COMPLETED: 'success',
   CANCELLED: 'error',
   REJECTED: 'error',
+  ABANDONED: 'default',
   PENDING_ACCEPTANCE: 'warning',
   OUT_FOR_DELIVERY: 'info',
 };

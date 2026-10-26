@@ -221,14 +221,99 @@ describe('Pay before the kitchen (PostgreSQL)', () => {
     ).rejects.toMatchObject({ response: { code: 'BELOW_AMOUNT_PAID' } });
   });
 
+  // O-37: the order sent back to its cart keeps its number; a discarded cart closes it as Abandoned.
+  it('closes an order sent back to the cart as Abandoned when its cart is discarded', async () => {
+    const sent = await send();
+    await orders.returnToCart(tenantId, sent!.id);
+    const gone = await orders.abandonDraft(tenantId, sent!.id);
+    expect(gone).toMatchObject({ state: 'ABANDONED', order_number: sent!.order_number });
+    const listed = await orders.getOrders(tenantId, { branch: branchId, limit: '200' });
+    expect(listed.data.map((o: any) => o.id)).not.toContain(sent!.id);
+
+    const kept = await send({ ...delivery });
+    await expect(orders.abandonDraft(tenantId, kept!.id)).rejects.toMatchObject({ response: { code: 'ORDER_ALREADY_SENT' } });
+  });
+
+  // O-37: held carts end with their shift, and so does an order still back on that register.
+  it('abandons an order still back on the till when its shift closes', async () => {
+    const save = (entity: any, data: any) => dataSource.getRepository(entity).save(dataSource.getRepository(entity).create(data)) as Promise<any>;
+    const till2 = (await save(Terminal, { tenant_id: tenantId, branch_id: branchId, code: 'PK-2', name: 'Till 2', terminal_type: 'CASHIER', is_active: true })).id;
+    const shifts = moduleRef.get(ShiftService);
+    const shift2 = ((await shifts.openShift(tenantId, { terminalId: till2 } as any)) as any).id;
+    const draft = await orders.createDraft(tenantId, {
+      branch_id: branchId, terminal_id: till2, shift_id: shift2, channel: 'POS', order_type: 'TAKEAWAY',
+      items: [{ product_id: burger, quantity: 1 }],
+    } as any);
+    await orders.submitOrder(tenantId, draft.id, {} as any);
+    await orders.returnToCart(tenantId, draft.id);
+
+    await shifts.closeShift(tenantId, shift2, { actualCash: '0' } as any);
+    expect((await reload(draft.id)).state).toBe('ABANDONED');
+  });
+
+  // O-38: the charge was for the old total, so the order waits for its answer.
+  it('refuses to edit or change a delivery while a card charge on it is out', async () => {
+    const sent = await send({ ...delivery });
+    await dataSource.query(
+      `INSERT INTO payment (id, tenant_id, order_id, payment_number, method_kind, amount, status, currency_code)
+       VALUES ($1, $2, $3, $4, 'NETWORK_POS', '100000.0000', 'PROCESSING', 'IRR')`,
+      [randomUUID(), tenantId, sent!.id, `PAY-${Date.now()}`],
+    );
+    await expect(
+      orders.editOrder(tenantId, sent!.id, { changes: { add: [{ productId: burger, quantity: '1' }] } } as any),
+    ).rejects.toMatchObject({ response: { code: 'CHARGE_IN_PROGRESS' } });
+    await expect(orders.changeOrderType(tenantId, sent!.id, { orderType: 'TAKEAWAY' } as any)).rejects.toMatchObject({
+      response: { code: 'CHARGE_IN_PROGRESS' },
+    });
+    // Y-18: the same refusal comes before a manager is asked to cancel it.
+    await expect(refunds.checkPayBack(tenantId, sent!.id, true)).rejects.toMatchObject({ response: { code: 'CHARGE_UNRESOLVED' } });
+  });
+
+  // Till and Orders §9: paid at the till before, a delivery whose fee comes off owes nothing.
+  it('completes a delivery changed to the counter when what was paid covers the new total', async () => {
+    const sent = await send({ ...delivery, delivery_fee: '20000.0000' });
+    expect(sent!.grand_total).toBe('120000.0000');
+    await pay(sent!.id, '100000.0000');
+
+    // Money has landed, so a manager approves the change (R-15).
+    const save = (entity: any, data: any) => dataSource.getRepository(entity).save(dataSource.getRepository(entity).create(data)) as Promise<any>;
+    const tag = Date.now();
+    const cashier = await save(AdminUser, { tenant_id: tenantId, username: `pk-c-${tag}`, display_name: 'Cashier', role: 'CASHIER', password_hash: 'x', is_active: true, branch_id: branchId });
+    const manager = await save(AdminUser, {
+      tenant_id: tenantId, username: `pk-m-${tag}`, display_name: 'Manager', role: 'MANAGER',
+      password_hash: await argon2.hash('Manager!1'), is_active: true, branch_id: branchId,
+    });
+    const approvals = moduleRef.get(ApprovalService);
+    const request = await approvals.createRequest(tenantId, cashier.id, { action: 'EDIT_ORDER', entity_type: 'ORDER', entity_id: sent!.id }, 'test');
+    await approvals.approveRequest(tenantId, request.id, cashier.id, '', undefined, 'test', null, { username: manager.username, password: 'Manager!1' });
+
+    const changed = await orders.changeOrderType(tenantId, sent!.id, { orderType: 'TAKEAWAY', approvalRequestId: request.id } as any);
+    expect(changed).toMatchObject({ state: 'COMPLETED', outstanding_total: '0.0000' });
+    const receipts = await dataSource.getRepository(PrintJob).count({
+      where: { tenant_id: tenantId, entity_id: sent!.id, document_type: 'CUSTOMER_RECEIPT' },
+    });
+    expect(receipts).toBe(1);
+    expect(await kitchenTickets(sent!.id)).toBe(1);
+  });
+
   // P-18: after the cutoff the old shift takes no payment, but a manager's cancel of a part-paid
   // order gives its cash back from that shift. Last here: it ends the shift's business day.
   it('pays a part-paid order back from the old shift after the cutoff', async () => {
     const sent = await send();
     await pay(sent!.id, '40000.0000');
+    // A card started before the cutoff, never charged.
+    const card = (await dataSource.getRepository(PaymentMethod).save(
+      dataSource.getRepository(PaymentMethod).create({ tenant_id: tenantId, code: 'CARD', name: 'Card', kind: 'NETWORK_POS', currency_code: 'IRR', is_active: true }),
+    )).id;
+    const later = await send();
+    const cardIntent = await payments.createPaymentIntent(tenantId, { orderId: later!.id, methodId: card, amount: '100000.0000' } as any);
     await dataSource.query(`UPDATE cashier_shift SET business_date = '2020-01-01' WHERE id = $1`, [shiftId]);
 
     await expect(pay(sent!.id, '60000.0000')).rejects.toMatchObject({ response: { code: 'SHIFT_BUSINESS_DAY_ENDED' } });
+    // P-17: no new card collection on the old shift either.
+    await expect(payments.processPayment(tenantId, cardIntent.id, {} as any)).rejects.toMatchObject({
+      response: { code: 'SHIFT_BUSINESS_DAY_ENDED' },
+    });
     await refunds.cancelPaidOrder(tenantId, sent!.id, { reason: 'Left after the cutoff' } as any);
     expect((await reload(sent!.id)).state).toBe('CANCELLED');
     const [back] = await dataSource.query(`SELECT amount, shift_id FROM refund WHERE order_id = $1`, [sent!.id]);
