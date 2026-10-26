@@ -38,6 +38,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import RestaurantIcon from '@mui/icons-material/Restaurant';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PointOfSaleIcon from '@mui/icons-material/PointOfSale';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import TakeoutDiningIcon from '@mui/icons-material/TakeoutDining';
 import DeliveryDiningIcon from '@mui/icons-material/DeliveryDining';
@@ -77,6 +78,7 @@ import {
   LinearProgress,
   CircularProgress,
   FormControlLabel,
+  ClickAwayListener,
   ToggleButtonGroup,
 } from '@mui/material';
 
@@ -184,6 +186,8 @@ export function PosOrderPage() {
   // 86 from the tile: long-press, right-click or the tile's stop button opens it.
   const [stopProduct, setStopProduct] = useState<Product | null>(null);
   const longPress = React.useRef<{ timer?: number; fired: boolean }>({ fired: false });
+  // The tile whose ingredients are showing.
+  const [infoProductId, setInfoProductId] = useState<string | null>(null);
   // This branch's in-store prices (its price list's, else base), keyed `product:variant`. The
   // server charges these, so the grid and cart show them too.
   const [branchPrices, setBranchPrices] = useState<Map<string, string>>(new Map());
@@ -1832,9 +1836,39 @@ export function PosOrderPage() {
                               {p.name}
                             </Typography>
                           </Box>
-                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main', mt: 1 }}>
-                            {MoneyUtil.formatCurrency(priceOf(p))} {currency}
-                          </Typography>
+                          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                              {MoneyUtil.formatCurrency(priceOf(p))} {currency}
+                            </Typography>
+                            {/* What's in it, for when a customer asks. Hover shows it with a mouse; a tap
+                                shows it on a touch till, and a tap anywhere else closes it. */}
+                            {p.description?.trim() && (
+                              <ClickAwayListener onClickAway={() => setInfoProductId((id) => (id === p.id ? null : id))}>
+                                <Tooltip
+                                  title={p.description}
+                                  open={infoProductId === p.id}
+                                  onOpen={() => setInfoProductId(p.id)}
+                                  onClose={() => setInfoProductId(null)}
+                                  disableTouchListener
+                                  arrow
+                                  slotProps={{ tooltip: { sx: { fontSize: '0.8125rem', whiteSpace: 'pre-line', maxWidth: 260 } } }}
+                                >
+                                  <IconButton
+                                    size="small"
+                                    aria-label={t('pos.ingredients', { name: p.name })}
+                                    onPointerDown={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setInfoProductId(p.id);
+                                    }}
+                                    sx={{ p: 0.25, my: -0.5, color: 'text.secondary', '&:hover': { color: 'info.main' } }}
+                                  >
+                                    <InfoOutlinedIcon sx={{ fontSize: 18 }} />
+                                  </IconButton>
+                                </Tooltip>
+                              </ClickAwayListener>
+                            )}
+                          </Stack>
                         </Paper>
                       </Grid>
                       );

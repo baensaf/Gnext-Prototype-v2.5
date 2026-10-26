@@ -531,6 +531,8 @@ export function ProductDetailPage() {
                       label={t('catalog.productDetailPage.general.description')}
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
+                      placeholder={t('catalog.productDetailPage.general.descriptionPlaceholder')}
+                      helperText={t('catalog.productDetailPage.general.descriptionHelp')}
                       fullWidth
                       multiline
                       rows={3}
