@@ -1805,6 +1805,35 @@ export function PosOrderPage() {
                           >
                             <DoNotDisturbOnOutlinedIcon sx={{ fontSize: 18 }} />
                           </IconButton>
+                          {/* What's in it, for when a customer asks: beside the stop button, so a long price
+                              never wraps. Hover shows it with a mouse; a tap shows it on a touch till, and a
+                              tap anywhere else closes it. */}
+                          {p.description?.trim() && (
+                            <ClickAwayListener onClickAway={() => setInfoProductId((id) => (id === p.id ? null : id))}>
+                              <Tooltip
+                                title={p.description}
+                                open={infoProductId === p.id}
+                                onOpen={() => setInfoProductId(p.id)}
+                                onClose={() => setInfoProductId(null)}
+                                disableTouchListener
+                                arrow
+                                slotProps={{ tooltip: { sx: { fontSize: '0.8125rem', whiteSpace: 'pre-line', maxWidth: 260 } } }}
+                              >
+                                <IconButton
+                                  size="small"
+                                  aria-label={t('pos.ingredients', { name: p.name })}
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInfoProductId(p.id);
+                                  }}
+                                  sx={{ position: 'absolute', top: 4, insetInlineEnd: 28, p: 0.5, color: 'text.secondary', '&:hover': { color: 'info.main' } }}
+                                >
+                                  <InfoOutlinedIcon sx={{ fontSize: 18 }} />
+                                </IconButton>
+                              </Tooltip>
+                            </ClickAwayListener>
+                          )}
                           <Box>
                             {/* Room for the stop button, so the chips never sit under it. */}
                             <Box sx={{ paddingInlineEnd: '24px' }}>
@@ -1824,7 +1853,7 @@ export function PosOrderPage() {
                               sx={{
                                 fontWeight: 'bold',
                                 mb: 0.5,
-                                paddingInlineEnd: '24px',
+                                paddingInlineEnd: p.description?.trim() ? '48px' : '24px',
                                 lineHeight: 1.25,
                                 color: 'text.primary',
                                 display: '-webkit-box',
@@ -1836,39 +1865,9 @@ export function PosOrderPage() {
                               {p.name}
                             </Typography>
                           </Box>
-                          <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 1 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                              {MoneyUtil.formatCurrency(priceOf(p))} {currency}
-                            </Typography>
-                            {/* What's in it, for when a customer asks. Hover shows it with a mouse; a tap
-                                shows it on a touch till, and a tap anywhere else closes it. */}
-                            {p.description?.trim() && (
-                              <ClickAwayListener onClickAway={() => setInfoProductId((id) => (id === p.id ? null : id))}>
-                                <Tooltip
-                                  title={p.description}
-                                  open={infoProductId === p.id}
-                                  onOpen={() => setInfoProductId(p.id)}
-                                  onClose={() => setInfoProductId(null)}
-                                  disableTouchListener
-                                  arrow
-                                  slotProps={{ tooltip: { sx: { fontSize: '0.8125rem', whiteSpace: 'pre-line', maxWidth: 260 } } }}
-                                >
-                                  <IconButton
-                                    size="small"
-                                    aria-label={t('pos.ingredients', { name: p.name })}
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setInfoProductId(p.id);
-                                    }}
-                                    sx={{ p: 0.25, my: -0.5, color: 'text.secondary', '&:hover': { color: 'info.main' } }}
-                                  >
-                                    <InfoOutlinedIcon sx={{ fontSize: 18 }} />
-                                  </IconButton>
-                                </Tooltip>
-                              </ClickAwayListener>
-                            )}
-                          </Stack>
+                          <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'primary.main', mt: 1 }}>
+                            {MoneyUtil.formatCurrency(priceOf(p))} {currency}
+                          </Typography>
                         </Paper>
                       </Grid>
                       );
