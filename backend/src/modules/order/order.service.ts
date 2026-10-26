@@ -1008,8 +1008,10 @@ export class OrderService {
           consideredDiscounts: quoteRes.consideredDiscounts,
           // Who changed a delivery price, from what: the zone's fee can change afterwards.
           ...(deliveryContext && order.delivery_fee_manual !== null && order.delivery_fee_manual !== undefined
-            ? { deliveryFeeManual: order.delivery_fee_manual, deliveryZoneFee: deliveryContext.zone.fee }
+            ? { deliveryFeeManual: order.delivery_fee_manual, deliveryZoneFee: deliveryContext.zone?.fee ?? null }
             : {}),
+          // Sent to an address no zone covers (O-35).
+          ...(deliveryContext && !deliveryContext.zone ? { outsideZones: true } : {}),
         },
       });
       await em.save(OrderStateEvent, stateEvt);
@@ -1136,13 +1138,18 @@ export class OrderService {
 
   /**
    * The delivery cost is the selected active branch zone's fee, unless the cashier typed a price
-   * for this order (`delivery_fee_manual`). A typed price belongs to a delivery with a zone: it
-   * is dropped when the order stops being one, so it cannot charge for a journey nobody makes.
+   * for this order (`delivery_fee_manual`). Outside every zone the typed price is the only one
+   * (O-35). A typed price belongs to a delivery: it is dropped when the order stops being one,
+   * so it cannot charge for a journey nobody makes.
    */
   private async applyDeliveryZoneFee(tenantId: string, order: OrderHeader, em: EntityManager) {
-    if (order.order_type !== 'DELIVERY' || !order.delivery_zone_id) {
+    if (order.order_type !== 'DELIVERY') {
       order.delivery_fee = '0.0000';
       order.delivery_fee_manual = null;
+      return;
+    }
+    if (!order.delivery_zone_id) {
+      order.delivery_fee = order.delivery_fee_manual ?? '0.0000';
       return;
     }
     const zone = await em.findOne(DeliveryZone, {
@@ -1207,8 +1214,10 @@ export class OrderService {
       if (requireComplete) throw new BadRequestException('DELIVERY_ADDRESS_REQUIRED');
       return null;
     }
-    if (!order.delivery_zone_id) {
-      if (requireComplete) throw new BadRequestException('DELIVERY_ZONE_REQUIRED');
+    // Zones guide the fee; they don't block an order (O-35). Outside every zone the cashier
+    // types the fee, 0 for free delivery, and the order goes out marked as outside zones.
+    if (!order.delivery_zone_id && (order.delivery_fee_manual === null || order.delivery_fee_manual === undefined)) {
+      if (requireComplete) throw new BadRequestException('DELIVERY_FEE_REQUIRED');
       return null;
     }
     const address = await em.findOne(CustomerAddress, {
@@ -1216,6 +1225,10 @@ export class OrderService {
     });
     if (!address) throw new BadRequestException('DELIVERY_ADDRESS_NOT_FOUND');
     if (address.customer_id !== order.customer_id) throw new BadRequestException('DELIVERY_ADDRESS_CUSTOMER_MISMATCH');
+    if (!order.delivery_zone_id) {
+      order.delivery_fee = order.delivery_fee_manual!;
+      return { address, zone: null };
+    }
     const zone = await em.findOne(DeliveryZone, {
       where: { id: order.delivery_zone_id, tenant_id: tenantId },
     });

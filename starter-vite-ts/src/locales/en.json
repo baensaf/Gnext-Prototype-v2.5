@@ -338,7 +338,9 @@
       "postalField": "Postal code",
       "setDefault": "Set as default address",
       "saveAddress": "Save address",
-      "savingAddress": "Saving…"
+      "savingAddress": "Saving…",
+      "outsideZones": "Outside every zone. Type the delivery price to send it.",
+      "feeRequired": "Type the delivery price (0 for free delivery)"
     },
     "comboChooseSlot": "Choose the {{slot}}",
     "stop": {
@@ -591,7 +593,8 @@
       "changeType": "Change type",
       "refund": "Refund",
       "more": "More actions",
-      "moreShort": "More"
+      "moreShort": "More",
+      "cancelAndRefund": "Cancel and refund"
     },
     "snappfood": {
       "withSupport": "With Snappfood support",
@@ -616,7 +619,8 @@
       "reasonRequired": "Please select a cancellation reason code",
       "approvalDetails": "Cancellation outside the cashier window",
       "approvalDetailsPaid": "Cancelling a paid order — the collected amount will be refunded to the original tender",
-      "approvalDetailsOut": "A courier has this order. A manager approves cancelling it."
+      "approvalDetailsOut": "A courier has this order. A manager approves cancelling it.",
+      "confirmRefund": "Cancel and refund"
     },
     "reprintDialog": {
       "title": "Reprint order {{orderNumber}}",
@@ -805,7 +809,8 @@
     "waiting": {
       "line": "Orders waiting to be accepted: {{count}}",
       "answer": "Answer in Incoming Orders"
-    }
+    },
+    "outsideZones": "Outside zones"
   },
   "delivery": {
     "title": "Delivery hub",
@@ -841,7 +846,8 @@
       "noCourier": "No courier",
       "elapsedMinutes": "{{n}} min",
       "elapsedHours": "{{h}} h {{m}} min",
-      "elapsedDays": "{{n}} days"
+      "elapsedDays": "{{n}} days",
+      "outsideZones": "Outside zones"
     },
     "states": {
       "unassigned": "Unassigned",

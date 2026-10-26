@@ -338,7 +338,9 @@
       "postalField": "کد پستی",
       "setDefault": "به عنوان نشانی پیش‌فرض ثبت شود",
       "saveAddress": "ذخیره نشانی",
-      "savingAddress": "در حال ذخیره…"
+      "savingAddress": "در حال ذخیره…",
+      "outsideZones": "خارج از همه محدوده‌ها. برای ثبت، هزینه ارسال را وارد کنید.",
+      "feeRequired": "هزینه ارسال را وارد کنید (0 یعنی ارسال رایگان)"
     },
     "comboChooseSlot": "{{slot}} را انتخاب کنید",
     "stop": {
@@ -591,7 +593,8 @@
       "changeType": "تغییر نوع فاکتور",
       "refund": "بازپرداخت",
       "more": "اقدامات بیشتر",
-      "moreShort": "بیشتر"
+      "moreShort": "بیشتر",
+      "cancelAndRefund": "لغو و برگشت وجه"
     },
     "snappfood": {
       "withSupport": "نزد پشتیبانی اسنپ‌فود",
@@ -616,7 +619,8 @@
       "reasonRequired": "لطفاً علت لغو سفارش را انتخاب کنید",
       "approvalDetails": "لغو خارج از بازه مجاز صندوق‌دار",
       "approvalDetailsPaid": "لغو سفارش پرداخت‌شده — مبلغ دریافتی به همان روش پرداخت بازگردانده می‌شود",
-      "approvalDetailsOut": "این سفارش دست پیک است. لغو آن را مدیر تأیید می‌کند."
+      "approvalDetailsOut": "این سفارش دست پیک است. لغو آن را مدیر تأیید می‌کند.",
+      "confirmRefund": "لغو و برگشت وجه"
     },
     "reprintDialog": {
       "title": "چاپ مجدد سفارش {{orderNumber}}",
@@ -805,7 +809,8 @@
     "waiting": {
       "line": "سفارش در انتظار تأیید: {{count}}",
       "answer": "پاسخ در سفارش‌های ورودی"
-    }
+    },
+    "outsideZones": "خارج از محدوده‌ها"
   },
   "delivery": {
     "title": "مرکز ارسال",
@@ -841,7 +846,8 @@
       "noCourier": "بدون سفیر",
       "elapsedMinutes": "{{n}} دقیقه",
       "elapsedHours": "{{h}} ساعت و {{m}} دقیقه",
-      "elapsedDays": "{{n}} روز"
+      "elapsedDays": "{{n}} روز",
+      "outsideZones": "خارج از محدوده‌ها"
     },
     "states": {
       "unassigned": "تخصیص‌نیافته",

@@ -494,6 +494,10 @@ export function OrdersWorkflowPage() {
     !isSnappfoodOrder(order) &&
     (lifecycleOf(order) === 'OPEN' || (order.status === 'COMPLETED' && !fromEarlierDay(order)));
 
+  // Money goes back with the cancel: the action says so (O-36). It is still a cancel in reports.
+  const cancelLabel = (order: OrderHeader | null) =>
+    order && MoneyUtil.greaterThan(refundableOf(order), '0') ? t('orders.actions.cancelAndRefund') : t('orders.actions.cancelOrder');
+
   // A platform collects for its orders, so the till takes no money for one, except a cash order
   // the customer collects: they pay at the counter.
   const canPay = (order: OrderHeader) =>
@@ -939,7 +943,9 @@ export function OrdersWorkflowPage() {
     if (isDelivery) {
       // "No courier yet" only means something while the order is still on its way out.
       place =
-        [order.delivery_zone_name, order.courier_name].filter(Boolean).join(' · ') ||
+        [order.delivery_zone_name || (order.order_type === 'DELIVERY' ? t('orders.outsideZones') : null), order.courier_name]
+          .filter(Boolean)
+          .join(' · ') ||
         (order.lifecycle === 'OPEN' ? t('orders.table.noCourierYet') : '');
     } else if (order.order_type === 'AGGREGATOR') {
       place = t('orders.table.snappfoodCourier');
@@ -1522,7 +1528,7 @@ export function OrdersWorkflowPage() {
             <ListItemIcon>
               <CancelIcon color="error" fontSize="small" />
             </ListItemIcon>
-            <ListItemText>{t('orders.actions.cancelOrder')}</ListItemText>
+            <ListItemText>{cancelLabel(menuOrder)}</ListItemText>
           </MenuItem>,
         ]}
       </Menu>
@@ -1557,7 +1563,9 @@ export function OrdersWorkflowPage() {
         <DialogActions>
           <Button onClick={() => setCancelDialogOpen(false)}>{t('orders.cancelDialog.keepOrder')}</Button>
           <Button color="error" onClick={() => handleConfirmCancel()} sx={{ fontWeight: 'bold' }} variant="contained">
-            {t('orders.cancelDialog.confirm')}
+            {MoneyUtil.greaterThan(selectedOrder ? refundableOf(selectedOrder) : '0', '0')
+              ? t('orders.cancelDialog.confirmRefund')
+              : t('orders.cancelDialog.confirm')}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1781,7 +1789,11 @@ export function OrdersWorkflowPage() {
                         [t('orders.drawer.contactPhone'), localMobile(selectedDrawerOrder.context?.customer_mobile || selectedDrawerOrder.customer_mobile)],
                         [t('orders.drawer.takenBy'), selectedDrawerOrder.people?.taken_by?.display_name || selectedDrawerOrder.people?.taken_by?.username],
                         [t('orders.drawer.terminal'), selectedDrawerOrder.context?.terminal_name],
-                        [t('orders.drawer.deliveryZone'), selectedDrawerOrder.context?.delivery_zone_name],
+                        [
+                          t('orders.drawer.deliveryZone'),
+                          selectedDrawerOrder.context?.delivery_zone_name ||
+                            (selectedDrawerOrder.order_type === 'DELIVERY' ? t('orders.outsideZones') : null),
+                        ],
                         [t('orders.drawer.courier'), selectedDrawerOrder.people?.courier?.name],
                       ]
                         .filter(([, value]) => !!value)
@@ -2172,7 +2184,7 @@ export function OrdersWorkflowPage() {
                         <ListItemIcon>
                           <CancelIcon color="error" fontSize="small" />
                         </ListItemIcon>
-                        <ListItemText>{t('orders.actions.cancelOrder')}</ListItemText>
+                        <ListItemText>{cancelLabel(order)}</ListItemText>
                       </MenuItem>
                     )}
                   </Menu>
