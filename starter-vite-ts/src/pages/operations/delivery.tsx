@@ -162,9 +162,9 @@ function DeliveryCard({
               {address}
             </Typography>
           )}
-          {!out && delivery.zone_name && (
-            <Typography variant="caption" color="text.secondary">
-              {delivery.zone_name} · {t('delivery.card.fee')} {MoneyUtil.formatCurrency(delivery.fee)} {currency}
+          {!out && (delivery.zone_name || delivery.outside_zones) && (
+            <Typography variant="caption" color={delivery.outside_zones ? 'warning.main' : 'text.secondary'}>
+              {delivery.zone_name || t('delivery.card.outsideZones')} · {t('delivery.card.fee')} {MoneyUtil.formatCurrency(delivery.fee)} {currency}
             </Typography>
           )}
           {out && (

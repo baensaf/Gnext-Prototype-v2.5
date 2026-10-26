@@ -356,7 +356,9 @@ export class DeliveryService {
     if (order.order_type !== 'DELIVERY') throw new BadRequestException('DELIVERY_ORDER_TYPE_REQUIRED');
     if (!order.customer_id) throw new BadRequestException('DELIVERY_CUSTOMER_REQUIRED');
     if (!order.customer_address_id) throw new BadRequestException('DELIVERY_ADDRESS_REQUIRED');
-    if (!order.delivery_zone_id) throw new BadRequestException('DELIVERY_ZONE_REQUIRED');
+    // Outside every zone the cashier typed the fee (O-35).
+    const typedFee = order.delivery_fee_manual !== null && order.delivery_fee_manual !== undefined;
+    if (!order.delivery_zone_id && !typedFee) throw new BadRequestException('DELIVERY_FEE_REQUIRED');
     if (zoneId && zoneId !== order.delivery_zone_id) throw new BadRequestException('DELIVERY_ZONE_MISMATCH');
 
     const address = await this.customerAddressRepo.findOne({
@@ -364,17 +366,19 @@ export class DeliveryService {
     });
     if (!address) throw new BadRequestException('DELIVERY_ADDRESS_NOT_FOUND');
     if (address.customer_id !== order.customer_id) throw new BadRequestException('DELIVERY_ADDRESS_CUSTOMER_MISMATCH');
-    const zone = await this.zoneRepo.findOne({
-      where: { id: order.delivery_zone_id, tenant_id: tenantId, branch_id: order.branch_id, is_active: true },
-    });
-    if (!zone) throw new BadRequestException('DELIVERY_ZONE_INVALID_OR_INACTIVE');
+    const zone = order.delivery_zone_id
+      ? await this.zoneRepo.findOne({
+          where: { id: order.delivery_zone_id, tenant_id: tenantId, branch_id: order.branch_id, is_active: true },
+        })
+      : null;
+    if (order.delivery_zone_id && !zone) throw new BadRequestException('DELIVERY_ZONE_INVALID_OR_INACTIVE');
 
     const delivery = this.deliveryRepo.create({
       tenant_id: tenantId,
       order_id: orderId,
-      zone_id: zone.id,
+      zone_id: zone?.id ?? null,
       state: 'UNASSIGNED',
-      fee: courierDeliveryFee(zone.fee, order.delivery_fee_manual),
+      fee: courierDeliveryFee(zone?.fee, order.delivery_fee_manual),
       currency_code: order.currency_code || 'IRR',
       address_snapshot: {
         address_id: address.id,
@@ -683,7 +687,9 @@ export class DeliveryService {
         customer_phone: customer?.mobile || null,
         courier_name: courier ? courier.name : 'Unassigned',
         courier_phone: courier ? courier.phone : '',
-        zone_name: zone ? zone.name : 'Default Zone',
+        zone_name: zone ? zone.name : null,
+        // Our own delivery to an address no zone covers, its fee typed at the till (O-35).
+        outside_zones: order.order_type === 'DELIVERY' && !zone,
         zone_estimated_minutes: zone?.estimated_minutes ?? null,
       });
     }

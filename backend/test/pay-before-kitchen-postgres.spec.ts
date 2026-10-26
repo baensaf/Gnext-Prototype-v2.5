@@ -11,6 +11,7 @@ import { Product } from '../src/entities/Product.entity';
 import { PaymentMethod } from '../src/entities/PaymentMethod.entity';
 import { OrderHeader } from '../src/entities/OrderHeader.entity';
 import { PrintJob } from '../src/entities/PrintJob.entity';
+import { Delivery } from '../src/entities/Delivery.entity';
 import { ShiftService } from '../src/modules/cashier/shift.service';
 import { OrderService } from '../src/modules/order/order.service';
 import { PaymentService } from '../src/modules/payment/payment.service';
@@ -102,6 +103,19 @@ describe('Pay before the kitchen (PostgreSQL)', () => {
     const sent = await send({ ...delivery });
     expect(sent).toMatchObject({ state: 'CONFIRMED', call_number: expect.any(Number) });
     expect(await kitchenTickets(sent!.id)).toBe(1);
+  });
+
+  it('sends a delivery outside every zone with the price the cashier typed (O-35)', async () => {
+    const { delivery_zone_id: _zone, ...noZone } = delivery;
+    await expect(send({ ...noZone })).rejects.toThrow('DELIVERY_FEE_REQUIRED');
+
+    const sent = await send({ ...noZone, delivery_fee: '150000.0000' });
+    expect(sent).toMatchObject({ state: 'CONFIRMED', delivery_zone_id: null, delivery_fee: '150000.0000' });
+    expect(sent!.grand_total).toBe('250000.0000');
+    const submit = sent!.stateEvents.find((e) => e.action === 'SUBMIT');
+    expect(submit?.snapshot).toMatchObject({ outsideZones: true, deliveryFeeManual: '150000.0000', deliveryZoneFee: null });
+    const trip = await dataSource.getRepository(Delivery).findOneByOrFail({ order_id: sent!.id });
+    expect(trip).toMatchObject({ zone_id: null, state: 'UNASSIGNED', fee: '150000.0000' });
   });
 
   it('puts an unpaid takeaway back in the cart, and refuses once part of it is paid', async () => {

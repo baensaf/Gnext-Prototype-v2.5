@@ -828,13 +828,14 @@ export function PosOrderPage() {
       toast.warning(t('pos.deliveryContext.addressRequired'));
       return false;
     }
-    if (!selectedDeliveryZoneId) {
-      setError(t('pos.deliveryContext.zoneRequired'));
-      toast.warning(t('pos.deliveryContext.zoneRequired'));
+    // Zones guide the price; outside every zone the cashier types it, 0 for free (O-35).
+    if (!selectedDeliveryZoneId && (manualDeliveryFee === null || manualDeliveryFee === '')) {
+      setError(t('pos.deliveryContext.feeRequired'));
+      toast.warning(t('pos.deliveryContext.feeRequired'));
       return false;
     }
     return true;
-  }, [orderType, selectedCustomerId, selectedDeliveryAddressId, selectedDeliveryZoneId, t]);
+  }, [orderType, selectedCustomerId, selectedDeliveryAddressId, selectedDeliveryZoneId, manualDeliveryFee, t]);
 
   const handleCreateAddress = async () => {
     if (!selectedCustomerId || !newAddress.title.trim() || !newAddress.address_text.trim()) {
@@ -973,6 +974,8 @@ export function PosOrderPage() {
   const zoneDeliveryFee = deliveryZones.find((zone) => zone.id === selectedDeliveryZoneId)?.fee || '0';
   const typedDeliveryFee = manualDeliveryFee !== null && manualDeliveryFee !== '' ? manualDeliveryFee : null;
   const deliveryFeeCharged = orderType === 'DELIVERY' ? (typedDeliveryFee ?? zoneDeliveryFee) : '0';
+  // An address no zone covers is still delivered to; the cashier types its price (O-35).
+  const outsideZones = orderType === 'DELIVERY' && !!selectedDeliveryAddressId && !selectedDeliveryZoneId && !deliveryOptionsLoading;
 
   // A typed price belongs to the delivery it was typed for. What a delivery was missing
   // (customer, address, zone) no longer applies to another order type either.
@@ -1335,7 +1338,8 @@ export function PosOrderPage() {
         order_type: orderType,
         customer_id: selectedCustomerId || undefined,
         delivery_address_id: orderType === 'DELIVERY' ? selectedDeliveryAddressId : undefined,
-        delivery_zone_id: orderType === 'DELIVERY' ? selectedDeliveryZoneId : undefined,
+        // None outside every zone (O-35); null also clears a zone an earlier send of this draft had.
+        delivery_zone_id: orderType === 'DELIVERY' ? selectedDeliveryZoneId || null : undefined,
         // Null goes back to the zone's fee on a draft that had a typed one.
         delivery_fee: orderType === 'DELIVERY' ? typedDeliveryFee : undefined,
         notes: orderNotes.trim() || undefined,
@@ -1995,7 +1999,7 @@ export function PosOrderPage() {
                             <Select value={selectedDeliveryAddressId} label={t('pos.deliveryContext.addressLabel')} onChange={(e) => {
                                 // The last entry adds an address; it is not one to select.
                                 if (e.target.value === ADD_ADDRESS) { setAddAddressOpen(true); return; }
-                                setSelectedDeliveryAddressId(e.target.value); setSelectedDeliveryZoneId(''); setManualDeliveryFee(null);
+                                setSelectedDeliveryAddressId(e.target.value); setSelectedDeliveryZoneId('');
                               }}
                             >
                               {customerAddresses.map((address) => (
@@ -2011,7 +2015,7 @@ export function PosOrderPage() {
                           </FormControl>
                         {customerAddresses.length === 0 && !deliveryOptionsLoading && <Alert severity="info" sx={{ py: 0.25 }}>{t('pos.deliveryContext.noAddresses')}</Alert>}
                         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                        <FormControl fullWidth size="small" disabled={deliveryOptionsLoading} error={Boolean(selectedCustomerId && !selectedDeliveryZoneId)} sx={{ minWidth: 0 }}>
+                        <FormControl fullWidth size="small" disabled={deliveryOptionsLoading} sx={{ minWidth: 0 }}>
                           <InputLabel>{t('pos.deliveryContext.zoneLabel')}</InputLabel>
                           <Select value={selectedDeliveryZoneId} label={t('pos.deliveryContext.zoneLabel')}
                             onChange={(e) => { setSelectedDeliveryZoneId(e.target.value); setManualDeliveryFee(null); }}
@@ -2037,22 +2041,28 @@ export function PosOrderPage() {
                         <TextField
                           size="small"
                           label={t('pos.deliveryContext.feeLabel', { currency: currencyLabel })}
-                          disabled={!selectedDeliveryZoneId}
+                          disabled={!selectedDeliveryAddressId}
+                          error={outsideZones && typedDeliveryFee === null}
                           color={typedDeliveryFee !== null ? 'warning' : undefined}
                           focused={typedDeliveryFee !== null ? true : undefined}
-                          value={!selectedDeliveryZoneId ? '' : toToman(manualDeliveryFee ?? zoneDeliveryFee).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                          value={
+                            outsideZones && typedDeliveryFee === null
+                              ? ''
+                              : toToman(manualDeliveryFee ?? zoneDeliveryFee).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+                          }
                           onChange={(e) => {
                             const typed = fromToman(e.target.value.replace(/,/g, ''));
                             // Nothing below zero; a half-typed value never reaches the order.
                             setManualDeliveryFee(/^\d*$/.test(typed) ? typed : manualDeliveryFee);
                           }}
                           onBlur={() => {
-                            if (manualDeliveryFee === '' || manualDeliveryFee === MoneyUtil.format(zoneDeliveryFee, 0)) setManualDeliveryFee(null);
+                            // Back to the zone's price; outside every zone a typed 0 is free delivery and stays.
+                            if (manualDeliveryFee === '' || (!outsideZones && manualDeliveryFee === MoneyUtil.format(zoneDeliveryFee, 0))) setManualDeliveryFee(null);
                           }}
                           slotProps={{
                             htmlInput: { inputMode: 'numeric', dir: 'ltr' },
                             input: {
-                              endAdornment: typedDeliveryFee !== null ? (
+                              endAdornment: typedDeliveryFee !== null && !outsideZones ? (
                                 <InputAdornment position="end">
                                   <Tooltip title={t('pos.deliveryContext.feeReset')}>
                                     <IconButton size="small" aria-label={t('pos.deliveryContext.feeReset')} onClick={() => setManualDeliveryFee(null)} sx={{ p: 0.25 }}>
@@ -2066,6 +2076,7 @@ export function PosOrderPage() {
                           sx={{ width: 120, flexShrink: 0 }}
                         />
                         </Stack>
+                        {outsideZones && <Alert severity="warning" sx={{ py: 0.25 }}>{t('pos.deliveryContext.outsideZones')}</Alert>}
                         {deliveryOptionsLoading && <LinearProgress />}
                         {deliveryOptionsError && <Alert severity="error" sx={{ py: 0.25 }}>{deliveryOptionsError}</Alert>}
                       </>

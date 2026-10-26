@@ -33,7 +33,9 @@ export interface Delivery {
   order_id: string;
   order_number: string;
   zone_id?: string;
-  zone_name?: string;
+  zone_name?: string | null;
+  /** Our own delivery to an address no zone covers (O-35). */
+  outside_zones?: boolean;
   courier_id?: string;
   courier_name?: string;
   courier_phone?: string;
