@@ -253,4 +253,21 @@ describe('the overnight business day (PostgreSQL)', () => {
     const stored = await dataSource.getRepository(CashierShift).findOneByOrFail({ id: nightShift.id });
     expect(stored.business_date).toBe(nightShift.business_date);
   });
+
+  it('closes a day whose forgotten shift is counted weeks later', async () => {
+    // Opened on the 20th and forgotten; nobody counts it until the 2nd of next month.
+    tehranTime('2026-10-20T20:00:00');
+    const forgotten = (await shifts.openShift(tenantId, { terminalId: tehranTill } as any)) as CashierShift;
+    await payCash(await sell(tehranTill, tehranBranch, forgotten.id));
+
+    tehranTime('2026-11-02T12:00:00');
+    expect(await autoClose.processBranch(tenantId, tehranBranch, new Date())).toContainEqual(
+      expect.objectContaining({ businessDate: '2026-10-20', outcome: 'WAITING_FOR_SHIFTS' }),
+    );
+
+    await closeShift(forgotten.id);
+    expect(await autoClose.processBranch(tenantId, tehranBranch, new Date())).toEqual([
+      expect.objectContaining({ businessDate: '2026-10-20', outcome: 'CLOSED' }),
+    ]);
+  });
 });
