@@ -8,6 +8,7 @@ import { useCloudBack } from 'src/utils/cloud-back';
 import { shiftApi } from 'src/api/shiftApi';
 import { tenantApi } from 'src/api/tenantApi';
 import { businessDayApi } from 'src/api/businessDayApi';
+import { useIsHeadOffice } from 'src/store/useAuthStore';
 import { useBranchContext } from 'src/contexts/branch-context';
 
 import { useDeviceTerminal } from './device-terminal';
@@ -21,6 +22,9 @@ import { useDeviceTerminal } from './device-terminal';
  * is set to — head office switching scope, or a device carried to another shop. Nothing is
  * opened or counted in that state: the server would put it in the register's own branch,
  * which is not the one on screen.
+ *
+ * `headOfficeReads` is a head-office account working inside a branch: it reads the branch's
+ * shifts but opens and closes none (P-27), so this device is no register for it.
  *
  * `checked` turns true once the first answer is in, so a screen that gates on the shift
  * does not flash its "no shift" state while the question is still in flight.
@@ -39,12 +43,13 @@ export function useRegisterShift() {
   const [checked, setChecked] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const headOfficeReads = useIsHeadOffice() && !isHeadOffice;
   const mismatch = !!terminal && !isHeadOffice && !!selectedBranchId && terminal.branch_id !== selectedBranchId;
-  const ready = !!terminal && !mismatch && !isHeadOffice;
+  const ready = !!terminal && !mismatch && !isHeadOffice && !headOfficeReads;
   const terminalBranchName = terminal ? branches.find((b) => b.id === terminal.branch_id)?.name : undefined;
 
   const refresh = useCallback(async () => {
-    if (!terminal || mismatch || isHeadOffice) {
+    if (!terminal || mismatch || isHeadOffice || headOfficeReads) {
       setShift(null);
       setChecked(true);
       return;
@@ -74,7 +79,7 @@ export function useRegisterShift() {
       setLoading(false);
       setChecked(true);
     }
-  }, [terminal, mismatch, isHeadOffice, setTerminal]);
+  }, [terminal, mismatch, isHeadOffice, headOfficeReads, setTerminal]);
 
   useEffect(() => {
     refresh();
@@ -104,6 +109,7 @@ export function useRegisterShift() {
     mismatch,
     ready,
     isHeadOffice,
+    headOfficeReads,
     terminalBranchName,
     branchId: selectedBranchId,
     branchName: selectedBranch?.name,

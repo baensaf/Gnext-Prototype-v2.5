@@ -51,7 +51,7 @@ describe('setting scope resolution', () => {
 
   it('keeps money and discount authority chain-wide', () => {
     expect(isBranchOverridable('ORDER_ACTIONS')).toBe(true);
-    expect(isBranchOverridable('SHIFT_POLICY')).toBe(true);
+    expect(isBranchOverridable('SHIFT_POLICY')).toBe(false);
     expect(isBranchOverridable('TAX')).toBe(false);
     expect(isBranchOverridable('FINANCIAL')).toBe(false);
     expect(isBranchOverridable('DISCOUNT_AUTHORIZATIONS')).toBe(false);
@@ -153,8 +153,8 @@ describe('reading settings for a branch', () => {
   it('names every group a branch may diverge on, configured or not', async () => {
     const scoped = await service.getSettingsWithScope('t1', BRANCH_A);
 
-    expect(scoped.overridable_groups).toContain('SHIFT_POLICY');
+    expect(scoped.overridable_groups).toContain('ORDER_WORKFLOW');
     expect(scoped.overridable_groups).toContain('KIOSK_CUSTOMER_IDENTITY_POLICY');
-    expect(scoped.groups.SHIFT_POLICY).toBeUndefined();
+    expect(scoped.groups.ORDER_WORKFLOW).toBeUndefined();
   });
 });

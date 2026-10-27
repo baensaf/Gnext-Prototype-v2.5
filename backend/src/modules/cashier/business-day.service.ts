@@ -62,8 +62,31 @@ export class BusinessDayService {
     const limit = parseInt(query.limit || '50', 10);
     qb.skip((page - 1) * limit).take(limit);
 
-    const [data, total] = await qb.getManyAndCount();
+    const [days, total] = await qb.getManyAndCount();
+    const data = await this.withCashDifference(tenantId, days);
     return { data, total, page, limit };
+  }
+
+  /**
+   * Each day's cash difference: what its shifts counted against what they should have held,
+   * added up (P-28). Read from the shifts, so a day closed before this was shown has it too.
+   */
+  private async withCashDifference(tenantId: string, days: BusinessDayClose[]) {
+    if (!days.length) return [];
+    const rows: Array<{ branch_id: string; business_date: string; difference: string }> = await this.dataSource.query(
+      `SELECT s.branch_id, s.business_date,
+              COALESCE(SUM(s.short_over), 0)::text AS difference
+         FROM cashier_shift s
+        WHERE s.tenant_id = $1 AND s.state = 'CLOSED'
+          AND (s.branch_id, s.business_date) IN (SELECT * FROM unnest($2::uuid[], $3::varchar[]))
+        GROUP BY s.branch_id, s.business_date`,
+      [tenantId, days.map((d) => d.branch_id), days.map((d) => String(d.business_date).slice(0, 10))],
+    );
+    const byDay = new Map(rows.map((r) => [`${r.branch_id}|${r.business_date}`, MoneyUtil.format(r.difference)]));
+    return days.map((day) => ({
+      ...day,
+      cash_difference: byDay.get(`${day.branch_id}|${String(day.business_date).slice(0, 10)}`) ?? '0.0000',
+    }));
   }
 
   /**

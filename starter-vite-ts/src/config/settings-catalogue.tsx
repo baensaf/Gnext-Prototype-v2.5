@@ -182,7 +182,7 @@ export function useSettingsCatalogue(): SettingCategory[] {
         },
         {
           id: 'shiftPolicy',
-          scope: 'INHERITED',
+          scope: 'ORG',
           title: t('settings.hub.items.shiftPolicy.title', 'Shift & Drawer Policy'),
           description: t('settings.hub.items.shiftPolicy.description', 'The opening float a new shift is offered.'),
           path: '/app/settings/shift-policy',

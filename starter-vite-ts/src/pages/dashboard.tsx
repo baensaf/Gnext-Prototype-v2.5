@@ -12,9 +12,11 @@ import {
   Grid,
   Card,
   Chip,
+  Alert,
   Stack,
   Table,
   Paper,
+  Button,
   TableRow,
   TableBody,
   TableCell,
@@ -23,6 +25,9 @@ import {
   CardContent,
   TableContainer,
 } from '@mui/material';
+
+import { paths } from 'src/routes/paths';
+import { RouterLink } from 'src/routes/components';
 
 import { MoneyUtil } from 'src/utils/money.util';
 import { useCurrencyLabel } from 'src/utils/currency';
@@ -86,6 +91,29 @@ export function DashboardPage() {
           }
         />
       </Box>
+
+      {/* A shift left open from an earlier day holds up that day's close; nothing closes it by itself (P-22). */}
+      {(kpis.shifts_from_earlier_days?.length ?? 0) > 0 && (
+        <Alert
+          severity="warning"
+          sx={{ mb: 3 }}
+          action={
+            <Button color="inherit" size="small" component={RouterLink} href={paths.app.cashier.shifts}>
+              {t('dashboard.openShifts', 'Open Shifts')}
+            </Button>
+          }
+        >
+          {t('dashboard.shiftsFromEarlierDays', {
+            count: kpis.shifts_from_earlier_days.length,
+            defaultValue: '{{count}} shift(s) left open from an earlier day. Close them so that day can close.',
+          })}
+          {!scopedBranchId &&
+            ` (${[...new Set<string>(kpis.shifts_from_earlier_days.map((s: any) => s.branch_id))]
+              .map((id) => branches.find((b) => b.id === id)?.name ?? '')
+              .filter(Boolean)
+              .join(', ')})`}
+        </Alert>
+      )}
 
       {/* KPI Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>

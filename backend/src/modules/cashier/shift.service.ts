@@ -20,6 +20,7 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
 import { currentTillTerminalId } from '../../common/utils/till-context';
+import { UserScope, isApprover, isHeadOfficeUser } from '../../common/utils/user-scope.util';
 import { nextNumber } from '../../common/utils/sequence.util';
 import { ShiftPolicy, resolveShiftPolicy } from './shift-policy';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
@@ -105,6 +106,40 @@ export interface ShiftCloseCheck {
   openOrders: DayCloseOpenOrder[];
   /** Cash payments on this drawer that must be finished or cancelled before it closes. */
   pendingCash: PendingCashPayment[];
+  /**
+   * Card charges taken in this shift that the terminal hasn't answered, or that are still on
+   * their way. The cashier marks each one charged or not charged on the Payments page (Y-15).
+   */
+  cardCharges: PendingCashPayment[];
+}
+
+/**
+ * Head office picks a branch and reads its shifts; it opens and closes none (P-27). Without a
+ * shift it takes no payment, so it does not sell at a branch's till either.
+ */
+function assertNotHeadOffice(actor: UserScope) {
+  if (!isHeadOfficeUser(actor)) return;
+  throw new ForbiddenException({
+    code: 'HEAD_OFFICE_READS_ONLY',
+    title: 'Head Office Reads Only',
+    detail: "Head office reads a branch's shifts but doesn't open or close them. Sign in as the branch's staff.",
+  });
+}
+
+/**
+ * A shift is closed by a cashier at its own register or by the branch manager (P-21). A
+ * manager, supervisor or a branch's own administrator may close any shift of the branch, from
+ * the Shifts page; a cashier only the one in the drawer in front of them.
+ */
+function assertMayClose(actor: UserScope, shift: CashierShift) {
+  assertNotHeadOffice(actor);
+  if (isApprover(actor.role)) return;
+  if (shift.terminal_id && currentTillTerminalId() === shift.terminal_id) return;
+  throw new ForbiddenException({
+    code: 'SHIFT_OTHER_REGISTER',
+    title: 'Another Register',
+    detail: 'Only a cashier at this register or the branch manager closes this shift.',
+  });
 }
 
 @Injectable()
@@ -120,15 +155,15 @@ export class ShiftService {
   ) {}
 
   /**
-   * The drawer rules in force at a branch: its own override when it has one, else head
-   * office's, else the defaults. Read at the till, not only by the settings screen, or an
-   * override would show there and change nothing.
+   * The drawer rules in force at a branch: head office's, else the defaults. The default float
+   * is one chain setting in V1 (P-24), so a branch row left over from when it could override
+   * is ignored. `branchId` stays in the signature for when overrides come back (V3).
    */
-  async policyFor(tenantId: string, branchId?: string | null): Promise<ShiftPolicy> {
+  async policyFor(tenantId: string, _branchId?: string | null): Promise<ShiftPolicy> {
     const rows = await this.dataSource
       .getRepository(TenantSetting)
       .find({ where: { tenant_id: tenantId, key: 'SHIFT_POLICY' } });
-    return resolveShiftPolicy(pickSettingValue(rows, branchId));
+    return resolveShiftPolicy(pickSettingValue(rows, null));
   }
 
   async getShifts(tenantId: string, query: any) {
@@ -354,7 +389,9 @@ export class ShiftService {
     userId?: string,
     correlationId?: string,
     callerBranchId?: string | null,
+    actor?: UserScope,
   ) {
+    if (actor) assertNotHeadOffice(actor);
     return await this.dataSource.transaction(async (em) => {
       const terminal = await em.findOne(Terminal, {
         where: { id: dto.terminalId, tenant_id: tenantId },
@@ -511,7 +548,14 @@ export class ShiftService {
    * checked first and blocks the close, with no override: cash payments begun and never
    * finished, orders still owing money, and orders waiting to be accepted.
    */
-  async closeShift(tenantId: string, shiftId: string, dto: ShiftCloseDto, userId?: string, correlationId?: string) {
+  async closeShift(
+    tenantId: string,
+    shiftId: string,
+    dto: ShiftCloseDto,
+    userId?: string,
+    correlationId?: string,
+    actor?: UserScope,
+  ) {
     return await this.dataSource.transaction(async (em) => {
       // Loaded without its movements on purpose. `movements` cascades, so saving a shift
       // that carries the list read here treats the CLOSE_ADJUSTMENT written below as removed
@@ -525,6 +569,7 @@ export class ShiftService {
       if (shift.state === 'CLOSED') {
         throw new BadRequestException('Shift is already closed');
       }
+      if (actor) assertMayClose(actor, shift);
 
       const leftBehind = await this.closeCheckFor(em, tenantId, shift);
       if (leftBehind.pendingCash.length > 0) {
@@ -535,6 +580,16 @@ export class ShiftService {
           title: 'Cash Payment Not Finished',
           detail: `${leftBehind.pendingCash.length} cash payment(s) on this drawer were started and never finished. Take or cancel them before closing.`,
           context: { pendingCash: leftBehind.pendingCash },
+        });
+      }
+      if (leftBehind.cardCharges.length > 0) {
+        // Money the terminal may or may not have taken: the drawer can't be counted against it
+        // until someone reads the slip (Y-15). No override.
+        throw new ConflictException({
+          code: 'SHIFT_HAS_CARD_CHARGE',
+          title: 'Card Charge Not Answered',
+          detail: `${leftBehind.cardCharges.length} card charge(s) in this shift have no answer from the terminal. Mark each one charged or not charged on the Payments page before closing.`,
+          context: { cardCharges: leftBehind.cardCharges },
         });
       }
       if (leftBehind.openOrders.length > 0) {
@@ -667,12 +722,23 @@ export class ShiftService {
       [tenantId, shift.id],
     );
 
+    const cardCharges: PendingCashPayment[] = await em.query(
+      `SELECT p.id, p.payment_number AS "paymentNumber", p.order_id AS "orderId", o.order_number AS "orderNumber",
+              p.amount, p.status, p.initiated_at AS "initiatedAt"
+         FROM payment p
+         LEFT JOIN order_header o ON o.id = p.order_id
+        WHERE p.tenant_id = $1 AND p.shift_id = $2 AND p.method_kind <> 'CASH' AND p.status = 'PROCESSING'
+        ORDER BY p.initiated_at`,
+      [tenantId, shift.id],
+    );
+
     return {
       shiftId: shift.id,
       branchId: shift.branch_id,
       businessDate: shift.business_date,
       openOrders,
       pendingCash,
+      cardCharges,
     };
   }
 

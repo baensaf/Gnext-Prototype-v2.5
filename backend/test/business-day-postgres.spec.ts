@@ -218,9 +218,15 @@ describe('the overnight business day (PostgreSQL)', () => {
     expect(waiting).toContainEqual(expect.objectContaining({ businessDate: '2026-10-14', outcome: 'CLOSED' }));
     expect(waiting).toContainEqual(expect.objectContaining({ businessDate: '2026-10-15', outcome: 'CLOSED' }));
 
-    await closeShift(evening.id);
+    // Counted 10,000 short, which the day's list adds up across its shifts (P-28).
+    const statement: any = await shifts.getShiftStatement(tenantId, evening.id);
+    const short = (Number(statement.expectedCash) - 10000).toFixed(4);
+    await shifts.closeShift(tenantId, evening.id, { actualCash: short } as any, undefined, 'bday-close');
     const after = await autoClose.processBranch(tenantId, tehranBranch, new Date());
     expect(after).toEqual([expect.objectContaining({ businessDate: '2026-10-16', outcome: 'CLOSED' })]);
+    const listed = await businessDays.getBusinessDays(tenantId, { branch: tehranBranch });
+    expect(listed.data.find((d: any) => d.business_date === '2026-10-16')).toMatchObject({ cash_difference: '-10000.0000' });
+    expect(listed.data.find((d: any) => d.business_date === '2026-10-14')).toMatchObject({ cash_difference: '0.0000' });
 
     const close = await dataSource.getRepository(BusinessDayClose).findOneOrFail({ where: { tenant_id: tenantId, branch_id: tehranBranch, business_date: '2026-10-14' } });
     expect(close.totals).toMatchObject({ orderCount: 2 });

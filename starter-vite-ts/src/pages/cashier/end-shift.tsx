@@ -29,6 +29,8 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { paths } from 'src/routes/paths';
+
 import { MoneyUtil } from 'src/utils/money.util';
 import { serverText } from 'src/utils/server-text';
 import { useCurrencyLabel } from 'src/utils/currency';
@@ -37,6 +39,8 @@ import { amountText, amountFromText } from 'src/utils/amount-input';
 
 import { shiftApi } from 'src/api/shiftApi';
 import { paymentApi } from 'src/api/paymentApi';
+import { isApproverRole } from 'src/config/role-access';
+import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
 import { ShiftReport } from 'src/components/shift/shift-summary';
 import { CashMovements } from 'src/components/shift/cash-movements';
@@ -102,6 +106,9 @@ function Row({ label, value, color, strong }: { label: string; value: string; co
  * settled, and the Close button stays off until the list is empty. What stays in the drawer for
  * the next shift starts at the policy's float (none, where the drawer is emptied at every
  * close); the rest is handed over.
+ *
+ * A cashier at the shift's own register or the branch manager closes it (P-21). Anyone else,
+ * head office included (P-27), reads the page with the steps showing what is left and no count.
  */
 export function EndShiftPage() {
   const { t } = useTranslation();
@@ -109,7 +116,11 @@ export function EndShiftPage() {
   const navigate = useNavigate();
   const { shiftId = '' } = useParams();
 
+  const role = useAuthStore((state) => state.user?.role);
+  const headOffice = useIsHeadOffice();
+
   const [summary, setSummary] = useState<ShiftSalesSummary | null>(null);
+  const [registerId, setRegisterId] = useState<string | null>(null);
   const [check, setCheck] = useState<ShiftCloseCheck | null>(null);
   const [policy, setPolicy] = useState<ShiftPolicy | null>(null);
   const [movements, setMovements] = useState<CashMovement[]>([]);
@@ -127,6 +138,7 @@ export function EndShiftPage() {
     try {
       const [s, statement] = await Promise.all([shiftApi.getSummary(shiftId), shiftApi.getShiftStatement(shiftId)]);
       setSummary(s);
+      setRegisterId(statement.terminalId);
       setMovements(statement.movements);
       if (!s.closed) {
         setCheck(await shiftApi.getCloseCheck(shiftId));
@@ -147,8 +159,11 @@ export function EndShiftPage() {
   const heldCount = terminal && !closed ? readHeldCarts(terminal.id, shiftId).length : 0;
   const openOrders = check?.openOrders ?? [];
   const pendingCash = check?.pendingCash ?? [];
+  const cardCharges = check?.cardCharges ?? [];
   const cashDone = !!check && pendingCash.length === 0;
+  const cardsDone = !!check && cardCharges.length === 0;
   const ordersDone = !!check && openOrders.length === 0;
+  const mayClose = !headOffice && (isApproverRole(role) || (!!terminal && terminal.id === registerId));
 
   // What stays starts at the policy's float, never more than what was counted.
   const countedRials = counted || '0';
@@ -158,7 +173,7 @@ export function EndShiftPage() {
   const handedOver = MoneyUtil.subtract(countedRials, leftRials);
 
   const countReady = counted !== '' && !leftTooMuch;
-  const canClose = !!check && ordersDone && cashDone && countReady && !submitting;
+  const canClose = mayClose && !!check && ordersDone && cashDone && cardsDone && countReady && !submitting;
 
   // The difference the count will leave, from what the report says the drawer should hold.
   const expectedRials = summary?.cash.expectedCash ?? '0';
@@ -193,7 +208,7 @@ export function EndShiftPage() {
       setSummary(await shiftApi.getSummary(shiftId));
     } catch (err: any) {
       setError(serverText(errorText(err, t('shift.close.error', 'Could not close the shift')), t));
-      if (err.code === 'SHIFT_HAS_PENDING_CASH' || err.code === 'SHIFT_HAS_OPEN_ORDERS') {
+      if (['SHIFT_HAS_PENDING_CASH', 'SHIFT_HAS_OPEN_ORDERS', 'SHIFT_HAS_CARD_CHARGE'].includes(err.code)) {
         shiftApi.getCloseCheck(shiftId).then(setCheck).catch(() => undefined);
       }
     } finally {
@@ -275,7 +290,43 @@ export function EndShiftPage() {
         )}
       </Step>
 
-      <Step n={3} title={t('shift.end.stepCount', 'Count the cash')} done={countReady}>
+      <Step n={3} title={t('shift.end.stepCards', 'Unanswered card charges')} done={cardsDone}>
+        {cardCharges.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            {t('shift.end.noCardCharges', 'The terminal answered every card charge.')}
+          </Typography>
+        ) : (
+          <>
+            <Typography variant="body2" color="text.secondary">
+              {t(
+                'shift.end.cardChargesHelp',
+                'Read the terminal slip and mark each one charged or not charged on the Payments page.'
+              )}
+            </Typography>
+            {cardCharges.map((payment) => (
+              <Stack key={payment.id} direction="row" sx={{ alignItems: 'center', gap: 1, py: 0.5, flexWrap: 'wrap' }}>
+                <Typography variant="subtitle2" dir="ltr">
+                  {payment.orderNumber || payment.paymentNumber}
+                </Typography>
+                <Typography variant="body2" dir="ltr">
+                  {MoneyUtil.formatCurrency(payment.amount)}
+                </Typography>
+              </Stack>
+            ))}
+            <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+              <Button size="small" variant="contained" onClick={() => navigate(paths.app.payments)}>
+                {t('shift.end.openPayments', 'Open Payments')}
+              </Button>
+              <Button size="small" startIcon={<RefreshIcon />} onClick={load}>
+                {t('shift.close.recheck', 'Check again')}
+              </Button>
+            </Stack>
+          </>
+        )}
+      </Step>
+
+      {mayClose && (
+      <Step n={4} title={t('shift.end.stepCount', 'Count the cash')} done={countReady}>
         <Stack spacing={1.5}>
           <TextField
             autoFocus
@@ -314,7 +365,9 @@ export function EndShiftPage() {
           )}
         </Stack>
       </Step>
+      )}
 
+      {mayClose ? (
       <Box>
         {error && (
           <Alert severity="error" sx={{ mb: 1.5 }}>
@@ -333,6 +386,13 @@ export function EndShiftPage() {
           {t('shift.close.title', 'Close shift')}
         </Button>
       </Box>
+      ) : (
+        <Alert severity="info">
+          {headOffice
+            ? t('shift.end.headOfficeReads', 'Head office reads this shift. It is closed at the branch.')
+            : t('shift.end.otherRegister', 'Only a cashier at this register or the branch manager closes this shift.')}
+        </Alert>
+      )}
     </Stack>
   );
 

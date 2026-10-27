@@ -70,6 +70,8 @@ export interface BusinessDayClose {
     autoCompletedOrders?: number;
     carriedOverOrders?: number;
   } | null;
+  /** Counted against expected, added up over the day's shifts (P-28). */
+  cash_difference?: string;
   closed_at: string;
 }
 
@@ -110,6 +112,8 @@ export interface ShiftCloseCheck {
   openOrders: DayCloseOpenOrder[];
   /** Cash payments on this drawer that must be finished or cancelled first. */
   pendingCash: PendingCashPayment[];
+  /** Card charges in this shift the terminal hasn't answered; each is marked charged or not first (Y-15). */
+  cardCharges: PendingCashPayment[];
 }
 
 /** One register's shift at a glance. */

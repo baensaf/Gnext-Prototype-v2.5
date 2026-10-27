@@ -122,6 +122,22 @@ export function BusinessDaysPage() {
       renderCell: (params) => count(params.row.totals?.carriedOverOrders),
     },
     {
+      // Counted against expected over the day's shifts (P-28): short is red, over is blue.
+      field: 'cash_difference',
+      headerName: t('cashier.cashDifference', 'Cash over / short'),
+      width: 160,
+      sortable: false,
+      renderCell: (params) => {
+        const value = params.value || '0';
+        const color = MoneyUtil.isZero(value) ? 'text.secondary' : MoneyUtil.greaterThan(value, '0') ? 'info.main' : 'error.main';
+        return (
+          <Typography variant="body2" sx={{ color }}>
+            <bdi dir="ltr">{MoneyUtil.formatCurrency(value)}</bdi> {currencyLabel}
+          </Typography>
+        );
+      },
+    },
+    {
       field: 'closed_at',
       headerName: t('cashier.closedAt', 'Closed at'),
       width: 190,

@@ -189,7 +189,10 @@
     "scopeChain": "All branches",
     "branchOnline": "Online",
     "branchOffline": "Offline",
-    "agentHealthy": "Healthy"
+    "agentHealthy": "Healthy",
+    "openShifts": "Open Shifts",
+    "shiftsFromEarlierDays_one": "{{count}} shift is still open from an earlier day. Close it so that day can close.",
+    "shiftsFromEarlierDays_other": "{{count}} shifts are still open from an earlier day. Close them so that day can close."
   },
   "pos": {
     "cartBar": {
@@ -1108,7 +1111,8 @@
     "currentDay": "Business day now: {{date}} · turns over at {{cutoff}}",
     "dateReview": {},
     "autoCompleted": "Completed at close",
-    "daysCloseThemselves": "The date moves on at the cutoff and new shifts open on the new day. Each day closes by itself once every shift on it is counted: paid orders still open are completed, the rest are carried over to the next day."
+    "daysCloseThemselves": "The date moves on at the cutoff and new shifts open on the new day. Each day closes by itself once every shift on it is counted: paid orders still open are completed, the rest are carried over to the next day.",
+    "cashDifference": "Cash over / short"
   },
   "shift": {
     "register": "Register",
@@ -1203,13 +1207,15 @@
     "gate": {
       "title": "No shift is open on this register",
       "help": "{{register}}: count the float into the drawer and open a shift to start selling.",
-      "headOffice": "Choose a branch to sell in"
+      "headOffice": "Choose a branch to read",
+      "headOfficeReads": "Head office reads a branch but does not sell. Sign in as the branch staff to sell."
     },
     "page": {
       "title": "Shifts & drawers",
       "help": "Every register at {{branch}}. A shift belongs to one register and is counted down when it closes. The business day turns over at its cutoff by itself, and closes on its own once every drawer is counted.",
       "registers": "Registers",
-      "loadError": "Failed to load the drawers"
+      "loadError": "Failed to load the drawers",
+      "headOfficeReads": "Head office reads this branch's shifts. They are opened and closed at the branch."
     },
     "state": {
       "open": "Open",
@@ -1266,7 +1272,13 @@
       "leftInDrawer": "Left in the drawer",
       "backToRegister": "Back to the register",
       "heldCarts_one": "{{count}} cart on hold at this register is dropped when the shift closes.",
-      "heldCarts_other": "{{count}} carts on hold at this register are dropped when the shift closes."
+      "heldCarts_other": "{{count}} carts on hold at this register are dropped when the shift closes.",
+      "stepCards": "Unanswered card charges",
+      "noCardCharges": "The terminal answered every card charge.",
+      "cardChargesHelp": "Read the terminal slip and mark each one charged or not charged on the Payments page.",
+      "openPayments": "Open Payments",
+      "headOfficeReads": "Head office reads this shift. It is closed at the branch.",
+      "otherRegister": "Only a cashier at this register or the branch manager closes this shift."
     }
   },
   "payments": {
@@ -2545,7 +2557,7 @@
       "cardTitle": "Opening a drawer",
       "floatLabel": "Default opening float ({{currency}})",
       "floatHelp": "Offered when a shift is opened. The cashier still enters what they actually counted into the drawer.",
-      "saveSuccess": "Shift policy saved for every branch that follows head office.",
+      "saveSuccess": "Shift policy saved for every branch.",
       "loadError": "Failed to load the shift policy",
       "saveError": "Failed to save the shift policy"
     },

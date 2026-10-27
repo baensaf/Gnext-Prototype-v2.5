@@ -139,9 +139,13 @@ export function PosShiftGate({ register }: { register: RegisterShiftState }) {
 
   return (
     <>
-      {register.isHeadOffice ? (
+      {register.isHeadOffice || register.headOfficeReads ? (
         <Card sx={{ p: 3, textAlign: 'center' }}>
-          <Typography variant="h6">{t('shift.gate.headOffice', 'Choose a branch to sell in')}</Typography>
+          <Typography variant="h6">
+            {register.isHeadOffice
+              ? t('shift.gate.headOffice', 'Choose a branch to read')
+              : t('shift.gate.headOfficeReads', 'Head office reads a branch but does not sell. Sign in as the branch staff to sell.')}
+          </Typography>
         </Card>
       ) : !ready ? (
         <RegisterNotice
