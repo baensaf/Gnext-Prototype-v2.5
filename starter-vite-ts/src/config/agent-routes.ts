@@ -4,7 +4,7 @@
  * A register opens the app from the branch PC's agent, and the agent serves the cashier only:
  * the pages a CASHIER account reaches today (`CASHIER_PATHS` in role-access.ts), narrowed to
  * the register, orders, delivery, incoming orders and the shift and cash pages. Everything
- * else (the manager's and head office's screens) opens on gnext.top, and in agent mode the
+ * else (the manager's and head office's screens) opens on v25.gnext.top, and in agent mode the
  * app shows a link to it instead of the page.
  *
  * Kept free of `src/` imports so scripts/check-agent-routes.mjs can load it as it is.
@@ -19,7 +19,7 @@ export interface AgentRoute {
 
 /**
  * The one list. A path is allowed when it equals an entry, or sits below it (`/app/orders`
- * covers `/app/orders/incoming`). A path that is on no entry opens on gnext.top.
+ * covers `/app/orders/incoming`). A path that is on no entry opens on v25.gnext.top.
  *
  * Add a page here only when a cashier needs it at the register; every other screen stays on
  * the cloud, where it already works.

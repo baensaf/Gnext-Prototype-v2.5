@@ -79,7 +79,7 @@ spec:
               valueFrom: { secretKeyRef: { name: gnext-env, key: ADMIN_PASSWORD } }
             - name: APPROVER_DEMO_PIN
               valueFrom: { secretKeyRef: { name: gnext-env, key: APPROVER_DEMO_PIN, optional: true } }
-            # Public base URL agents are told to connect to, e.g. https://gnext.top.
+            # Public base URL agents are told to connect to, e.g. https://v25.gnext.top.
             - name: AGENT_PUBLIC_URL
               valueFrom: { secretKeyRef: { name: gnext-env, key: AGENT_PUBLIC_URL, optional: true } }
             # The site's own address; the backend accepts cross-origin calls from it.
