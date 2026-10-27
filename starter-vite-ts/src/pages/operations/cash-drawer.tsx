@@ -38,9 +38,9 @@ import { fDate , fTime } from 'src/utils/format-time';
 
 import { shiftApi } from 'src/api/shiftApi';
 import { tenantApi } from 'src/api/tenantApi';
-import { useAuthStore } from 'src/store/useAuthStore';
 import { isApproverRole } from 'src/config/role-access';
 import { useBranchContext } from 'src/contexts/branch-context';
+import { useAuthStore, useIsHeadOffice } from 'src/store/useAuthStore';
 
 import { CustomBreadcrumbs } from 'src/components/custom-breadcrumbs';
 import { OpenShiftDialog } from 'src/components/shift/open-shift-dialog';
@@ -76,12 +76,15 @@ function Figure({ label, value, color }: { label: string; value: string; color?:
  * manager may count down any drawer in the branch — a cashier who went home without
  * closing leaves one for them — while a cashier works their own. Counting down goes through
  * the End shift page, which refuses to close while orders are unsettled.
+ *
+ * Head office picks a branch and reads this page; it opens and closes nothing (P-27).
  */
 export function CashDrawerPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const role = useAuthStore((state) => state.user?.role);
-  const canManage = isApproverRole(role);
+  const headOffice = useIsHeadOffice();
+  const canManage = isApproverRole(role) && !headOffice;
   const { selectedBranchId, selectedBranch } = useBranchContext();
   const register = useRegisterShift();
 
@@ -243,7 +246,13 @@ export function CashDrawerPage() {
         )}
       </Alert>
 
-      {!register.ready && register.checked && (
+      {headOffice && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          {t('shift.page.headOfficeReads', "Head office reads this branch's shifts. They are opened and closed at the branch.")}
+        </Alert>
+      )}
+
+      {!headOffice && !register.ready && register.checked && (
         <Alert
           severity="warning"
           sx={{ mb: 3 }}

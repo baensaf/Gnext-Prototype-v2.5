@@ -1183,17 +1183,23 @@ export class ReportsService {
 
     // Today is each branch's own business day, by its cutoff and on its own clock.
     const todayAt = new Map<string, string>();
-    for (const id of new Set(orders.map((o) => o.branch_id))) {
+    for (const id of new Set([...orders.map((o) => o.branch_id), ...shifts.map((s) => s.branch_id)])) {
       todayAt.set(id, (await loadBusinessClock(this.orderRepo.manager, tenantId, id)).today());
     }
     const todayOrders = orders.filter((o) => o.placed_at && storedDate(o, o.placed_at) === todayAt.get(o.branch_id));
     const salesToday = todayOrders.reduce((sum, o) => MoneyUtil.add(sum, o.total_amount || '0', 2), '0.00');
     const openOrders = orders.filter((o) => o.status === 'SUBMITTED' || o.status === 'ACCEPTED' || o.status === 'IN_PREPARATION');
+    // A shift still open from an earlier business day holds up that day's automatic close, and
+    // nothing closes it by itself (P-22), so the dashboard names it.
+    const shiftsFromEarlierDays = shifts
+      .filter((s) => s.business_date && s.business_date < (todayAt.get(s.branch_id) ?? s.business_date))
+      .map((s) => ({ id: s.id, shift_number: s.shift_number, branch_id: s.branch_id, business_date: s.business_date }));
 
     return {
       sales_today: salesToday,
       open_orders_count: openOrders.length,
       active_shifts_count: shifts.length,
+      shifts_from_earlier_days: shiftsFromEarlierDays,
       branch_health_percentage: 100,
       /** Null when the figures cover the whole chain, so the screen can say which it is. */
       branch_id: branchId ?? null,

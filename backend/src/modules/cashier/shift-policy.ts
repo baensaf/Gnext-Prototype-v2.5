@@ -1,6 +1,6 @@
 /**
- * How a branch runs its drawers. Head office sets it once for the chain; a branch may
- * override it (see BRANCH_OVERRIDABLE_SETTING_GROUPS) like the order-editing windows.
+ * How a branch runs its drawers. Head office sets it once for the chain; in V1 no branch
+ * overrides it (P-24).
  */
 export interface ShiftPolicy {
   /** What the Open Shift dialog offers as the float. The cashier still types what they counted. */

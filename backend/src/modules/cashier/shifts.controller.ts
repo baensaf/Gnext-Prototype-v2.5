@@ -1,11 +1,16 @@
 import { Controller, Get, Post, Param, Body, Query, Req } from '@nestjs/common';
 import { Request } from 'express';
 import { ShiftService } from './shift.service';
-import { effectiveBranchId } from '../../common/utils/user-scope.util';
+import { UserScope, effectiveBranchId } from '../../common/utils/user-scope.util';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { ShiftOpenDto, ShiftCloseDto } from './dtos/shift.dto';
 import { CheckRegisterDeviceOnRead } from '../../common/guards/register-device.guard';
+
+/** Who is asking, for the rules on who opens and closes a shift (P-21, P-27). */
+function actorOf(req: Request): UserScope {
+  return { role: (req as any).userRole, branchId: (req as any).userBranchId ?? null };
+}
 
 /**
  * Every route that names a shift by id is held to the caller's own branch by
@@ -36,6 +41,7 @@ export class ShiftsController {
       userId,
       correlationId,
       (req as any).userBranchId ?? null,
+      actorOf(req),
     );
   }
 
@@ -89,7 +95,7 @@ export class ShiftsController {
     const tenantId = (req as any).tenantId;
     const userId = (req as any).user?.id || (req as any).userId;
     const correlationId = (req as any).correlationId;
-    return await this.shiftService.closeShift(tenantId, id, body, userId, correlationId);
+    return await this.shiftService.closeShift(tenantId, id, body, userId, correlationId, actorOf(req));
   }
 
   /** What stops this shift closing: unsettled orders and unfinished cash. */

@@ -6,15 +6,14 @@ import { TenantSetting } from '../../entities/TenantSetting.entity';
  * stays organization-wide until someone deliberately opens it up.
  *
  * The groups here are the ones that legitimately differ between sites — how long a cashier
- * keeps authority over an order, how orders flow, what a kiosk asks a customer for, and how
- * its drawers are floated. The business day's cutoff is not among them: it is one chain
- * setting (P-07). TAX and POS were dropped: nothing ever read them.
+ * keeps authority over an order, how orders flow, and what a kiosk asks a customer for. The
+ * business day's cutoff is not among them: it is one chain setting (P-07), and so is the
+ * default opening float in V1 (P-24). TAX and POS were dropped: nothing ever read them.
  */
 export const BRANCH_OVERRIDABLE_SETTING_GROUPS = [
   'ORDER_ACTIONS',
   'ORDER_WORKFLOW',
   'KIOSK_CUSTOMER_IDENTITY_POLICY',
-  'SHIFT_POLICY',
 ];
 
 export function isBranchOverridable(key: string): boolean {
@@ -61,7 +60,9 @@ export function resolveSettingsForBranch(
 
   const resolved: Record<string, { value: Record<string, any>; source: SettingSource }> = {};
   for (const [key, keyRows] of byKey) {
-    const picked = pickSettingRow(keyRows, branchId);
+    // A branch row of a group no branch may override any more (the float, P-24) is left over
+    // from before and no longer applies.
+    const picked = pickSettingRow(keyRows, isBranchOverridable(key) ? branchId : null);
     if (!picked) continue;
     resolved[key] = { value: picked.value, source: picked.branch_id ? 'BRANCH' : 'ORG' };
   }

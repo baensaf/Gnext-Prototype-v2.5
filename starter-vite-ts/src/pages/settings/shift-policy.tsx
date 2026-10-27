@@ -20,6 +20,7 @@ import {
 import { toToman, fromToman, useCurrencyLabel } from 'src/utils/currency';
 
 import { settingsApi } from 'src/api/settingsApi';
+import { useIsHeadOffice } from 'src/store/useAuthStore';
 import { useBranchContext } from 'src/contexts/branch-context';
 
 import { SettingScopeNotice } from 'src/components/setting-scope';
@@ -32,17 +33,17 @@ const SHIFT_POLICY_DEFAULTS: ShiftPolicy = {
 };
 
 /**
- * How drawers are floated. Head office sets it for the chain; a branch may keep its own, like
- * the order-editing windows. The till reads the same value, so what is saved here is what a
- * cashier is offered when a shift opens.
+ * How drawers are floated. Head office sets it once for the chain; in V1 no branch keeps its
+ * own (P-24). The till reads the same value, so what is saved here is what a cashier is offered
+ * when a shift opens on a register whose last close left nothing in the drawer.
  */
 export function ShiftPolicySettingsPage() {
   const currencyLabel = useCurrencyLabel();
   const { t } = useTranslation();
-  const { selectedBranchId, selectedBranch } = useBranchContext();
+  const isHeadOffice = useIsHeadOffice();
+  const { selectedBranch } = useBranchContext();
 
   const [policy, setPolicy] = useState<ShiftPolicy>(SHIFT_POLICY_DEFAULTS);
-  const [source, setSource] = useState<'BRANCH' | 'ORG'>('ORG');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,19 +53,17 @@ export function ShiftPolicySettingsPage() {
     setLoading(true);
     setError(null);
     try {
-      const scoped = await settingsApi.getScopedSettings(selectedBranchId || undefined);
-      const group = scoped.groups?.SHIFT_POLICY;
-      const value = group?.value || {};
+      const scoped = await settingsApi.getScopedSettings(undefined);
+      const value = scoped.groups?.SHIFT_POLICY?.value || {};
       setPolicy({
         defaultOpeningFloat: String(value.defaultOpeningFloat ?? SHIFT_POLICY_DEFAULTS.defaultOpeningFloat),
       });
-      setSource(group?.source || 'ORG');
     } catch (err: any) {
       setError(err.detail || err.message || t('settings.shiftPolicy.loadError', 'Failed to load the shift policy'));
     } finally {
       setLoading(false);
     }
-  }, [selectedBranchId, t]);
+  }, [t]);
 
   useEffect(() => {
     load();
@@ -76,36 +75,11 @@ export function ShiftPolicySettingsPage() {
     setError(null);
     setSuccess(null);
     try {
-      await settingsApi.updateSetting(
-        'SHIFT_POLICY',
-        {
-          defaultOpeningFloat: policy.defaultOpeningFloat || '0',
-        },
-        selectedBranchId || undefined
-      );
-      setSuccess(
-        selectedBranchId
-          ? t('settings.orderWorkflow.saveBranchSuccess', 'Saved as an override for this branch.')
-          : t('settings.shiftPolicy.saveSuccess', 'Shift policy saved for every branch that follows head office.')
-      );
+      await settingsApi.updateSetting('SHIFT_POLICY', { defaultOpeningFloat: policy.defaultOpeningFloat || '0' });
+      setSuccess(t('settings.shiftPolicy.saveSuccess', 'Shift policy saved for every branch.'));
       await load();
     } catch (err: any) {
       setError(err.detail || err.message || t('settings.shiftPolicy.saveError', 'Failed to save the shift policy'));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleFollowHeadOffice = async () => {
-    if (!selectedBranchId) return;
-    setSaving(true);
-    setError(null);
-    try {
-      await settingsApi.clearBranchOverride('SHIFT_POLICY', selectedBranchId);
-      setSuccess(t('settings.orderWorkflow.resetSuccess', 'Override removed. This branch follows head office again.'));
-      await load();
-    } catch (err: any) {
-      setError(err.detail || err.message || 'Failed to remove the branch override');
     } finally {
       setSaving(false);
     }
@@ -135,14 +109,7 @@ export function ShiftPolicySettingsPage() {
         }
       />
 
-      <SettingScopeNotice
-        kind="BRANCH"
-        branchId={selectedBranchId}
-        branchName={selectedBranch?.name}
-        source={source}
-        busy={saving}
-        onFollowHeadOffice={handleFollowHeadOffice}
-      />
+      <SettingScopeNotice kind="CHAIN" isHeadOffice={isHeadOffice} branchName={selectedBranch?.name} />
 
       {error && (
         <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
@@ -168,6 +135,7 @@ export function ShiftPolicySettingsPage() {
             <TextField
               fullWidth
               type="number"
+              disabled={!isHeadOffice}
               label={t('settings.shiftPolicy.floatLabel', 'Default opening float ({{currency}})', { currency: currencyLabel })}
               helperText={t(
                 'settings.shiftPolicy.floatHelp',
@@ -180,11 +148,13 @@ export function ShiftPolicySettingsPage() {
           </Stack>
         </Card>
 
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3, maxWidth: 720 }}>
-          <Button type="submit" variant="contained" size="large" startIcon={<SaveIcon />} disabled={saving}>
-            {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
-          </Button>
-        </Box>
+        {isHeadOffice && (
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3, maxWidth: 720 }}>
+            <Button type="submit" variant="contained" size="large" startIcon={<SaveIcon />} disabled={saving}>
+              {saving ? t('common.saving', 'Saving...') : t('common.save', 'Save')}
+            </Button>
+          </Box>
+        )}
       </form>
     </Box>
   );
