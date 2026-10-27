@@ -69,7 +69,7 @@ func (r Retry) attemptTimeout(limit, elapsed time.Duration) time.Duration {
 // Proxy passes the page's API calls to the cloud.
 type Proxy struct {
 	Up *Upstream
-	// Server returns the cloud's address (https://gnext.top); empty when none is configured.
+	// Server returns the cloud's address (https://v25.gnext.top); empty when none is configured.
 	Server  func() string
 	Version string
 	Log     *slog.Logger

@@ -195,7 +195,7 @@ function AppAndAddresses({ agent, cloudBuild }: { agent: BranchAgent; cloudBuild
  */
 function ConnectThisPc({ enrolled, onDone }: { enrolled: boolean; onDone: () => void }) {
   const { t } = useTranslation();
-  const [server, setServer] = useState(agentMode?.cloud_url || 'https://gnext.top');
+  const [server, setServer] = useState(agentMode?.cloud_url || 'https://v25.gnext.top');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ severity: 'success' | 'error'; text: string } | null>(null);
