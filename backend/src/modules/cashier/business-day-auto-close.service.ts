@@ -9,7 +9,10 @@ import { addDays } from '../../common/utils/business-day';
 import { BusinessDayService } from './business-day.service';
 
 const SWEEP_MS = 5 * 60_000;
-/** How far back auto-close looks for a day still waiting on its shifts. */
+/**
+ * How far back auto-close looks for a day with nothing but orders on it. A day that had a shift
+ * is found however old it is, so one counted weeks late still closes (Shifts PRD §7).
+ */
 const LOOKBACK_DAYS = 7;
 
 export interface AutoCloseOutcome {
@@ -44,6 +47,8 @@ export class BusinessDayAutoCloseService implements OnApplicationBootstrap, OnMo
 
     const today = clock.today(now);
     let first = addDays(today, -LOOKBACK_DAYS);
+    const oldestWaiting = await this.oldestUnclosedShiftDay(tenantId, branchId, today);
+    if (oldestWaiting && oldestWaiting < first) first = oldestWaiting;
     if (clock.policy.since && clock.policy.since > first) first = clock.policy.since;
 
     const outcomes: AutoCloseOutcome[] = [];
@@ -73,6 +78,21 @@ export class BusinessDayAutoCloseService implements OnApplicationBootstrap, OnMo
       }
     }
     return outcomes;
+  }
+
+  /** The earliest ended day at a branch that had a shift and isn't closed yet, if any. */
+  private async oldestUnclosedShiftDay(tenantId: string, branchId: string, today: string): Promise<string | null> {
+    const rows: Array<{ day: string | null }> = await this.dataSource.query(
+      `SELECT MIN(s.business_date) AS day
+         FROM cashier_shift s
+        WHERE s.tenant_id = $1 AND s.branch_id = $2 AND s.business_date < $3
+          AND NOT EXISTS (
+            SELECT 1 FROM business_day_close d
+             WHERE d.tenant_id = s.tenant_id AND d.branch_id = s.branch_id AND d.business_date = s.business_date
+          )`,
+      [tenantId, branchId, today],
+    );
+    return rows[0]?.day ?? null;
   }
 
   /** Whether a branch kept a drawer or sold anything on a day; a day with neither has nothing to close. */
