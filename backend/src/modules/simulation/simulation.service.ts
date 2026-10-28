@@ -22,6 +22,7 @@ import { CustomerAddress } from '../../entities/CustomerAddress.entity';
 import { CustomerService, normalizePhone } from '../customer/customer.service';
 import { OrderItemOption } from '../../entities/OrderItemOption.entity';
 import { SnappfoodCatalogService } from './snappfood-catalog.service';
+import { SnappfoodLiveService } from '../snappfood/snappfood-live.service';
 
 /** Snappfood quotes every amount in Toman. The store keeps its books in Rial, ten to the Toman. */
 export function tomanToRial(toman: any): string {
@@ -90,6 +91,9 @@ export class SimulationService {
     // Our menu as Snappfood knows it: ids on order lines and toppings, the vendor's menu.
     @Optional()
     private readonly snappfoodCatalog?: SnappfoodCatalogService,
+    // A branch connected to the real Snappfood acks there.
+    @Optional()
+    private readonly snappfoodLive?: SnappfoodLiveService,
   ) {}
 
   verifyHmacSignature(rawBody: string, signature: string, secret: string = 'snappfood-secret-key-123', timestamp?: string): boolean {
@@ -254,7 +258,7 @@ export class SimulationService {
     });
 
     // The annex asks the store to ack (61) every order it receives, before anyone opens it.
-    if (orderCode) await this.ackOrder(tenantId, orderCode).catch(() => undefined);
+    if (orderCode) await this.ackOnArrival(tenantId, savedHeader.branch_id, orderCode).catch(() => undefined);
 
     // A channel the branch lets straight through is accepted here, by the same accept a
     // cashier uses. Otherwise the order waits on the till's Online panel.
@@ -1390,6 +1394,13 @@ export class SimulationService {
     order.status = 'REJECTED';
   }
 
+  /** Ack to the real Snappfood when the branch is connected to it, else to the simulator. */
+  private async ackOnArrival(tenantId: string, branchId: string, orderCode: string) {
+    const live = await this.snappfoodLive?.connectionFor(tenantId, branchId);
+    if (live) return this.snappfoodLive!.ack(live, orderCode);
+    return this.ackOrder(tenantId, orderCode);
+  }
+
   // Ack (61) says the store has received the order. It does not accept it.
   async ackOrder(tenantId: string, orderCode: string) {
     await this.logRepo.save(
@@ -1431,7 +1442,8 @@ export class SimulationService {
     if (deliveryTime > 70) {
       throw new BadRequestException({ status: 2110, title: 'time_exceeded', detail: 'MAX deliveryTime is 70 minutes' });
     }
-    if (delta > 5000) {
+    // MAX_DELTA is 500 Toman (5000 only for confectioneries, which this product doesn't serve).
+    if (delta > 500) {
       throw new BadRequestException({ status: 2112, title: 'delta_exceeded', detail: 'Delta surpasses limits' });
     }
 

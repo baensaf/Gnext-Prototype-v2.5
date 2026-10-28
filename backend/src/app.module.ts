@@ -123,6 +123,8 @@ import { CashMovement } from './entities/CashMovement.entity';
 import { BusinessDayClose } from './entities/BusinessDayClose.entity';
 import { IntegrationLog } from './entities/IntegrationLog.entity';
 import { TaraConnection, TaraBranch, TaraTerminal, TaraPurchase, TaraSimPurchase } from './entities/Tara.entity';
+import { SnappfoodConnection, SnappfoodWebhook } from './entities/SnappfoodConnection.entity';
+import { SnappfoodModule } from './modules/snappfood/snappfood.module';
 
 
 @Module({
@@ -161,7 +163,7 @@ import { TaraConnection, TaraBranch, TaraTerminal, TaraPurchase, TaraSimPurchase
           Courier, DeliveryAssignment, CourierSettlement, CourierSettlementLine,
           DeliveryZone, Delivery, DeliveryEvent,
           CashierShift, CashMovement, BusinessDayClose,
-          IntegrationLog,
+          IntegrationLog, SnappfoodWebhook, SnappfoodConnection,
           TaraConnection, TaraBranch, TaraTerminal, TaraPurchase, TaraSimPurchase,
           ImportJob, ImportRow,
           Agent, AgentEnrolmentCode, AgentCommand, AgentRelease,
@@ -191,6 +193,7 @@ import { TaraConnection, TaraBranch, TaraTerminal, TaraPurchase, TaraSimPurchase
     DeliveryModule,
     KioskModule,
     SimulationModule,
+    SnappfoodModule,
     ReportsModule,
     ImportExportModule,
     UsersModule,

@@ -17,6 +17,9 @@ async function bootstrap() {
   // Raised from the 100 kb default for the offline order batches of agents 1.x (removed, protocol
   // §19.2). Kept at 2 MB: lower it only after checking nothing else sends a larger JSON body.
   app.useBodyParser('json', { limit: '2mb' });
+  // Snappfood's webhook posts each order form-encoded (products[0][id]=...), and a big order
+  // with Persian titles runs past the 100 kb default.
+  app.useBodyParser('urlencoded', { limit: '2mb', extended: true });
 
   const allowedOrigins = [
     process.env.FRONTEND_URL || 'http://localhost:3030',

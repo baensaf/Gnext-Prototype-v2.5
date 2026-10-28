@@ -28,6 +28,7 @@ import { DeliveryModule } from '../delivery/delivery.module';
 import { ApprovalModule } from '../approval/approval.module';
 import { RefundModule } from '../refund/refund.module';
 import { SimulationModule } from '../simulation/simulation.module';
+import { SnappfoodModule } from '../snappfood/snappfood.module';
 import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module';
 
 @Module({
@@ -60,6 +61,8 @@ import { OrderLifecycleModule } from '../order-lifecycle/order-lifecycle.module'
     // Each needs the other: orders tell Snappfood about accepts and rejects, and a Snappfood
     // order is put through the branch's acceptance policy as it lands.
     forwardRef(() => SimulationModule),
+    // A branch connected to the real Snappfood answers its orders there.
+    SnappfoodModule,
   ],
   providers: [OrderService, OrderSequenceService, IncomingOrderPolicyService, OnlineOrdersService],
   controllers: [OrdersController],

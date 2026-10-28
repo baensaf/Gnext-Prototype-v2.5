@@ -36,6 +36,7 @@ import { OutboxWriter } from '../outbox/outbox-writer.service';
 import { OrderTransitionRecorder } from '../order-lifecycle/order-transition-recorder.service';
 import { PrintQueueService } from '../printing/print-queue.service';
 import { SimulationService } from '../simulation/simulation.service';
+import { SnappfoodLiveService } from '../snappfood/snappfood-live.service';
 import { CatalogService } from '../catalog/catalog.service';
 import { PriceListService } from '../catalog/price-lists.service';
 import { checkOptionChoices } from '../catalog/option-choices.util';
@@ -195,6 +196,7 @@ export class OrderService {
     @Optional() @Inject(forwardRef(() => SimulationService)) private readonly simulationService?: SimulationService,
     @Optional() private readonly itemDiscounts?: ItemDiscountsService,
     @Optional() private readonly coupons?: CouponsService,
+    @Optional() private readonly snappfoodLive?: SnappfoodLiveService,
   ) {}
 
   /**
@@ -1397,7 +1399,11 @@ export class OrderService {
   }
 
   private channelDeps() {
-    return { simulation: this.simulationService, menuIds: (tenantId: string) => this.platformMenuIds(tenantId) };
+    return {
+      simulation: this.simulationService,
+      live: this.snappfoodLive,
+      menuIds: (tenantId: string) => this.platformMenuIds(tenantId),
+    };
   }
 
   /** The categories a platform shows as menus; a pause switches them all off. */

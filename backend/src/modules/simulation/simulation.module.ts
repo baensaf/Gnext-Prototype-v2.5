@@ -17,6 +17,9 @@ import { SnappfoodCatalogService } from './snappfood-catalog.service';
 import { CatalogModule } from '../catalog/catalog.module';
 import { SimulationController } from './simulation.controller';
 import { SimulatedWebhooksController } from './simulated-webhooks.controller';
+import { SnappfoodWebhookController } from './snappfood-webhook.controller';
+import { SnappfoodConnection, SnappfoodWebhook } from '../../entities/SnappfoodConnection.entity';
+import { SnappfoodModule } from '../snappfood/snappfood.module';
 import { AuditModule } from '../audit/audit.module';
 import { OrderModule } from '../order/order.module';
 import { CustomerModule } from '../customer/customer.module';
@@ -36,7 +39,11 @@ import { CustomerModule } from '../customer/customer.module';
       CustomerAddress,
       ChannelItemMap,
       TenantSetting,
+      SnappfoodWebhook,
+      SnappfoodConnection,
     ]),
+    // A branch on the real Snappfood is acked there, not in the simulator.
+    SnappfoodModule,
     // The menu sync reads the Snappfood price sheet and the branch's stops.
     CatalogModule,
     AuditModule,
@@ -46,7 +53,7 @@ import { CustomerModule } from '../customer/customer.module';
     forwardRef(() => OrderModule),
   ],
   providers: [SimulationService, SnappfoodCatalogService],
-  controllers: [SimulationController, SimulatedWebhooksController],
+  controllers: [SimulationController, SimulatedWebhooksController, SnappfoodWebhookController],
   exports: [SimulationService, SnappfoodCatalogService],
 })
 export class SimulationModule {}
