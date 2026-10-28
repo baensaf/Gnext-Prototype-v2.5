@@ -210,6 +210,17 @@ export function useSettingsCatalogue(): SettingCategory[] {
           path: '/app/settings/tara',
           tags: ['tara', 'bnpl', 'credit', 'installments', 'تارا', 'اعتبار', 'خرید اعتباری'],
         },
+        {
+          id: 'snappfood',
+          scope: 'ORG',
+          title: t('settings.hub.items.snappfood.title', 'Snappfood'),
+          description: t(
+            'settings.hub.items.snappfood.description',
+            'Receiving Snappfood orders for real: the webhook address to give Snappfood, and each branch’s vendor code and API account.'
+          ),
+          path: '/app/settings/snappfood',
+          tags: ['snappfood', 'webhook', 'aggregator', 'vendor', 'api', 'اسنپ فود', 'اسنپ‌فود', 'وب‌هوک'],
+        },
       ],
     },
     {

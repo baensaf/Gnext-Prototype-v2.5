@@ -2918,6 +2918,10 @@
           "title": "Data reset",
           "description": "Wipe transactions, reload the demo data and reset number sequences."
         },
+        "snappfood": {
+          "title": "Snappfood",
+          "description": "Receiving Snappfood orders for real: the webhook address to give Snappfood, and each branch’s vendor code and API account."
+        },
         "tara": {
           "title": "Tara",
           "description": "Paying with Tara credit at the till: the Tara login, each branch’s Tara code and terminals, and product groups."
@@ -3027,6 +3031,48 @@
         "DATE": "Date",
         "CHOICE": "Choice"
       }
+    },
+    "snappfood": {
+      "title": "Snappfood",
+      "loadFailed": "Could not load the Snappfood setup.",
+      "saveFailed": "The Snappfood setting was not saved.",
+      "modes": {
+        "SIMULATED": "Simulator",
+        "STAGING": "Snappfood staging",
+        "PRODUCTION": "Snappfood live"
+      },
+      "webhook": {
+        "title": "Webhook address",
+        "subtitle": "Give this address to Snappfood. It serves every branch: Snappfood names the branch in each order’s vendor code.",
+        "url": "Webhook URL",
+        "copy": "Copy the address",
+        "copied": "Address copied.",
+        "lastReceived": "Last order received {{at}}.",
+        "neverReceived": "Snappfood has not sent anything to this address yet.",
+        "rotate": "Make a new address",
+        "rotateConfirm": "The current address stops working at once, and Snappfood must be given the new one. Make a new address?",
+        "rotated": "New address made. Send it to Snappfood.",
+        "hmac": "HMAC secret",
+        "hmacOn": "Each call must carry Snappfood’s HMAC header. Type a new secret to replace it.",
+        "hmacOff": "Optional. Ask Snappfood support to switch HMAC on, then save the secret they share.",
+        "hmacSaved": "HMAC secret saved.",
+        "hmacClear": "Stop checking HMAC"
+      },
+      "branches": {
+        "title": "Branches",
+        "subtitle": "Each branch is a vendor on Snappfood. A branch on the simulator answers its orders there; on staging or live it answers them on Snappfood’s servers with its own API account.",
+        "vendorCode": "Vendor code",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "username": "Username",
+        "password": "Password",
+        "secretsKept": "Leave a secret empty to keep the one saved.",
+        "saved": "{{name}} saved.",
+        "test": "Test connection",
+        "testOk": "Snappfood answered: {{title}} ({{status}}).",
+        "testFailed": "Snappfood refused: {{message}}"
+      },
+      "menuNote": "Orders, accepting and rejecting go to Snappfood for real. The menu and pausing a branch still go to the simulator, so keep the branch’s menu up to date in the Snappfood vendor panel for now."
     },
     "tara": {
       "title": "Tara",

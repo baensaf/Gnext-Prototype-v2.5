@@ -44,6 +44,8 @@ const PAGE_LABELS: Record<string, PhaseLabel> = {
   '/app/settings/data-reset': 'F',
   // Tara (buy now, pay later) at the till: the chain's Tara login, branch codes and product groups
   '/app/settings/tara': 'V3',
+  // Snappfood for real: the chain's webhook address, each branch's vendor code and API account
+  '/app/settings/snappfood': 'V2',
   '/app/delivery': 'V1',
   // Categories, products with sizes, add-on groups and combos, availability (the 86 stop)
   // and the product and category import

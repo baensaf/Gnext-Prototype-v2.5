@@ -1,5 +1,7 @@
 import { OrderHeader } from '../../../entities/OrderHeader.entity';
 import type { SimulationService } from '../../simulation/simulation.service';
+import type { SnappfoodLiveService } from '../../snappfood/snappfood-live.service';
+import type { SnappfoodConnection } from '../../../entities/SnappfoodConnection.entity';
 import {
   SNAPPFOOD_DELAY_REASON_ID,
   SNAPPFOOD_REPORT_WINDOW_MINUTES,
@@ -27,6 +29,8 @@ const SNAPPFOOD_REASON_IDS: Partial<Record<OnlineRejectReason | OnlineReportReas
 
 export type SnappfoodAdapterDeps = {
   simulation?: SimulationService;
+  /** The real Snappfood, for a branch connected to it; every other branch uses the simulator. */
+  live?: SnappfoodLiveService;
   /** The branch's menus (categories) on Snappfood, which a pause switches off and back on. */
   menuIds?: (tenantId: string, branchId: string) => Promise<string[]>;
 };
@@ -36,7 +40,10 @@ export type SnappfoodAdapterDeps = {
  * accepting, the only thing a store can send is a reject ("needs a call"), within an hour, and
  * Snappfood support then cancels the order or sends it back. It hears nothing about ready or
  * handover; its rider's progress comes in on the webhook when the vendor has it switched on.
- * The prototype talks to the simulator, which logs each call as Snappfood would receive it.
+ * A branch connected to Snappfood (staging or production) makes the order calls there; every
+ * other branch talks to the simulator, which logs each call as Snappfood would receive it.
+ * A pause stays with the simulator for now: it switches menus off by our ids, which only
+ * mean something on Snappfood once the menu is synced there.
  */
 export class SnappfoodAdapter implements ChannelAdapter {
   readonly platform = 'SNAPPFOOD' as const;
@@ -76,31 +83,42 @@ export class SnappfoodAdapter implements ChannelAdapter {
     return ['MORE_TIME', 'ITEM_UNAVAILABLE', 'NO_COURIER', 'DELIVERY_FEE'];
   }
 
+  /** The branch's live Snappfood account, or null while it talks to the simulator. */
+  private async live(tenantId: string, order: OrderHeader): Promise<SnappfoodConnection | null> {
+    return (await this.deps.live?.connectionFor(tenantId, order.branch_id)) ?? null;
+  }
+
   async received(tenantId: string, order: OrderHeader) {
+    const live = await this.live(tenantId, order);
+    if (live) return this.deps.live!.ack(live, this.externalCode(order));
     await this.deps.simulation?.ackOrder(tenantId, this.externalCode(order));
   }
 
   async opened(tenantId: string, order: OrderHeader) {
+    const live = await this.live(tenantId, order);
+    if (live) return this.deps.live!.pick(live, this.externalCode(order));
     await this.deps.simulation?.pickOrder(tenantId, this.externalCode(order));
   }
 
   async accepted(tenantId: string, order: OrderHeader, minutes: number) {
+    const live = await this.live(tenantId, order);
+    if (live) return this.deps.live!.accept(live, this.externalCode(order), acceptNotice(order, minutes));
     await this.deps.simulation?.notifyAccepted(tenantId, this.externalCode(order), acceptNotice(order, minutes));
   }
 
   async rejected(tenantId: string, order: OrderHeader, reason: OnlineRejectReason, comment?: string) {
-    await this.deps.simulation?.notifyRejected(tenantId, this.externalCode(order), {
-      reasonId: SNAPPFOOD_REASON_IDS[reason],
-      comment,
-    });
+    await this.reject(tenantId, order, { reasonId: SNAPPFOOD_REASON_IDS[reason], comment });
   }
 
   async rejectedUnanswered(tenantId: string, order: OrderHeader, comment: string) {
     // None of Snappfood's reasons says nobody answered; a delay in sending is the nearest.
-    await this.deps.simulation?.notifyRejected(tenantId, this.externalCode(order), {
-      reasonId: SNAPPFOOD_DELAY_REASON_ID,
-      comment,
-    });
+    await this.reject(tenantId, order, { reasonId: SNAPPFOOD_DELAY_REASON_ID, comment });
+  }
+
+  private async reject(tenantId: string, order: OrderHeader, body: { reasonId?: number; comment?: string }) {
+    const live = await this.live(tenantId, order);
+    if (live) return this.deps.live!.reject(live, this.externalCode(order), body);
+    await this.deps.simulation?.notifyRejected(tenantId, this.externalCode(order), body);
   }
 
   async reported(tenantId: string, order: OrderHeader, notice: ReportNotice): Promise<string> {
@@ -108,8 +126,11 @@ export class SnappfoodAdapter implements ChannelAdapter {
     const comment = [notice.extraMinutes && `Needs ${notice.extraMinutes} more minutes`, notice.comment?.trim()]
       .filter(Boolean)
       .join('. ');
-    await this.deps.simulation?.notifyRejected(tenantId, this.externalCode(order), { reasonId, comment });
-    const reasons = (await this.deps.simulation?.getDeclineReasons()) ?? [];
+    await this.reject(tenantId, order, { reasonId, comment });
+    const live = await this.live(tenantId, order);
+    const reasons = live
+      ? await this.deps.live!.declineReasons(live).catch(() => [])
+      : ((await this.deps.simulation?.getDeclineReasons()) ?? []);
     const title = reasons.find((r) => r.id === reasonId)?.title;
     return [`${reasonId}${title ? ` ${title}` : ''}`, comment].filter(Boolean).join(': ').slice(0, 255);
   }

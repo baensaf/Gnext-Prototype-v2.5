@@ -57,6 +57,7 @@ import { PriceChangesPage } from 'src/pages/catalog/price-changes';
 import { BusinessDaysPage } from 'src/pages/cashier/business-days';
 import { ReportViewerPage } from 'src/pages/reports/report-viewer';
 import { CalendarSettingsPage } from 'src/pages/settings/calendar';
+import { SnappfoodSettingsPage } from 'src/pages/settings/snappfood';
 import { ItemDiscountsPage } from 'src/pages/catalog/item-discounts';
 import { ChannelPricesPage } from 'src/pages/catalog/channel-prices';
 import { ApprovalsSettingsPage } from 'src/pages/settings/approvals';
@@ -286,6 +287,7 @@ export const routesSection: RouteObject[] = [
       { path: 'settings/discount-authorizations', element: <DiscountAuthorizationsPage /> },
       { path: 'settings/payments-refunds', element: <PaymentSettingsPage /> },
       { path: 'settings/tara', element: <TaraSettingsPage /> },
+      { path: 'settings/snappfood', element: <SnappfoodSettingsPage /> },
       { path: 'settings/payments', element: <Navigate to="/app/settings/payments-refunds" replace /> },
       { path: 'settings/approvals', element: <ApprovalsSettingsPage /> },
       { path: 'settings/reasons', element: <ReasonCodesPage /> },
