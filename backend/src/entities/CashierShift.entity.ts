@@ -12,6 +12,17 @@ import { CashMovement } from './CashMovement.entity';
 
 export type ShiftState = 'OPEN' | 'CLOSED';
 
+/** What a shift's report says about its orders. */
+export interface ShiftOrderFigures {
+  orderCount: number;
+  cancelledCount: number;
+  salesTotal: string;
+  discountTotal: string;
+  deliveryFeeTotal: string;
+  unpaidTotal: string;
+  byType: Array<{ type: string; count: number; total: string }>;
+}
+
 @Entity('cashier_shift')
 @Index(['tenant_id', 'branch_id', 'business_date', 'state'])
 export class CashierShift {
@@ -63,6 +74,10 @@ export class CashierShift {
   /** Of the count, what stays in the drawer for the next shift; the rest was handed over. */
   @Column({ type: 'numeric', precision: 19, scale: 4, nullable: true })
   left_in_drawer: string | null;
+
+  /** The report's order figures as they stood at the close (P-29). Null on a shift closed before these were kept. */
+  @Column({ type: 'jsonb', nullable: true })
+  closing_orders: ShiftOrderFigures | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;
