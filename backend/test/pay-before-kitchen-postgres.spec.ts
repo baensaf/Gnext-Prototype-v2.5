@@ -251,6 +251,28 @@ describe('Pay before the kitchen (PostgreSQL)', () => {
     expect((await reload(draft.id)).state).toBe('ABANDONED');
   });
 
+  // P-29: a paid order cancelled in the next shift pays back there; the closed shift reads as it closed.
+  it('leaves a closed shift as it was when its order is cancelled in the next shift', async () => {
+    const save = (entity: any, data: any) => dataSource.getRepository(entity).save(dataSource.getRepository(entity).create(data)) as Promise<any>;
+    const till3 = (await save(Terminal, { tenant_id: tenantId, branch_id: branchId, code: 'PK-3', name: 'Till 3', terminal_type: 'CASHIER', is_active: true })).id;
+    const shifts = moduleRef.get(ShiftService);
+    const closing = ((await shifts.openShift(tenantId, { terminalId: till3 } as any)) as any).id;
+    const sold = await send({ order_type: 'TAKEAWAY', terminal_id: till3, shift_id: closing });
+    await pay(sold!.id, '100000.0000');
+    await shifts.closeShift(tenantId, closing, { actualCash: '100000.0000' } as any);
+    const atClose = await shifts.getSalesSummary(tenantId, closing);
+    expect(atClose).toMatchObject({ orderCount: 1, cancelledCount: 0, salesTotal: '100000.0000' });
+
+    const next = ((await shifts.openShift(tenantId, { terminalId: till3 } as any)) as any).id;
+    await refunds.cancelPaidOrder(tenantId, sold!.id, { reason: 'Came back' } as any);
+
+    expect((await reload(sold!.id)).state).toBe('CANCELLED');
+    expect(await shifts.getSalesSummary(tenantId, closing)).toEqual(atClose);
+    const [back] = await dataSource.query(`SELECT amount, shift_id FROM refund WHERE order_id = $1`, [sold!.id]);
+    expect(back).toMatchObject({ amount: '100000.0000', shift_id: next });
+    expect((await shifts.getShiftStatement(tenantId, next)).cashRefunds).toBe('100000.0000');
+  });
+
   // O-38: the charge was for the old total, so the order waits for its answer.
   it('refuses to edit or change a delivery while a card charge on it is out', async () => {
     const sent = await send({ ...delivery });

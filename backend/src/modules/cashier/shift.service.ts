@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, EntityManager, In } from 'typeorm';
-import { CashierShift, ShiftState } from '../../entities/CashierShift.entity';
+import { CashierShift, ShiftOrderFigures, ShiftState } from '../../entities/CashierShift.entity';
 import { CashMovement, CashMovementType } from '../../entities/CashMovement.entity';
 import { Terminal } from '../../entities/Terminal.entity';
 import { Payment } from '../../entities/Payment.entity';
@@ -47,8 +47,37 @@ const TILL_OPEN_ORDER_ISSUES: OpenOrderIssue[] = ['UNPAID', 'AWAITING_ACCEPTANCE
 /** Orders that never became a sale: never sent, abandoned, waiting to be accepted, cancelled or turned down. */
 const UNSOLD_ORDER_STATES: string[] = ['DRAFT', 'ABANDONED', 'PENDING_ACCEPTANCE', 'CANCELLED', 'REJECTED'];
 
+/** Adds up a shift's orders for its report. */
+function shiftOrderFigures(orders: OrderHeader[]): ShiftOrderFigures {
+  const sold = orders.filter((o) => !UNSOLD_ORDER_STATES.includes(o.state));
+  let salesTotal = '0.0000';
+  let discountTotal = '0.0000';
+  let deliveryFeeTotal = '0.0000';
+  let unpaidTotal = '0.0000';
+  const byType = new Map<string, { type: string; count: number; total: string }>();
+  for (const o of sold) {
+    salesTotal = MoneyUtil.add(salesTotal, o.grand_total || '0');
+    discountTotal = MoneyUtil.add(discountTotal, o.discount_total || '0');
+    deliveryFeeTotal = MoneyUtil.add(deliveryFeeTotal, o.delivery_fee || '0');
+    if (MoneyUtil.greaterThan(o.outstanding_total || '0', '0')) unpaidTotal = MoneyUtil.add(unpaidTotal, o.outstanding_total);
+    const bucket = byType.get(o.order_type) ?? { type: o.order_type, count: 0, total: '0.0000' };
+    bucket.count += 1;
+    bucket.total = MoneyUtil.add(bucket.total, o.grand_total || '0');
+    byType.set(o.order_type, bucket);
+  }
+  return {
+    orderCount: sold.length,
+    cancelledCount: orders.filter((o) => o.state === 'CANCELLED').length,
+    salesTotal,
+    discountTotal,
+    deliveryFeeTotal,
+    unpaidTotal,
+    byType: [...byType.values()],
+  };
+}
+
 /** What one register did in a shift, for the cashier to read on screen. */
-export interface ShiftSalesSummary {
+export interface ShiftSalesSummary extends ShiftOrderFigures {
   shiftId: string;
   shiftNumber: string;
   registerName: string | null;
@@ -56,13 +85,6 @@ export interface ShiftSalesSummary {
   openedAt: Date;
   closedAt: Date | null;
   closed: boolean;
-  orderCount: number;
-  cancelledCount: number;
-  salesTotal: string;
-  discountTotal: string;
-  deliveryFeeTotal: string;
-  unpaidTotal: string;
-  byType: Array<{ type: string; count: number; total: string }>;
   /** Money taken at this register, by kind of payment. */
   tenders: Array<{ kind: string; count: number; amount: string }>;
   refundCount: number;
@@ -649,6 +671,7 @@ export class ShiftService {
       shift.actual_cash = actualCash;
       shift.left_in_drawer = leftInDrawer;
       shift.short_over = shortOver;
+      shift.closing_orders = shiftOrderFigures(await em.find(OrderHeader, { where: { tenant_id: tenantId, shift_id: shiftId } }));
       shift.state = 'CLOSED';
       shift.closed_at = new Date();
       shift.closed_by = userId || null;
@@ -824,23 +847,10 @@ export class ShiftService {
     if (!shift) throw new NotFoundException(`Shift ${shiftId} not found`);
     const closed = statement.state === 'CLOSED';
 
-    const orders = await this.orderRepo.find({ where: { tenant_id: tenantId, shift_id: shiftId } });
-    const sold = orders.filter((o) => !UNSOLD_ORDER_STATES.includes(o.state));
-    let salesTotal = '0.0000';
-    let discountTotal = '0.0000';
-    let deliveryFeeTotal = '0.0000';
-    let unpaidTotal = '0.0000';
-    const byType = new Map<string, { type: string; count: number; total: string }>();
-    for (const o of sold) {
-      salesTotal = MoneyUtil.add(salesTotal, o.grand_total || '0');
-      discountTotal = MoneyUtil.add(discountTotal, o.discount_total || '0');
-      deliveryFeeTotal = MoneyUtil.add(deliveryFeeTotal, o.delivery_fee || '0');
-      if (MoneyUtil.greaterThan(o.outstanding_total || '0', '0')) unpaidTotal = MoneyUtil.add(unpaidTotal, o.outstanding_total);
-      const bucket = byType.get(o.order_type) ?? { type: o.order_type, count: 0, total: '0.0000' };
-      bucket.count += 1;
-      bucket.total = MoneyUtil.add(bucket.total, o.grand_total || '0');
-      byType.set(o.order_type, bucket);
-    }
+    // A closed shift's orders read as they stood at its close: a cancel in a later shift doesn't
+    // rewrite this report (P-29). A shift closed before these were kept is added up from its orders.
+    const figures =
+      shift.closing_orders ?? shiftOrderFigures(await this.orderRepo.find({ where: { tenant_id: tenantId, shift_id: shiftId } }));
 
     // A payment refunded later was still taken here; the refund is counted under refunds.
     const payments = await this.paymentRepo.find({
@@ -879,13 +889,7 @@ export class ShiftService {
       openedBy: cashier?.display_name || cashier?.username || null,
       openedAt: shift.opened_at,
       closedAt: shift.closed_at || null,
-      orderCount: sold.length,
-      cancelledCount: orders.filter((o) => o.state === 'CANCELLED').length,
-      salesTotal,
-      discountTotal,
-      deliveryFeeTotal,
-      unpaidTotal,
-      byType: [...byType.values()].map((b) => ({ ...b, total: b.total })),
+      ...figures,
       tenders: [...tenders.values()],
       refundCount: refunds.length,
       refundTotal,

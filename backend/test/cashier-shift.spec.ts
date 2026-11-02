@@ -396,6 +396,29 @@ describe('Cashier Shift & Business Day Suite (R13)', () => {
         expect(summary).toMatchObject({ closed: true, salesTotal: '800000.0000' });
         expect(summary.cash).toMatchObject({ actualCash: '340000.0000', shortOver: '-10000.0000' });
       });
+
+      it('keeps the order figures of the close when an order is cancelled in a later shift (P-29)', async () => {
+        const shift: any = { ...openShift(), shift_number: 'SHF-1', opened_at: new Date() };
+        shiftRepo.findOne.mockResolvedValue(shift);
+        await shiftService.closeShift('t-1', 'shf-1', { actualCash: '350000.0000' }, 'cashier-1');
+
+        orderRepo.find.mockResolvedValue([
+          { state: 'CANCELLED', order_type: 'TAKEAWAY', grand_total: '300000.0000', outstanding_total: '0' },
+          { state: 'COMPLETED', order_type: 'DELIVERY', grand_total: '500000.0000', discount_total: '20000.0000', delivery_fee: '40000.0000', outstanding_total: '0' },
+          { state: 'CANCELLED', order_type: 'TAKEAWAY', grand_total: '90000.0000', outstanding_total: '0' },
+        ]);
+
+        const summary = await shiftService.getSalesSummary('t-1', 'shf-1');
+        expect(summary).toMatchObject({ closed: true, orderCount: 2, cancelledCount: 1, salesTotal: '800000.0000' });
+        expect(summary.byType).toContainEqual({ type: 'TAKEAWAY', count: 1, total: '300000.0000' });
+      });
+
+      it('adds up a shift closed before the figures were kept from its orders', async () => {
+        shiftRepo.findOne.mockResolvedValue({ ...openShift(), state: 'CLOSED', closing_orders: null, shift_number: 'SHF-1' });
+
+        const summary = await shiftService.getSalesSummary('t-1', 'shf-1');
+        expect(summary).toMatchObject({ orderCount: 2, cancelledCount: 1, salesTotal: '800000.0000' });
+      });
     });
   });
 
