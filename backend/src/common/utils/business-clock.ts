@@ -38,6 +38,28 @@ export async function loadBusinessClock(em: any, tenantId: string, branchId?: st
   }
 }
 
+/**
+ * The first branch whose current business day a new cutoff would change, or null when none would
+ * (P-30). Saving such a cutoff would put the date back on a day already closed, or end the open
+ * shifts on the spot. The cutoff is before noon, so a save in the afternoon never hits this.
+ */
+export async function branchDayMovedByCutoff(
+  em: any,
+  tenantId: string,
+  cutoff: string,
+  now: Date = new Date(),
+): Promise<{ branch: string; today: string; wouldBe: string } | null> {
+  if (!canRead(em) || !tenantId) return null;
+  const branches: Branch[] = await em.find(Branch, { where: { tenant_id: tenantId, is_active: true } });
+  for (const branch of branches) {
+    const clock = await loadBusinessClock(em, tenantId, branch.id);
+    const today = clock.today(now);
+    const wouldBe = new BusinessClock({ ...clock.policy, cutoff }).today(now);
+    if (wouldBe !== today) return { branch: branch.name, today, wouldBe };
+  }
+  return null;
+}
+
 /** Today's business date at a branch. */
 export async function businessToday(em: any, tenantId: string, branchId?: string | null, now: Date = new Date()): Promise<string> {
   return (await loadBusinessClock(em, tenantId, branchId)).today(now);

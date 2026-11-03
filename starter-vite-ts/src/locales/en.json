@@ -3010,7 +3010,7 @@
       "cardTitle": "When the day turns over",
       "cutoffLabel": "Business day cutoff",
       "cutoffHelp": "The new business day starts here, on the branch’s own clock. Set it after the latest closing time: with 05:00, a sale at 01:30 belongs to the day before and one at 05:00 to the new day. Orders, payments, refunds, call numbers and reports all follow it. Opening hours are set on each branch.",
-      "changeNote": "A change applies from the moment it is saved and nothing already recorded is re-dated. Change it while the shops are closed.",
+      "changeNote": "A change applies from the moment it is saved and nothing already recorded is re-dated. A save that would change the current business day of any branch is refused; any time in the afternoon works.",
       "now": "Now: business day {{date}}, which ends at {{ends}} ({{zone}}).",
       "saveSuccess": "Business day saved for every branch.",
       "loadError": "Failed to load the business day settings",

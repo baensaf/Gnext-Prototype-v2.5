@@ -16,7 +16,7 @@ import { canActOnBranch, isHeadOfficeUser, UserScope } from '../../common/utils/
 import { BUSINESS_DAY_SETTING_KEY, businessDaySettingProblem } from '../../common/utils/business-day';
 import { CATALOG_SETTING_KEY, catalogSettingProblem } from '../../common/utils/default-tax';
 import { nextCode, typedCode } from '../../common/utils/next-code.util';
-import { businessToday } from '../../common/utils/business-clock';
+import { branchDayMovedByCutoff, businessToday } from '../../common/utils/business-clock';
 import { CALL_NUMBER_SETTING_KEY, callNumberRangesProblem, callNumberSettingToSave } from '../order/call-number';
 
 @Injectable()
@@ -249,6 +249,21 @@ export class SettingsService {
     // New call-number ranges start with the next business day; today keeps its own (O-39).
     if (key.toUpperCase() === CALL_NUMBER_SETTING_KEY) {
       value = callNumberSettingToSave(setting?.value, value, await businessToday(this.settingRepo.manager, tenantId));
+    }
+
+    // A changed cutoff applies at once, so it may not move any branch's current day (P-30).
+    if (key.toUpperCase() === BUSINESS_DAY_SETTING_KEY && value.cutoff !== undefined) {
+      const moved = await branchDayMovedByCutoff(this.settingRepo.manager, tenantId, value.cutoff);
+      if (moved) {
+        throw new ConflictException({
+          code: 'CUTOFF_MOVES_BUSINESS_DAY',
+          title: 'Would Change the Business Day',
+          detail:
+            `Saving ${value.cutoff} now would change ${moved.branch}'s business day from ${moved.today} to ${moved.wouldBe}. ` +
+            'Save it later, once the time has passed both the old and the new cutoff; any time in the afternoon works.',
+          context: moved,
+        });
+      }
     }
 
     if (!setting) {
