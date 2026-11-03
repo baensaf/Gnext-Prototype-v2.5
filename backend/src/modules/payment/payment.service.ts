@@ -24,7 +24,6 @@ import { AuditWriter } from '../audit/audit-writer.service';
 import {
   PaymentCreateDto,
   PaymentProcessDto,
-  PaymentCorrectionDto,
   PaymentDeviceCreateDto,
   SettlementAccountCreateDto,
 } from './dtos/payment.dto';
@@ -79,12 +78,20 @@ export class PaymentService {
     const total = await qb.getCount();
     const rows = await qb
       .leftJoin('tara_purchase', 't', 't.payment_id = p.id')
+      .leftJoin('cashier_shift', 'sh', 'sh.id = p.shift_id')
+      .leftJoin('terminal', 'reg', 'reg.id = COALESCE(sh.terminal_id, o.terminal_id)')
       .select([
         'p.id AS id',
         'p.payment_number AS payment_number',
         'p.order_id AS order_id',
         'o.order_number AS order_number',
+        'o.call_number AS call_number',
         'o.branch_id AS branch_id',
+        'reg.name AS register_name',
+        // Who raised the payment is on its first audit event.
+        `(SELECT COALESCE(u.display_name, u.username) FROM audit_event ae JOIN admin_user u ON u.id::text = ae.actor_id::text
+           WHERE ae.entity_type = 'Payment' AND ae.entity_id::text = p.id::text AND ae.action = 'PAYMENT_INTENT_CREATED' LIMIT 1) AS cashier_name`,
+        'p.needs_terminal_check AS needs_terminal_check',
         'p.method_kind AS method_kind',
         'p.status AS status',
         'p.amount AS amount',
@@ -98,7 +105,10 @@ export class PaymentService {
         // Charged by hand on another reader (Y-12): still a card, shown apart.
         `EXISTS (SELECT 1 FROM payment_attempt pa WHERE pa.payment_id = p.id AND pa.adapter = 'MANUAL') AS other_reader`,
       ])
-      .orderBy('COALESCE(p.posted_at, p.initiated_at)', 'DESC')
+      // A charge the terminal never answered stays at the top until someone settles it (Y-17):
+      // End shift sends the cashier here for it, and a busy day runs to many pages.
+      .orderBy('p.needs_terminal_check', 'DESC')
+      .addOrderBy('COALESCE(p.posted_at, p.initiated_at)', 'DESC')
       .addOrderBy('p.payment_number', 'DESC')
       .offset((page - 1) * limit)
       .limit(limit)
@@ -519,140 +529,6 @@ export class PaymentService {
     });
   }
 
-  async reversePayment(tenantId: string, id: string, dto: { reason: string; approvalRequestId?: string }, userId?: string, correlationId?: string) {
-    return await this.dataSource.transaction(async (em) => {
-      const payment = await em.findOne(Payment, {
-        where: { id, tenant_id: tenantId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!payment) throw new NotFoundException(`Payment ${id} not found`);
-
-      if (payment.status !== 'SUCCEEDED') {
-        throw new BadRequestException(`Only SUCCEEDED payments can be reversed. Current status: ${payment.status}`);
-      }
-
-      // Tara gives the money back itself, through ReversePurchase, on the day of the sale only.
-      if (payment.method_kind === TARA_KIND) {
-        const ofOrder = await em.findOneOrFail(OrderHeader, { where: { id: payment.order_id, tenant_id: tenantId } });
-        if (!(await this.taraPay.reversibleToday(em, payment, ofOrder.branch_id))) {
-          throw new BadRequestException({
-            code: 'TARA_REVERSE_SAME_DAY',
-            title: 'Tara',
-            detail: 'Tara takes a sale back only on the day it was made. Refund the order instead.',
-          });
-        }
-        await this.taraPay.reverse(em, payment, { userId, correlationId });
-      }
-
-      payment.status = 'REVERSED';
-      await em.save(Payment, payment);
-
-      const order = await em.findOne(OrderHeader, {
-        where: { id: payment.order_id, tenant_id: tenantId },
-        lock: { mode: 'pessimistic_write' },
-      });
-
-      if (order) {
-        order.paid_total = MoneyUtil.subtract(order.paid_total, payment.amount);
-        if (MoneyUtil.lessThan(order.paid_total, '0.0000')) order.paid_total = '0.0000';
-        order.outstanding_total = MoneyUtil.subtract(order.grand_total, order.paid_total);
-        order.paid_amount = order.paid_total;
-        order.due_amount = order.outstanding_total;
-        await em.save(OrderHeader, order);
-
-        // Cash going back out is recorded against the drawer it comes from: the register doing
-        // the reversal, else the drawer the payment went into while that is still open. This
-        // used to run only when the order named a terminal, which the POS never sent — so a
-        // reversed cash sale stayed in the drawer's expected cash and read as a shortage at
-        // close. If no drawer is open the reversal still stands; the money was not counted.
-        if (payment.method_kind === 'CASH') {
-          let shift = await this.shiftService.resolveDrawer(tenantId, order.branch_id, order.terminal_id);
-          if (!shift && payment.shift_id) {
-            shift = await this.shiftService.requireOpenShiftById(tenantId, payment.shift_id, em).catch(() => null);
-          }
-          if (shift) {
-            await this.shiftService.recordCashRefundMovement(
-              tenantId,
-              shift.id,
-              payment.id,
-              payment.amount,
-              userId,
-              em,
-            );
-          }
-        }
-      }
-
-      // Credit was debited when the payment succeeded, so it has to be handed back here —
-      // otherwise the order un-pays but the customer stays in debt for it. A wallet payment
-      // goes back into the wallet the same way.
-      if (payment.method_kind === 'CUSTOMER_CREDIT' || payment.method_kind === 'WALLET') {
-        await this.creditService.reversePurchase(
-          tenantId,
-          payment.id,
-          `Reversal of payment #${payment.payment_number}: ${dto.reason}`,
-          userId,
-          correlationId,
-          em,
-        );
-      }
-
-      await this.auditWriter.write({
-        tenantId,
-        actorType: userId ? 'ADMIN' : 'SYSTEM',
-        actorId: userId,
-        action: 'PAYMENT_REVERSED',
-        entityType: 'Payment',
-        entityId: id,
-        correlationId: correlationId || 'system',
-      });
-
-      return payment;
-    });
-  }
-
-  async correctPayment(tenantId: string, id: string, dto: PaymentCorrectionDto, userId?: string, correlationId?: string) {
-    const correctionGroupId = crypto.randomUUID();
-
-    // 1. Reverse original payment
-    const original = await this.reversePayment(tenantId, id, { reason: dto.reason }, userId, correlationId);
-    original.correction_group_id = correctionGroupId;
-    await this.paymentRepo.save(original);
-
-    // 2. Post replacement payment intent
-    const replacementAmount = dto.replacementAmount || original.amount;
-    const replacementIntent = await this.createPaymentIntent(
-      tenantId,
-      {
-        orderId: original.order_id,
-        methodId: dto.replacementMethodId,
-        amount: replacementAmount,
-      },
-      userId,
-      correlationId,
-    );
-
-    replacementIntent.original_payment_id = original.id;
-    replacementIntent.correction_group_id = correctionGroupId;
-    await this.paymentRepo.save(replacementIntent);
-
-    // 3. Process replacement payment
-    const processedReplacement = await this.processPayment(
-      tenantId,
-      replacementIntent.id,
-      { scenarioId: 'SUCCESS' },
-      userId,
-      correlationId,
-    );
-
-    return {
-      originalPayment: original,
-      replacementPayment: processedReplacement,
-      correctionGroupId,
-    };
-  }
-
-  // Devices & Settlement Accounts Management
   async getDevices(tenantId: string, branchId?: string) {
     const qb = this.deviceRepo.createQueryBuilder('d').where('d.tenant_id = :tenantId', { tenantId });
     if (branchId) qb.andWhere('d.branch_id = :branchId', { branchId });

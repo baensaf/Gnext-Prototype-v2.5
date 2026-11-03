@@ -45,7 +45,7 @@ const SITE_CONFIG: [any, string[]][] = [
 const CHAIN_CONFIG: [any, string[]][] = [
   [TenantController, ['updateTenantProfile', 'createBranch', 'updateBranch', 'archiveBranch', 'restoreBranch', 'updateBranchHours']],
   [PaymentController, ['createSettlementAccount']],
-  [SettingsController, ['createCurrency', 'updateCurrency', 'createPaymentMethod', 'updatePaymentMethod', 'createReasonCode', 'updateReasonCode']],
+  [SettingsController, ['createCurrency', 'updateCurrency', 'updatePaymentMethod', 'createReasonCode', 'updateReasonCode']],
   [CatalogController, ['createProduct', 'updateProduct', 'createCategory', 'updateCategory']],
 ];
 

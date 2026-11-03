@@ -1324,6 +1324,9 @@
     "columnStatus": "Status",
     "columnDate": "Date & Time",
     "columnReference": "Reference / RRN",
+    "columnRegister": "Register",
+    "columnCashier": "Cashier",
+    "businessDay": "Business day {{date}}",
     "filterMethod": "Payment Method",
     "statusSucceeded": "Successful",
     "statusFailed": "Failed",
@@ -1386,6 +1389,7 @@
     }
   },
   "refunds": {
+    "noReasons": "No refund reasons are set yet. Head office adds them under Settings.",
     "reason": "Reason",
     "amount": "Amount",
     "continue": "Continue",
@@ -2601,7 +2605,7 @@
         "prep": "Default prep time on accept (minutes)"
       },
       "channelsTitle": "Active Dining Channels",
-      "channelsDesc": "Enable or disable operating dining channels across POS terminals and Kiosk registers.",
+      "channelsDesc": "Which order types the till offers. Head office picks them.",
       "channels": {
         "dineIn": "Dine-In Service",
         "takeaway": "Takeaway & Counter",

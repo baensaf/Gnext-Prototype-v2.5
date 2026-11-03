@@ -4,6 +4,7 @@ import { RefundService } from './refund.service';
 import { ApprovalService } from '../approval/approval.service';
 import { RefundCreateDto, PaidOrderCancelDto } from './dtos/refund.dto';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
+import { BranchStaffOnly } from '../../common/decorators/roles.decorator';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 
@@ -45,6 +46,7 @@ export class RefundController {
   }
 
   @BranchOwned(OrderHeader, { param: 'orderId' })
+  @BranchStaffOnly()
   @Post('orders/:orderId/refunds')
   async createRefund(
     @Param('orderId') orderId: string,
@@ -64,6 +66,7 @@ export class RefundController {
   }
 
   @BranchOwned(OrderHeader, { param: 'orderId' })
+  @BranchStaffOnly()
   @Post('orders/:orderId/cancel-paid')
   async cancelPaidOrder(
     @Param('orderId') orderId: string,

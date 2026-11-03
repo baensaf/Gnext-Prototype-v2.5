@@ -1,13 +1,14 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import {
+  BRANCH_STAFF_ONLY_KEY,
   HEAD_OFFICE_ONLY_KEY,
   ROLES_KEY,
 } from '../decorators/roles.decorator';
 import { isHeadOfficeUser } from '../utils/user-scope.util';
 
 /**
- * Enforces the two role decorators. Registered globally, but a handler carrying neither
+ * Enforces the role decorators. Registered globally, but a handler carrying neither
  * decorator is left exactly as it was — every route that worked before this guard existed
  * still does, and a route only becomes restricted when someone says so at the handler.
  */
@@ -19,8 +20,9 @@ export class RolesGuard implements CanActivate {
     const targets = [context.getHandler(), context.getClass()];
     const headOfficeOnly = this.reflector.getAllAndOverride<boolean>(HEAD_OFFICE_ONLY_KEY, targets);
     const roles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, targets);
+    const branchStaffOnly = this.reflector.getAllAndOverride<boolean>(BRANCH_STAFF_ONLY_KEY, targets);
 
-    if (!headOfficeOnly && !roles?.length) {
+    if (!headOfficeOnly && !roles?.length && !branchStaffOnly) {
       return true;
     }
 
@@ -37,6 +39,14 @@ export class RolesGuard implements CanActivate {
     }
 
     const scope = { role: req.userRole, branchId: req.userBranchId ?? null };
+
+    if (branchStaffOnly && isHeadOfficeUser(scope)) {
+      throw new ForbiddenException({
+        code: 'HEAD_OFFICE_READS_ONLY',
+        title: 'Head Office Reads Only',
+        detail: "Head office reads a branch's orders and payments but doesn't change them. Sign in as the branch's staff.",
+      });
+    }
 
     if (headOfficeOnly && !isHeadOfficeUser(scope)) {
       throw new ForbiddenException({

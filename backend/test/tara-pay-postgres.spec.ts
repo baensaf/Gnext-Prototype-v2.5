@@ -200,15 +200,6 @@ describe('Tara payments (PostgreSQL)', () => {
     expect(await dataSource.getRepository(TaraPurchase).findOneByOrFail({ payment_id: paid.id })).toMatchObject({ step: 'REVERSED' });
   });
 
-  it('does not reverse a Tara sale from an earlier business day', async () => {
-    const order = await submitted();
-    const paid = await payTara(order, '980000000001', '1000000');
-    await dataSource.query(`UPDATE payment SET business_date = '2020-01-01' WHERE id = $1`, [paid.id]);
-    await expect(payments.reversePayment(tenantId, paid.id, { reason: 'x' }, cashierId)).rejects.toMatchObject({
-      response: { code: 'TARA_REVERSE_SAME_DAY' },
-    });
-  });
-
   it('stops offering Tara once disconnected', async () => {
     await tara.disconnect(tenantId);
     expect(await tara.tillStatus(tenantId, branchId)).toEqual({ available: false, reason: 'NOT_CONNECTED' });

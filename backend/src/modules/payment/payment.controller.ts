@@ -5,13 +5,12 @@ import { OrderService } from '../order/order.service';
 import {
   PaymentCreateDto,
   PaymentProcessDto,
-  PaymentCorrectionDto,
   PaymentDeviceCreateDto,
   SettlementAccountCreateDto,
   PaymentDeviceAgentDto,
   TerminalResolutionDto,
 } from './dtos/payment.dto';
-import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
+import { BranchStaffOnly, HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { BranchOwned } from '../../common/decorators/branch-owned.decorator';
 import { RequireIdempotency } from '../../common/decorators/idempotency.decorator';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
@@ -46,6 +45,7 @@ export class PaymentController {
   // already SUCCEEDED is answered as it is. The key is optional, as on the order routes.
   @RequireIdempotency('PAYMENT_CREATE', { optional: true })
   @BranchOwned(OrderHeader, { body: 'orderId' })
+  @BranchStaffOnly()
   @Post('payments')
   async createPaymentIntent(@Body() body: PaymentCreateDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -71,6 +71,7 @@ export class PaymentController {
   }
 
   @BranchOwned(Payment, PAYMENT_OF_BRANCH)
+  @BranchStaffOnly()
   @Post('payments/:id/process')
   async processPayment(
     @Param('id') id: string,
@@ -98,6 +99,7 @@ export class PaymentController {
 
   /** Asks the card terminal how a charge it never confirmed ended. */
   @BranchOwned(Payment, PAYMENT_OF_BRANCH)
+  @BranchStaffOnly()
   @Post('payments/:id/check-terminal')
   async checkTerminal(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -111,6 +113,7 @@ export class PaymentController {
    * audit entry records who answered.
    */
   @BranchOwned(Payment, PAYMENT_OF_BRANCH)
+  @BranchStaffOnly()
   @Post('payments/:id/resolve-terminal')
   async resolveTerminal(@Param('id') id: string, @Body() body: TerminalResolutionDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -119,6 +122,7 @@ export class PaymentController {
   }
 
   @BranchOwned(Payment, PAYMENT_OF_BRANCH)
+  @BranchStaffOnly()
   @Post('payments/:id/void')
   async voidPayment(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -128,31 +132,6 @@ export class PaymentController {
   }
 
   @BranchOwned(Payment, PAYMENT_OF_BRANCH)
-  @Post('payments/:id/reverse')
-  async reversePayment(
-    @Param('id') id: string,
-    @Body() body: { reason: string; approvalRequestId?: string },
-    @Req() req: Request,
-  ) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-    return await this.paymentService.reversePayment(tenantId, id, body, userId, correlationId);
-  }
-
-  @BranchOwned(Payment, PAYMENT_OF_BRANCH)
-  @Post('payments/:id/correct')
-  async correctPayment(
-    @Param('id') id: string,
-    @Body() body: PaymentCorrectionDto,
-    @Req() req: Request,
-  ) {
-    const tenantId = (req as any).tenantId;
-    const userId = (req as any).user?.id || (req as any).userId;
-    const correlationId = (req as any).correlationId;
-    return await this.paymentService.correctPayment(tenantId, id, body, userId, correlationId);
-  }
-
   @Get('payment-devices')
   async getDevices(@Query('branchId') branchId: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;

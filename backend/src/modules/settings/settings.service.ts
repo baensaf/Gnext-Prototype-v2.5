@@ -14,6 +14,7 @@ import {
 } from '../../common/utils/setting-scope.util';
 import { canActOnBranch, isHeadOfficeUser, UserScope } from '../../common/utils/user-scope.util';
 import { BUSINESS_DAY_SETTING_KEY, businessDaySettingProblem } from '../../common/utils/business-day';
+import { ORDER_TYPE_SWITCHES } from '../../common/utils/order-types';
 import { CATALOG_SETTING_KEY, catalogSettingProblem } from '../../common/utils/default-tax';
 import { nextCode, typedCode } from '../../common/utils/next-code.util';
 import { branchDayMovedByCutoff, businessToday } from '../../common/utils/business-clock';
@@ -38,9 +39,6 @@ export class SettingsService {
     if (group === 'TAX') {
       if (value.tax_enabled !== undefined && typeof value.tax_enabled !== 'boolean') {
         throw new BadRequestException('TAX setting property tax_enabled must be a boolean');
-      }
-      if (value.prices_include_tax !== undefined && typeof value.prices_include_tax !== 'boolean') {
-        throw new BadRequestException('TAX setting property prices_include_tax must be a boolean');
       }
     } else if (group === 'POS') {
       if (value.allow_negative_inventory !== undefined && typeof value.allow_negative_inventory !== 'boolean') {
@@ -107,6 +105,10 @@ export class SettingsService {
     } else if (group === CATALOG_SETTING_KEY) {
       const problem = catalogSettingProblem(value);
       if (problem) throw new BadRequestException(problem);
+    } else if (group === 'ORDER_WORKFLOW') {
+      if (!ORDER_TYPE_SWITCHES.some(([, flag]) => value[flag] !== false)) {
+        throw new BadRequestException('ORDER_WORKFLOW must offer at least one order type');
+      }
     } else if (group === BUSINESS_DAY_SETTING_KEY) {
       const problem = businessDaySettingProblem(value);
       if (problem) throw new BadRequestException(problem);
@@ -246,6 +248,16 @@ export class SettingsService {
     });
     const before = setting ? { ...setting } : null;
 
+    // Head office picks the order types a branch offers; a manager saving the rest of this group
+    // leaves them as they are.
+    if (key.toUpperCase() === 'ORDER_WORKFLOW' && actor && !isHeadOfficeUser(actor)) {
+      value = { ...value };
+      for (const [, flag] of ORDER_TYPE_SWITCHES) {
+        if (setting?.value?.[flag] !== undefined) value[flag] = setting.value[flag];
+        else delete value[flag];
+      }
+    }
+
     // New call-number ranges start with the next business day; today keeps its own (O-39).
     if (key.toUpperCase() === CALL_NUMBER_SETTING_KEY) {
       value = callNumberSettingToSave(setting?.value, value, await businessToday(this.settingRepo.manager, tenantId));
@@ -355,42 +367,6 @@ export class SettingsService {
 
   async getPaymentMethods(tenantId: string) {
     return await this.methodRepo.find({ where: { tenant_id: tenantId }, order: { sort_order: 'ASC', code: 'ASC' } });
-  }
-
-  async createPaymentMethod(tenantId: string, data: Partial<PaymentMethod>, correlationId: string) {
-    let code = typedCode(data.code);
-    if (code) {
-      const existing = await this.methodRepo.findOne({ where: { tenant_id: tenantId, code } });
-      if (existing) throw new ConflictException(`Payment method ${code} already exists`);
-    } else {
-      code = await nextCode(this.methodRepo, { tenant_id: tenantId }, 'PAY');
-    }
-
-    const method = this.methodRepo.create({
-      tenant_id: tenantId,
-      code,
-      name: data.name,
-      kind: data.kind || 'CASH',
-      currency_code: data.currency_code || 'IRR',
-      requires_reference: data.requires_reference ?? false,
-      requires_device: data.requires_device ?? false,
-      is_active: data.is_active ?? true,
-      sort_order: data.sort_order ?? 0,
-    });
-
-    const saved = await this.methodRepo.save(method);
-
-    await this.auditWriter.write({
-      tenantId,
-      actorType: 'ADMIN',
-      action: 'PAYMENT_METHOD_CREATED',
-      entityType: 'PaymentMethod',
-      entityId: saved.id,
-      correlationId,
-      afterData: saved,
-    });
-
-    return saved;
   }
 
   async updatePaymentMethod(tenantId: string, methodId: string, data: Partial<PaymentMethod>, correlationId: string) {

@@ -142,12 +142,6 @@ export class TaraPayService implements OnApplicationBootstrap, OnModuleDestroy {
     return purchase;
   }
 
-  /** Whether a Tara payment can still be reversed through Tara: only on the business day it was taken. */
-  async reversibleToday(em: EntityManager, payment: Payment, branchId: string) {
-    const today = (await loadBusinessClock(em, payment.tenant_id, branchId)).today();
-    return payment.business_date === today;
-  }
-
   /** The Tara side of each payment, for the till's pay panel and the Payments page. */
   async purchasesFor(tenantId: string, paymentIds: string[]) {
     if (!paymentIds.length) return new Map<string, TaraPurchase>();

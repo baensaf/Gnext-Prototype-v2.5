@@ -1,5 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import {
+  BRANCH_STAFF_ONLY_KEY,
   HEAD_OFFICE_ONLY_KEY,
   MANAGER_AND_ABOVE,
   ROLES_KEY,
@@ -77,6 +78,19 @@ describe('RolesGuard', () => {
 
     it('does not care how the role was cased', () => {
       expect(guard.canActivate(contextFor(request('manager', 'branch-a')))).toBe(true);
+    });
+  });
+
+  describe('@BranchStaffOnly()', () => {
+    const guard = new RolesGuard(reflectorFor({ [BRANCH_STAFF_ONLY_KEY]: true }));
+
+    it('refuses head office, which only reads a branch', () => {
+      expect(() => guard.canActivate(contextFor({ userId: 'u', userRole: 'ADMIN', userBranchId: null }))).toThrow(ForbiddenException);
+    });
+
+    it('lets the branch staff through, a branch administrator too', () => {
+      expect(guard.canActivate(contextFor({ userId: 'u', userRole: 'CASHIER', userBranchId: 'b' }))).toBe(true);
+      expect(guard.canActivate(contextFor({ userId: 'u', userRole: 'ADMIN', userBranchId: 'b' }))).toBe(true);
     });
   });
 

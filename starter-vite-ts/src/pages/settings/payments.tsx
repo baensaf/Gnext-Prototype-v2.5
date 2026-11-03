@@ -5,8 +5,6 @@ import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect, useCallback } from 'react';
 
 import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
-import SaveIcon from '@mui/icons-material/Save';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import {
   Box,
@@ -19,20 +17,13 @@ import {
   Drawer,
   Button,
   Switch,
-  Select,
-  Divider,
   TableRow,
-  MenuItem,
   TextField,
   TableBody,
   TableCell,
   TableHead,
   Typography,
-  IconButton,
-  InputLabel,
-  FormControl,
   TableContainer,
-  FormControlLabel,
   CircularProgress,
 } from '@mui/material';
 
@@ -55,16 +46,6 @@ export function PaymentSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
-  // Drawer modal state for create/edit
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editingMethod, setEditingMethod] = useState<PaymentMethod | null>(null);
-  const [formName, setFormName] = useState('');
-  const [formKind, setFormKind] = useState('CARD');
-  const [formRequiresRef, setFormRequiresRef] = useState(false);
-  const [formRequiresDevice, setFormRequiresDevice] = useState(true);
-  const [formActive, setFormActive] = useState(true);
-  const [savingMethod, setSavingMethod] = useState(false);
 
   // The bank accounts the card terminals settle into: the chain's, like the tender types.
   const [accounts, setAccounts] = useState<SettlementAccount[]>([]);
@@ -95,73 +76,12 @@ export function PaymentSettingsPage() {
     loadData();
   }, [loadData]);
 
-  const handleOpenCreate = () => {
-    setEditingMethod(null);
-    setFormName('');
-    setFormKind('CARD');
-    setFormRequiresRef(false);
-    setFormRequiresDevice(true);
-    setFormActive(true);
-    setDrawerOpen(true);
-  };
-
-  const handleOpenEdit = (m: PaymentMethod) => {
-    setEditingMethod(m);
-    setFormName(m.name);
-    setFormKind(m.kind);
-    setFormRequiresRef(m.requires_reference);
-    setFormRequiresDevice(m.requires_device);
-    setFormActive(m.is_active);
-    setDrawerOpen(true);
-  };
-
   const handleToggleActive = async (m: PaymentMethod, active: boolean) => {
     try {
       await settingsApi.updatePaymentMethod(m.id, { is_active: active });
       loadData();
     } catch (err: any) {
       setError(err?.response?.data?.message || err.detail || err.message || t('settings.paymentsPage.statusError', 'Failed to update payment method status'));
-    }
-  };
-
-  const handleSaveMethod = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingMethod(true);
-    setError(null);
-
-    // A new method's code is made on the server, it is in Rials and in use, and what it needs at
-    // the till follows from its kind: a card goes through the terminal, a transfer needs its
-    // reference. Editing shows the switches for the odd method that differs.
-    const payload = editingMethod
-      ? {
-          name: formName.trim(),
-          kind: formKind,
-          requires_reference: formRequiresRef,
-          requires_device: formRequiresDevice,
-          is_active: formActive,
-        }
-      : {
-          name: formName.trim(),
-          kind: formKind,
-          requires_device: formKind === 'CARD',
-          requires_reference: formKind === 'BANK_TRANSFER',
-          is_active: true,
-        };
-
-    try {
-      if (editingMethod) {
-        await settingsApi.updatePaymentMethod(editingMethod.id, payload);
-        setSuccess(t('settings.paymentsPage.updatedSuccess', 'Payment method updated successfully'));
-      } else {
-        await settingsApi.createPaymentMethod(payload);
-        setSuccess(t('settings.paymentsPage.createdSuccess', 'Payment method created successfully'));
-      }
-      setDrawerOpen(false);
-      loadData();
-    } catch (err: any) {
-      setError(err?.response?.data?.message || err.detail || err.message || t('settings.paymentsPage.saveError', 'Failed to save payment method'));
-    } finally {
-      setSavingMethod(false);
     }
   };
 
@@ -207,9 +127,6 @@ export function PaymentSettingsPage() {
             <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadData}>
               {t('common.refresh', 'Refresh')}
             </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={handleOpenCreate} disabled={!isHeadOffice}>
-              {t('settings.paymentsPage.addMethod', 'Add Payment Method')}
-            </Button>
           </Stack>
         }
       />
@@ -237,9 +154,6 @@ export function PaymentSettingsPage() {
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colKind', 'Kind')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colDevice', 'Device / Reference')}</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>{t('settings.paymentsPage.colStatus', 'Status')}</TableCell>
-                <TableCell sx={{ fontWeight: 700 }} align="right">
-                  {t('settings.paymentsPage.colActions', 'Actions')}
-                </TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -283,16 +197,11 @@ export function PaymentSettingsPage() {
                       color="primary"
                     />
                   </TableCell>
-                  <TableCell align="right">
-                    <IconButton size="small" onClick={() => handleOpenEdit(m)} disabled={!isHeadOffice}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                  </TableCell>
                 </TableRow>
               ))}
               {methods.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} sx={{ textAlign: 'center', py: 4 }}>
+                  <TableCell colSpan={4} sx={{ textAlign: 'center', py: 4 }}>
                     <Typography color="text.secondary">
                       {t('settings.paymentsPage.noMethods', 'No payment methods configured.')}
                     </Typography>
@@ -370,94 +279,6 @@ export function PaymentSettingsPage() {
               </Button>
             </Stack>
           </Box>
-        </Box>
-      </Drawer>
-
-      {/* Create / Edit Drawer */}
-      <Drawer
-        anchor="right"
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      >
-        <Box sx={{ width: { xs: 320, sm: 420 }, p: 3 }} component="form" onSubmit={handleSaveMethod}>
-          <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5 }}>
-            {editingMethod
-              ? t('settings.paymentsPage.editMethod', 'Edit Payment Method')
-              : t('settings.paymentsPage.newMethod', 'New Payment Method')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            {t('settings.paymentsPage.drawerSubtitle', 'Configure instrument parameters and reconciliation flags.')}
-          </Typography>
-
-          <Stack spacing={2.5}>
-            <TextField
-              required
-              fullWidth
-              label={t('settings.paymentsPage.formName', 'Display Name')}
-              value={formName}
-              onChange={(e) => setFormName(e.target.value)}
-              placeholder={t('settings.paymentsPage.formNamePlaceholder', 'e.g. Bank POS Terminal, Cash Tender')}
-            />
-
-            <FormControl fullWidth>
-              <InputLabel>{t('settings.paymentsPage.formKind', 'Instrument Kind')}</InputLabel>
-              <Select
-                value={formKind}
-                label={t('settings.paymentsPage.formKind', 'Instrument Kind')}
-                onChange={(e) => setFormKind(e.target.value)}
-              >
-                <MenuItem value="CASH">{t('settings.paymentsPage.kinds.CASH', 'Cash Tender')}</MenuItem>
-                <MenuItem value="CARD">{t('settings.paymentsPage.kinds.CARD', 'Card / EFT POS')}</MenuItem>
-                <MenuItem value="POS">{t('settings.paymentsPage.kinds.POS', 'Mobile POS (Courier)')}</MenuItem>
-                <MenuItem value="CREDIT">{t('settings.paymentsPage.kinds.CREDIT', 'Customer Credit Account')}</MenuItem>
-                {/* The method Snappfood's prepaid orders are recorded under; it is kept, not offered as a new kind. */}
-                {formKind === 'ONLINE' && (
-                  <MenuItem value="ONLINE">{t('settings.paymentsPage.kinds.ONLINE', 'Online Payment Gateway')}</MenuItem>
-                )}
-                <MenuItem value="BANK_TRANSFER">{t('settings.paymentsPage.kinds.BANK_TRANSFER', 'Bank Transfer / Sheba')}</MenuItem>
-                <MenuItem value="OTHER">{t('settings.paymentsPage.kinds.OTHER', 'Other')}</MenuItem>
-              </Select>
-            </FormControl>
-
-            {editingMethod && <Divider />}
-
-            {editingMethod && (
-            <FormControlLabel
-              control={<Switch checked={formRequiresDevice} onChange={(e) => setFormRequiresDevice(e.target.checked)} />}
-              label={t('settings.paymentsPage.reqDevice', 'Requires Hardware EFT POS Terminal')}
-            />
-            )}
-
-            {editingMethod && (
-            <FormControlLabel
-              control={<Switch checked={formRequiresRef} onChange={(e) => setFormRequiresRef(e.target.checked)} />}
-              label={t('settings.paymentsPage.reqRef', 'Requires Transaction Reference / RRN')}
-            />
-            )}
-
-            {editingMethod && (
-            <FormControlLabel
-              control={<Switch checked={formActive} onChange={(e) => setFormActive(e.target.checked)} />}
-              label={t('settings.paymentsPage.formActive', 'Active & Available at POS')}
-            />
-            )}
-
-            <Button
-              type="submit"
-              variant="contained"
-              fullWidth
-              size="large"
-              startIcon={<SaveIcon />}
-              disabled={savingMethod}
-              sx={{ mt: 2, fontWeight: 700 }}
-            >
-              {savingMethod
-                ? '...'
-                : editingMethod
-                ? t('settings.paymentsPage.updateButton', 'Update Method')
-                : t('settings.paymentsPage.createButton', 'Create Method')}
-            </Button>
-          </Stack>
         </Box>
       </Drawer>
     </Box>

@@ -87,10 +87,6 @@ export const settingsApi = {
     const res = await httpClient.get('/api/v1/payment-methods');
     return res.data;
   },
-  createPaymentMethod: async (data: Partial<PaymentMethod>): Promise<PaymentMethod> => {
-    const res = await httpClient.post('/api/v1/payment-methods', data);
-    return res.data;
-  },
   updatePaymentMethod: async (id: string, data: Partial<PaymentMethod>): Promise<PaymentMethod> => {
     const res = await httpClient.patch(`/api/v1/payment-methods/${id}`, data);
     return res.data;

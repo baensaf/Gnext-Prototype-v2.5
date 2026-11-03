@@ -11,6 +11,7 @@ import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
 import { Payment } from '../../entities/Payment.entity';
 import { CashierShift } from '../../entities/CashierShift.entity';
 import { PaymentMethod } from '../../entities/PaymentMethod.entity';
+import { ReasonCode } from '../../entities/ReasonCode.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { isAggregatorOrder } from '../../common/utils/snappfood-order.util';
 import { ShiftService } from '../cashier/shift.service';
@@ -196,9 +197,23 @@ export class RefundService {
    * behind, and a second refund of the same order waits and then finds nothing left to give.
    */
   async refundOrder(tenantId: string, orderId: string, dto: RefundCreateDto, ctx: RefundContext = {}): Promise<Refund[]> {
-    return await this.dataSource.transaction(async (em) =>
-      this.payBack(tenantId, orderId, { reason: dto.reason, reasonCodeId: dto.reasonCodeId }, ctx, em, false),
-    );
+    return await this.dataSource.transaction(async (em) => {
+      const reason = dto.reasonCodeId ? await this.refundReasonName(em, tenantId, dto.reasonCodeId) : dto.reason;
+      return await this.payBack(tenantId, orderId, { reason: reason || '', reasonCodeId: dto.reasonCodeId }, ctx, em, false);
+    });
+  }
+
+  /** A refund's reason is one of head office's refund codes (Till and Orders §11). */
+  private async refundReasonName(em: EntityManager, tenantId: string, reasonCodeId: string): Promise<string> {
+    const code = await em.findOne(ReasonCode, { where: { id: reasonCodeId, tenant_id: tenantId } });
+    if (!code || code.is_active === false || !(code.applies_to || []).includes('REFUND')) {
+      throw new BadRequestException({
+        code: 'REFUND_REASON_INVALID',
+        title: 'Refund Reason',
+        detail: 'Pick one of the refund reasons head office has set.',
+      });
+    }
+    return code.name;
   }
 
   /**

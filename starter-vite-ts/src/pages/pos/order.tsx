@@ -232,6 +232,18 @@ export function PosOrderPage() {
   const [addingAddress, setAddingAddress] = useState(false);
   const [newAddress, setNewAddress] = useState({ title: '', address_text: '', postal_code: '', is_default: false });
   const [orderType, setOrderType] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>('DINE_IN');
+  // Head office picks which of the three this branch offers (Till and Orders §2).
+  const [offeredTypes, setOfferedTypes] = useState<('DINE_IN' | 'TAKEAWAY' | 'DELIVERY')[]>(['DINE_IN', 'TAKEAWAY', 'DELIVERY']);
+  useEffect(() => {
+    orderApi
+      .getOrderTypes(selectedBranchId || undefined)
+      .then((types) => {
+        if (!types.length) return;
+        setOfferedTypes(types);
+        setOrderType((current) => (types.includes(current) ? current : types[0]));
+      })
+      .catch(() => undefined);
+  }, [selectedBranchId]);
 
   // Order Notes Dialog state
   const [orderNotes, setOrderNotes] = useState<string>('');
@@ -1976,18 +1988,24 @@ export function PosOrderPage() {
                     },
                   }}
                 >
-                  <ToggleButton value="DINE_IN">
-                    <RestaurantIcon sx={{ fontSize: 18 }} />
-                    {t('pos.dineIn')}
-                  </ToggleButton>
-                  <ToggleButton value="TAKEAWAY">
-                    <TakeoutDiningIcon sx={{ fontSize: 18 }} />
-                    {t('pos.takeaway')}
-                  </ToggleButton>
-                  <ToggleButton value="DELIVERY">
-                    <DeliveryDiningIcon sx={{ fontSize: 18 }} />
-                    {t('pos.delivery')}
-                  </ToggleButton>
+                  {offeredTypes.includes('DINE_IN') && (
+                    <ToggleButton value="DINE_IN">
+                      <RestaurantIcon sx={{ fontSize: 18 }} />
+                      {t('pos.dineIn')}
+                    </ToggleButton>
+                  )}
+                  {offeredTypes.includes('TAKEAWAY') && (
+                    <ToggleButton value="TAKEAWAY">
+                      <TakeoutDiningIcon sx={{ fontSize: 18 }} />
+                      {t('pos.takeaway')}
+                    </ToggleButton>
+                  )}
+                  {offeredTypes.includes('DELIVERY') && (
+                    <ToggleButton value="DELIVERY">
+                      <DeliveryDiningIcon sx={{ fontSize: 18 }} />
+                      {t('pos.delivery')}
+                    </ToggleButton>
+                  )}
                 </ToggleButtonGroup>
 
                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>

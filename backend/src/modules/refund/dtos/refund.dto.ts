@@ -2,12 +2,13 @@ import { IsString, IsOptional, IsUUID } from 'class-validator';
 
 /** The refund of a completed order: all of it, back by the methods it was paid with. */
 export class RefundCreateDto {
-  @IsOptional()
+  /** One of head office's refund reasons, required on the route; its name becomes the refund's reason. */
   @IsUUID()
   reasonCodeId?: string;
 
+  @IsOptional()
   @IsString()
-  reason: string;
+  reason?: string;
 
   /** A manager pin, when the account asking is not itself allowed to approve. */
   @IsOptional()

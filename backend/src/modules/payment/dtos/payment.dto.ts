@@ -70,26 +70,6 @@ export class PaymentProcessDto {
   taraBarcode?: string;
 }
 
-export class PaymentCorrectionDto {
-  @IsString()
-  reason: string;
-
-  @IsOptional()
-  @IsUUID()
-  reasonCodeId?: string;
-
-  @IsUUID()
-  replacementMethodId: string;
-
-  @IsOptional()
-  @IsNumberString()
-  replacementAmount?: string;
-
-  @IsOptional()
-  @IsUUID()
-  approvalRequestId?: string;
-}
-
 export class PaymentDeviceCreateDto {
   @IsOptional()
   @IsString()

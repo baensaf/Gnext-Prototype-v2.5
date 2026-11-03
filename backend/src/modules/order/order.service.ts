@@ -43,6 +43,7 @@ import { checkOptionChoices } from '../catalog/option-choices.util';
 import { PriceQuote, readPriceQuote, signPriceQuote } from '../../common/utils/price-quote';
 import { CreditService } from '../customer/credit.service';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
+import { offeredOrderTypes, ORDER_TYPE_SWITCHES } from '../../common/utils/order-types';
 import { ReasonCode } from '../../entities/ReasonCode.entity';
 import { assignCallNumber } from './call-number';
 import { abandonOrder } from './abandon-order';
@@ -580,6 +581,24 @@ export class OrderService {
     return { terminalId: terminal.id, shiftId: shift?.id ?? null };
   }
 
+  /** The order types this branch offers (Till and Orders §2). */
+  async offeredOrderTypes(tenantId: string, branchId?: string | null): Promise<string[]> {
+    const rows = await this.dataSource.manager.find(TenantSetting, { where: { tenant_id: tenantId, key: 'ORDER_WORKFLOW' } });
+    return offeredOrderTypes(rows, branchId);
+  }
+
+  /** The till sells only what head office offers here; a kiosk or platform order is not its choice. */
+  private async assertOrderTypeOffered(em: EntityManager, order: OrderHeader, orderType: string) {
+    if (order.channel !== 'POS' || !ORDER_TYPE_SWITCHES.some(([type]) => type === orderType)) return;
+    const rows = await em.find(TenantSetting, { where: { tenant_id: order.tenant_id, key: 'ORDER_WORKFLOW' } });
+    if (offeredOrderTypes(rows, order.branch_id).includes(orderType)) return;
+    throw new ConflictException({
+      code: 'ORDER_TYPE_NOT_OFFERED',
+      title: 'Order Type Not Offered',
+      detail: `This branch does not offer ${orderType} orders.`,
+    });
+  }
+
   /** An archived branch takes no new orders. Closed by its hours is not this: that only warns. */
   private async assertBranchSells(em: EntityManager, tenantId: string, branchId?: string | null) {
     if (!branchId) return;
@@ -788,6 +807,8 @@ export class OrderService {
       if (!order.items || order.items.length === 0) {
         throw new BadRequestException('Cannot submit an order with zero items');
       }
+
+      await this.assertOrderTypeOffered(em, order, order.order_type);
 
       const deliveryContext = order.order_type === 'DELIVERY'
         ? await this.validateDeliveryContext(tenantId, order, em, true)
@@ -1898,6 +1919,7 @@ export class OrderService {
 
       this.refuseSnappfoodChange(order, 'change what kind of order it is');
       await this.refuseWhileChargeOut(em, order);
+      await this.assertOrderTypeOffered(em, order, to);
       if (from === to) {
         throw new BadRequestException(`Order ${order.order_number} is already a ${to} order`);
       }

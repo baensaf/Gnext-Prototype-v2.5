@@ -2,7 +2,7 @@ import { Controller, Get, Post, Patch, Delete, Param, Body, Query, Req, Header, 
 import { Request } from 'express';
 import { OrderService } from './order.service';
 import { effectiveBranchId } from '../../common/utils/user-scope.util';
-import { Roles, MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
+import { BranchStaffOnly, Roles, MANAGER_AND_ABOVE } from '../../common/decorators/roles.decorator';
 import {
   OrderCreateDto,
   OrderUpdateDto,
@@ -78,10 +78,17 @@ export class OrdersController {
     });
   }
 
+  // Which order types the till offers at a branch. Declared before ':id', as export is.
+  @Get('order-types')
+  async orderTypes(@Query('branchId') branchId: string, @Req() req: Request) {
+    return await this.orderService.offeredOrderTypes((req as any).tenantId, effectiveBranchId((req as any).userBranchId, branchId));
+  }
+
   // The three writes of the register's Place (and Hold) carry an Idempotency-Key when they come
   // through a branch agent, which repeats a request whose answer was lost (agent-protocol §19.11).
   // The key is optional: the kiosk and other clients send none and run as they always did.
   @RequireIdempotency('ORDER_CREATE', { optional: true })
+  @BranchStaffOnly()
   @Post()
   async createDraft(@Body() body: OrderCreateDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -140,6 +147,7 @@ export class OrdersController {
   }
 
   // An aggregator or website order waits in PENDING_ACCEPTANCE until the store answers.
+  @BranchStaffOnly()
   @Post(':id/accept')
   async acceptIncomingOrder(@Param('id') id: string, @Body() body: OrderAcceptDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -148,6 +156,7 @@ export class OrdersController {
     return await this.orderService.acceptIncomingOrder(tenantId, id, body, userId, correlationId);
   }
 
+  @BranchStaffOnly()
   @Post(':id/reject')
   async rejectIncomingOrder(@Param('id') id: string, @Body() body: OrderRejectDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -157,6 +166,7 @@ export class OrdersController {
   }
 
   // An accepted platform order needs more time or cannot be made: the platform takes it.
+  @BranchStaffOnly()
   @Post(':id/online/report')
   async reportOnlineOrder(@Param('id') id: string, @Body() body: OrderOnlineReportDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -166,18 +176,21 @@ export class OrdersController {
   }
 
   // A cashier opened a waiting platform order (Snappfood hears it as a pick).
+  @BranchStaffOnly()
   @Post(':id/online/opened')
   async onlineOrderOpened(@Param('id') id: string, @Req() req: Request) {
     return await this.onlineOrders.opened((req as any).tenantId, id);
   }
 
   // The cashier saw an alert on the Online panel (a platform cancel, a lost order).
+  @BranchStaffOnly()
   @Post(':id/online/alert-seen')
   async seeOnlineAlert(@Param('id') id: string, @Req() req: Request) {
     return await this.onlineOrders.seeAlert((req as any).tenantId, id);
   }
 
   // The platform's rider took it, or the customer collected it.
+  @BranchStaffOnly()
   @Post(':id/online/handed-over')
   async handOverOnlineOrder(@Param('id') id: string, @Req() req: Request) {
     const userId = (req as any).user?.id || (req as any).userId;
@@ -198,6 +211,7 @@ export class OrdersController {
   }
 
   @RequireIdempotency('ORDER_UPDATE_DRAFT', { optional: true })
+  @BranchStaffOnly()
   @Patch(':id')
   async updateDraft(@Param('id') id: string, @Body() body: OrderUpdateDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -213,6 +227,7 @@ export class OrdersController {
   }
 
   @RequireIdempotency('ORDER_SUBMIT', { optional: true })
+  @BranchStaffOnly()
   @Post(':id/submit')
   async submitOrder(@Param('id') id: string, @Body() body: OrderSubmitDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -221,6 +236,7 @@ export class OrdersController {
     return await this.orderService.submitOrder(tenantId, id, body, userId, correlationId, (req as any).userRole);
   }
 
+  @BranchStaffOnly()
   @Post(':id/confirm')
   async confirmOrder(@Param('id') id: string, @Body() body: OrderTransitionDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -229,6 +245,7 @@ export class OrdersController {
     return await this.orderService.transitionState(tenantId, id, 'CONFIRM', body, userId, correlationId);
   }
 
+  @BranchStaffOnly()
   @Post(':id/dispatch')
   async dispatchOrder(@Param('id') id: string, @Body() body: OrderTransitionDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -237,6 +254,7 @@ export class OrdersController {
     return await this.orderService.transitionState(tenantId, id, 'DISPATCH', body, userId, correlationId);
   }
 
+  @BranchStaffOnly()
   @Post(':id/complete')
   async completeOrder(@Param('id') id: string, @Body() body: OrderTransitionDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -245,6 +263,7 @@ export class OrdersController {
     return await this.orderService.transitionState(tenantId, id, 'COMPLETE', body, userId, correlationId);
   }
 
+  @BranchStaffOnly()
   @Post(':id/edit')
   async editOrder(@Param('id') id: string, @Body() body: OrderEditDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -255,6 +274,7 @@ export class OrdersController {
 
   // Rung up as the wrong kind of order. Ordinary counter work inside the cashier's window,
   // and the service escalates to an approval past it or once money has landed.
+  @BranchStaffOnly()
   @Post(':id/change-type')
   async changeOrderType(@Param('id') id: string, @Body() body: OrderTypeChangeDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -263,6 +283,7 @@ export class OrdersController {
     return await this.orderService.changeOrderType(tenantId, id, body, userId, correlationId);
   }
 
+  @BranchStaffOnly()
   @Post(':id/replace-item')
   async replaceItem(@Param('id') id: string, @Body() body: OrderItemReplaceDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -271,6 +292,7 @@ export class OrdersController {
     return await this.orderService.replaceItem(tenantId, id, body, userId, correlationId);
   }
 
+  @BranchStaffOnly()
   @Post(':id/cancel')
   async cancelOrder(@Param('id') id: string, @Body() body: OrderCancelDto, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -280,6 +302,7 @@ export class OrdersController {
   }
 
   /** A counter order still waiting for its payment goes back to being the till's cart (O-19, O-20). */
+  @BranchStaffOnly()
   @Post(':id/back-to-cart')
   async returnToCart(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
@@ -289,6 +312,7 @@ export class OrdersController {
   }
 
   /** A cart whose order was sent back is thrown away: the order closes as Abandoned (O-37). */
+  @BranchStaffOnly()
   @Post(':id/abandon')
   async abandonDraft(@Param('id') id: string, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
