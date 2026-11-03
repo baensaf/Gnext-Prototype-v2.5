@@ -43,7 +43,7 @@ export class OrderHeader {
 
   /**
    * What the branch calls the order by: 123, unique at the branch for the business day and
-   * drawn from its channel's range. Given when the order goes to the kitchen.
+   * drawn from its set's range (on site or delivered). Given when the order goes to the kitchen.
    */
   @Column({ type: 'integer', nullable: true })
   call_number: number | null;
