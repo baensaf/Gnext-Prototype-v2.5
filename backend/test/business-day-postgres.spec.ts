@@ -202,7 +202,7 @@ describe('the overnight business day (PostgreSQL)', () => {
     const b = await assignCallNumber(dataSource.manager, await order('b'));
     jest.setSystemTime(new Date('2026-10-21T04:00:00+04:00'));
     const c = await assignCallNumber(dataSource.manager, await order('c'));
-    expect([a, b, c]).toEqual([400, 401, 400]);
+    expect([a, b, c]).toEqual([100, 101, 100]);
   });
 
   it('closes an ended day by itself once its shifts are counted, and waits while one is open', async () => {

@@ -2995,10 +2995,9 @@
     },
     "callNumbers": {
       "title": "Daily order numbers",
-      "help": "The number printed large on kitchen chits and receipts, and called out at the counter. Each branch starts every channel again at the beginning of its range each business day; a range that runs out starts over.",
-      "pos": "Tills",
-      "kiosk": "Kiosks",
-      "online": "Snappfood and online",
+      "help": "The number printed large on kitchen chits and receipts, and called out at the counter. Each branch starts both sets again at the beginning of their ranges each business day; a range that runs out starts over.",
+      "onSite": "On site (dine-in, takeaway, pickup)",
+      "remote": "Delivered (courier, Snappfood rider)",
       "from": "From",
       "to": "To",
       "save": "Save number ranges",
