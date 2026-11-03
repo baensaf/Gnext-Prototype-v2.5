@@ -7,20 +7,18 @@ import { settingsApi } from 'src/api/settingsApi';
 
 // ----------------------------------------------------------------------
 
-type Channel = 'POS' | 'KIOSK' | 'ONLINE';
-type Ranges = Record<Channel, { start: number; end: number }>;
+type NumberSet = 'ON_SITE' | 'REMOTE';
+type Ranges = Record<NumberSet, { start: number; end: number }>;
 
 /** The server's defaults (backend/src/modules/order/call-number.ts) for when head office has set none. */
 const DEFAULT_RANGES: Ranges = {
-  POS: { start: 100, end: 399 },
-  KIOSK: { start: 400, end: 499 },
-  ONLINE: { start: 500, end: 599 },
+  ON_SITE: { start: 100, end: 499 },
+  REMOTE: { start: 500, end: 999 },
 };
 
-const CHANNELS: Array<{ key: Channel; labelKey: string; fallback: string }> = [
-  { key: 'POS', labelKey: 'settings.callNumbers.pos', fallback: 'Tills' },
-  { key: 'KIOSK', labelKey: 'settings.callNumbers.kiosk', fallback: 'Kiosks' },
-  { key: 'ONLINE', labelKey: 'settings.callNumbers.online', fallback: 'Snappfood and online' },
+const SETS: Array<{ key: NumberSet; labelKey: string; fallback: string }> = [
+  { key: 'ON_SITE', labelKey: 'settings.callNumbers.onSite', fallback: 'On site (dine-in, takeaway, pickup)' },
+  { key: 'REMOTE', labelKey: 'settings.callNumbers.remote', fallback: 'Delivered (courier, Snappfood rider)' },
 ];
 
 type Props = {
@@ -29,9 +27,9 @@ type Props = {
 };
 
 /**
- * The short daily number each branch calls its orders by. Each channel counts in its own
- * range, starting over every business day, so a kiosk order and a till order never hold the
- * same number at once and staff can tell where an order came from.
+ * The short daily number each branch calls its orders by. Orders the customer waits for at the
+ * branch share one set, wherever they were rung up, and delivered orders count in the other,
+ * each starting over every business day.
  */
 export function CallNumberRangesCard({ editable }: Props) {
   const { t } = useTranslation();
@@ -47,9 +45,8 @@ export function CallNumberRangesCard({ editable }: Props) {
       const scoped = await settingsApi.getScopedSettings(undefined);
       const stored = scoped.groups?.ORDER_CALL_NUMBERS?.value?.ranges || {};
       setRanges({
-        POS: { ...DEFAULT_RANGES.POS, ...(stored.POS || {}) },
-        KIOSK: { ...DEFAULT_RANGES.KIOSK, ...(stored.KIOSK || {}) },
-        ONLINE: { ...DEFAULT_RANGES.ONLINE, ...(stored.ONLINE || {}) },
+        ON_SITE: { ...DEFAULT_RANGES.ON_SITE, ...(stored.ON_SITE || {}) },
+        REMOTE: { ...DEFAULT_RANGES.REMOTE, ...(stored.REMOTE || {}) },
       });
     } catch (err: any) {
       setError(err.detail || err.message || t('settings.callNumbers.loadError', 'Could not load the order number ranges'));
@@ -62,14 +59,14 @@ export function CallNumberRangesCard({ editable }: Props) {
     load();
   }, [load]);
 
-  const set = (channel: Channel, field: 'start' | 'end', raw: string) => {
+  const set = (numberSet: NumberSet, field: 'start' | 'end', raw: string) => {
     setSaved(false);
-    setRanges((prev) => ({ ...prev, [channel]: { ...prev[channel], [field]: parseInt(raw, 10) || 0 } }));
+    setRanges((prev) => ({ ...prev, [numberSet]: { ...prev[numberSet], [field]: parseInt(raw, 10) || 0 } }));
   };
 
-  // A range must count upwards and must not share numbers with another channel's.
+  // A range must count upwards and must not share numbers with the other set.
   const problem = (() => {
-    const list = CHANNELS.map((c) => ({ ...ranges[c.key], key: c.key }));
+    const list = SETS.map((c) => ({ ...ranges[c.key], key: c.key }));
     if (list.some((r) => r.start < 1 || r.end < r.start || r.end > 99999)) {
       return t('settings.callNumbers.invalid', 'Each range must start at 1 or more and end at or after its start.');
     }
@@ -99,7 +96,7 @@ export function CallNumberRangesCard({ editable }: Props) {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
         {t(
           'settings.callNumbers.help',
-          'The number printed large on kitchen chits and receipts, and called out at the counter. Each branch starts every channel again at the beginning of its range each business day; a range that runs out starts over.'
+          'The number printed large on kitchen chits and receipts, and called out at the counter. Each branch starts both sets again at the beginning of their ranges each business day; a range that runs out starts over.'
         )}
       </Typography>
 
@@ -108,8 +105,8 @@ export function CallNumberRangesCard({ editable }: Props) {
       ) : (
         <Stack spacing={2}>
           <Grid container spacing={2}>
-            {CHANNELS.map((c) => (
-              <Grid key={c.key} size={{ xs: 12, md: 4 }}>
+            {SETS.map((c) => (
+              <Grid key={c.key} size={{ xs: 12, md: 6 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
                   {t(c.labelKey, c.fallback)}
                 </Typography>

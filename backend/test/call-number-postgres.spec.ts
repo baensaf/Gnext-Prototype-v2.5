@@ -9,8 +9,8 @@ import { TenantSetting } from '../src/entities/TenantSetting.entity';
 import { assignCallNumber, CALL_NUMBER_SETTING_KEY, nthInRange, readCallNumberRanges } from '../src/modules/order/call-number';
 import { deleteTenantData } from './utils/tenant-teardown';
 
-// The number a branch calls an order by: per branch, per business day, from its channel's
-// range, and never the same number twice for two orders standing at once.
+// The number a branch calls an order by: per branch, per business day, from its set's range,
+// and never the same number twice for two orders standing at once.
 describe('order call numbers (PostgreSQL)', () => {
   let moduleRef: TestingModule;
   let app: INestApplication;
@@ -36,29 +36,31 @@ describe('order call numbers (PostgreSQL)', () => {
     await app.close();
   });
 
-  const order = async (branchId: string, channel: string, businessDate = '2026-09-22') => {
+  const order = async (branchId: string, fields: Partial<OrderHeader>, businessDate = '2026-09-22') => {
     const repo = dataSource.getRepository(OrderHeader);
     return await repo.save(
-      repo.create({ tenant_id: tenantId, branch_id: branchId, channel, order_number: `CN-${Date.now()}-${++seq}`, business_date: businessDate }),
+      repo.create({ tenant_id: tenantId, branch_id: branchId, order_number: `CN-${Date.now()}-${++seq}`, business_date: businessDate, ...fields }),
     );
   };
-  const numberFor = async (branchId: string, channel: string, businessDate?: string) =>
-    assignCallNumber(dataSource.manager, await order(branchId, channel, businessDate));
+  const numberFor = async (branchId: string, fields: Partial<OrderHeader>, businessDate?: string) =>
+    assignCallNumber(dataSource.manager, await order(branchId, fields, businessDate));
+  const TILL_TAKEAWAY = { channel: 'POS', order_type: 'TAKEAWAY' };
 
-  it("counts each channel in its own range, and each branch on its own", async () => {
-    expect(await numberFor(branchA, 'POS')).toBe(100);
-    expect(await numberFor(branchA, 'POS')).toBe(101);
-    expect(await numberFor(branchA, 'KIOSK')).toBe(400);
-    expect(await numberFor(branchA, 'AGGREGATOR')).toBe(500);
-    expect(await numberFor(branchB, 'POS')).toBe(100);
+  it('counts on-site and remote orders in their own sets, and each branch on its own', async () => {
+    expect(await numberFor(branchA, TILL_TAKEAWAY)).toBe(100);
+    expect(await numberFor(branchA, { channel: 'KIOSK', order_type: 'DINE_IN' })).toBe(101);
+    expect(await numberFor(branchA, { channel: 'POS', order_type: 'DELIVERY' })).toBe(500);
+    expect(await numberFor(branchA, { channel: 'AGGREGATOR', order_type: 'AGGREGATOR', aggregator_expedition: 'DELIVERY' })).toBe(501);
+    expect(await numberFor(branchA, { channel: 'AGGREGATOR', order_type: 'AGGREGATOR', aggregator_expedition: 'PICKUP' })).toBe(102);
+    expect(await numberFor(branchB, TILL_TAKEAWAY)).toBe(100);
   });
 
   it('starts again the next business day', async () => {
-    expect(await numberFor(branchA, 'POS', '2026-09-23')).toBe(100);
+    expect(await numberFor(branchA, TILL_TAKEAWAY, '2026-09-23')).toBe(100);
   });
 
   it('keeps the number an order was first given', async () => {
-    const o = await order(branchA, 'POS', '2026-09-24');
+    const o = await order(branchA, TILL_TAKEAWAY, '2026-09-24');
     const first = await assignCallNumber(dataSource.manager, o);
     const again = await assignCallNumber(dataSource.manager, { ...o, call_number: null } as any);
     expect(again).toBe(first);
@@ -69,14 +71,14 @@ describe('order call numbers (PostgreSQL)', () => {
       tenant_id: tenantId,
       branch_id: null,
       key: CALL_NUMBER_SETTING_KEY,
-      value: { ranges: { POS: { start: 10, end: 11 } } },
+      value: { ranges: { ON_SITE: { start: 10, end: 11 } } },
     } as any);
     const day = '2026-09-25';
-    expect([await numberFor(branchA, 'POS', day), await numberFor(branchA, 'POS', day), await numberFor(branchA, 'POS', day)]).toEqual([10, 11, 10]);
+    expect([await numberFor(branchA, TILL_TAKEAWAY, day), await numberFor(branchA, TILL_TAKEAWAY, day), await numberFor(branchA, TILL_TAKEAWAY, day)]).toEqual([10, 11, 10]);
   });
 
   it('ignores a range that makes no sense', () => {
-    expect(readCallNumberRanges({ ranges: { POS: { start: 500, end: 100 } } }).POS).toEqual({ start: 100, end: 399 });
-    expect(nthInRange(301, { start: 100, end: 399 })).toBe(100);
+    expect(readCallNumberRanges({ ranges: { ON_SITE: { start: 500, end: 100 } } }).ON_SITE).toEqual({ start: 100, end: 499 });
+    expect(nthInRange(401, { start: 100, end: 499 })).toBe(100);
   });
 });
