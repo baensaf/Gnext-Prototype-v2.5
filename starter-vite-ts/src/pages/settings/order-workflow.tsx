@@ -24,7 +24,9 @@ import {
   CircularProgress,
 } from '@mui/material';
 
+import { orderApi } from 'src/api/orderApi';
 import { settingsApi } from 'src/api/settingsApi';
+import { useIsHeadOffice } from 'src/store/useAuthStore';
 import { useBranchContext } from 'src/contexts/branch-context';
 
 import { VersionTag } from 'src/components/version-tag';
@@ -60,6 +62,7 @@ const wholeIn = (raw: string, min: number, max: number) => Math.min(max, Math.ma
 export function OrderWorkflowSettingsPage() {
   const { t } = useTranslation();
 
+  const isHeadOffice = useIsHeadOffice();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,9 +113,10 @@ export function OrderWorkflowSettingsPage() {
         ...storedIncoming,
         acceptance: { ...INCOMING_DEFAULTS.acceptance, ...(storedIncoming.acceptance || {}) },
       });
-      if (workflow.enableDineIn !== undefined) setEnableDineIn(Boolean(workflow.enableDineIn));
-      if (workflow.enableTakeaway !== undefined) setEnableTakeaway(Boolean(workflow.enableTakeaway));
-      if (workflow.enableDelivery !== undefined) setEnableDelivery(Boolean(workflow.enableDelivery));
+      const offered = await orderApi.getOrderTypes(selectedBranchId || undefined);
+      setEnableDineIn(offered.includes('DINE_IN'));
+      setEnableTakeaway(offered.includes('TAKEAWAY'));
+      setEnableDelivery(offered.includes('DELIVERY'));
       if (workflow.enableAggregators !== undefined) setEnableAggregators(Boolean(workflow.enableAggregators));
     } catch (err: any) {
       setError(err?.response?.data?.message || err.detail || err.message || 'Failed to load order workflow settings');
@@ -133,9 +137,8 @@ export function OrderWorkflowSettingsPage() {
 
     const payload = {
       incomingOrders: incoming,
-      enableDineIn,
-      enableTakeaway,
-      enableDelivery,
+      // Head office picks the order types a branch offers (Till and Orders §2).
+      ...(isHeadOffice ? { enableDineIn, enableTakeaway, enableDelivery } : {}),
       enableAggregators,
     };
 
@@ -383,7 +386,7 @@ export function OrderWorkflowSettingsPage() {
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                 {t(
                   'settings.orderWorkflow.channelsDesc',
-                  'Enable or disable operating dining channels across POS terminals and Kiosk registers.'
+                  'Which order types the till offers. Head office picks them.'
                 )}
               </Typography>
 
@@ -397,6 +400,7 @@ export function OrderWorkflowSettingsPage() {
                     <Switch
                       checked={enableDineIn}
                       onChange={(e) => setEnableDineIn(e.target.checked)}
+                      disabled={!isHeadOffice}
                       color="primary"
                     />
                   </Paper>
@@ -411,6 +415,7 @@ export function OrderWorkflowSettingsPage() {
                     <Switch
                       checked={enableTakeaway}
                       onChange={(e) => setEnableTakeaway(e.target.checked)}
+                      disabled={!isHeadOffice}
                       color="warning"
                     />
                   </Paper>
@@ -425,6 +430,7 @@ export function OrderWorkflowSettingsPage() {
                     <Switch
                       checked={enableDelivery}
                       onChange={(e) => setEnableDelivery(e.target.checked)}
+                      disabled={!isHeadOffice}
                       color="info"
                     />
                   </Paper>

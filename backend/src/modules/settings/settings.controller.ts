@@ -102,20 +102,13 @@ export class SettingsController {
     return await this.settingsService.getPaymentMethods(tenantId);
   }
 
-  @Post('payment-methods')
-  @HeadOfficeOnly()
-  async createPaymentMethod(@Body() body: any, @Req() req: Request) {
-    const tenantId = (req as any).tenantId;
-    const correlationId = (req as any).correlationId;
-    return await this.settingsService.createPaymentMethod(tenantId, body, correlationId);
-  }
-
   @Patch('payment-methods/:id')
   @HeadOfficeOnly()
   async updatePaymentMethod(@Param('id') id: string, @Body() body: any, @Req() req: Request) {
     const tenantId = (req as any).tenantId;
     const correlationId = (req as any).correlationId;
-    return await this.settingsService.updatePaymentMethod(tenantId, id, body, correlationId);
+    // Methods and their names are made by the system; head office only turns one on or off.
+    return await this.settingsService.updatePaymentMethod(tenantId, id, { is_active: body?.is_active !== false }, correlationId);
   }
 
   @Get('reason-codes')

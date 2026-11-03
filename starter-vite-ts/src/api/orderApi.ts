@@ -249,6 +249,12 @@ export const orderApi = {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   },
 
+  /** The order types the till offers at a branch (Till and Orders §2). */
+  getOrderTypes: async (branchId?: string): Promise<('DINE_IN' | 'TAKEAWAY' | 'DELIVERY')[]> => {
+    const res = await httpClient.get('/api/v1/orders/order-types', { params: { branchId } });
+    return res.data;
+  },
+
   getOrderById: async (id: string): Promise<OrderHeader> => {
     const res = await httpClient.get(`/api/v1/orders/${id}`);
     return res.data;

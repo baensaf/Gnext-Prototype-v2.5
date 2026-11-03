@@ -1,3 +1,5 @@
+import type { ReasonCode } from 'src/api/settingsApi';
+
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -6,8 +8,11 @@ import {
   Alert,
   Button,
   Dialog,
-  TextField,
+  Select,
+  MenuItem,
+  InputLabel,
   DialogTitle,
+  FormControl,
   DialogActions,
   DialogContent,
 } from '@mui/material';
@@ -16,11 +21,12 @@ import { MoneyUtil } from 'src/utils/money.util';
 import { useCurrencyLabel } from 'src/utils/currency';
 
 import { refundApi } from 'src/api/refundApi';
+import { settingsApi } from 'src/api/settingsApi';
 import { useAuthStore } from 'src/store/useAuthStore';
 
 import { ApprovalModal } from 'src/components/approval/ApprovalModal';
 
-/** Roles that release a refund on their own authority. Everyone else produces a PIN. */
+/** Roles that release a refund on their own authority. For anyone else a manager signs in. */
 const APPROVER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'OWNER', 'MANAGER', 'SUPERVISOR'];
 
 /** What the dialog needs of the order it refunds. */
@@ -48,9 +54,9 @@ interface Props {
 }
 
 /**
- * The reason, and a manager's PIN when the person at the till is not one, for sending a whole
- * paid order back. The order is chosen before it opens: Orders offers it on the order itself.
- * A cashier is asked for the PIN before anything is created, so a refused authorization
+ * One of head office's refund reasons, and a manager's sign-in when the person at the till is not
+ * one, for sending a whole paid order back. The order is chosen before it opens: Orders offers it
+ * on the order itself. A manager signs in before anything is created, so a refused authorization
  * leaves no half-made refund behind.
  */
 export function RefundDialog({ order, orderRef, onClose, onRefunded }: Props) {
@@ -59,7 +65,8 @@ export function RefundDialog({ order, orderRef, onClose, onRefunded }: Props) {
   const role = useAuthStore((state) => state.user?.role);
   const canApprove = APPROVER_ROLES.includes((role || '').toUpperCase());
 
-  const [reason, setReason] = useState('');
+  const [reasons, setReasons] = useState<ReasonCode[]>([]);
+  const [reasonCodeId, setReasonCodeId] = useState('');
   const [pinOpen, setPinOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,9 +74,17 @@ export function RefundDialog({ order, orderRef, onClose, onRefunded }: Props) {
   // Each order opens on a blank form.
   const orderId = order?.id;
   useEffect(() => {
-    setReason('');
+    setReasonCodeId('');
     setError(null);
     setPinOpen(false);
+  }, [orderId]);
+
+  useEffect(() => {
+    if (!orderId) return;
+    settingsApi
+      .getReasonCodes()
+      .then((codes) => setReasons(codes.filter((r) => r.is_active !== false && (r.applies_to || []).includes('REFUND'))))
+      .catch(() => setReasons([]));
   }, [orderId]);
 
   const submit = async (approvalRequestId?: string) => {
@@ -77,7 +92,7 @@ export function RefundDialog({ order, orderRef, onClose, onRefunded }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      await refundApi.createRefund({ order_id: order.id, reason, approval_request_id: approvalRequestId });
+      await refundApi.createRefund({ order_id: order.id, reason_code_id: reasonCodeId, approval_request_id: approvalRequestId });
       onRefunded();
       onClose();
     } catch (err: any) {
@@ -122,14 +137,20 @@ export function RefundDialog({ order, orderRef, onClose, onRefunded }: Props) {
               </Alert>
             )}
 
-            <TextField
-              label={t('refunds.reason')}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              multiline
-              rows={2}
-              fullWidth
-            />
+            {reasons.length === 0 ? (
+              <Alert severity="warning">{t('refunds.noReasons')}</Alert>
+            ) : (
+              <FormControl fullWidth>
+                <InputLabel>{t('refunds.reason')}</InputLabel>
+                <Select label={t('refunds.reason')} value={reasonCodeId} onChange={(e) => setReasonCodeId(e.target.value)}>
+                  {reasons.map((r) => (
+                    <MenuItem key={r.id} value={r.id}>
+                      {r.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
 
             {!canApprove && <Alert severity="info">{t('refunds.pinNotice')}</Alert>}
           </Stack>
@@ -138,7 +159,7 @@ export function RefundDialog({ order, orderRef, onClose, onRefunded }: Props) {
           <Button onClick={onClose} disabled={submitting}>
             {t('common.cancel', 'Cancel')}
           </Button>
-          <Button variant="contained" onClick={handleSubmitClick} disabled={submitting || !reason.trim()}>
+          <Button variant="contained" onClick={handleSubmitClick} disabled={submitting || !reasonCodeId}>
             {canApprove ? t('common.save', 'Save') : t('refunds.continue')}
           </Button>
         </DialogActions>

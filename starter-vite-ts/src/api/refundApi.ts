@@ -85,14 +85,12 @@ export const refundApi = {
    */
   createRefund: async (data: {
     order_id: string;
-    reason_code_id?: string;
-    reason?: string;
+    reason_code_id: string;
     /** The request a manager approved by signing in (R-15), when the account asking can't approve. */
     approval_request_id?: string;
   }): Promise<RefundRecord[]> => {
     const payload = {
       reasonCodeId: data.reason_code_id,
-      reason: data.reason || 'Customer return',
       approvalRequestId: data.approval_request_id,
     };
     const res = await httpClient.post(`/api/v1/orders/${data.order_id}/refunds`, payload);

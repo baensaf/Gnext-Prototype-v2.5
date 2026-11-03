@@ -335,6 +335,7 @@ export function OrdersWorkflowPage() {
   const [typeDialogOpen, setTypeDialogOpen] = useState(false);
   const [typeOrder, setTypeOrder] = useState<OrderHeader | null>(null);
   const [typeTarget, setTypeTarget] = useState<'DINE_IN' | 'TAKEAWAY' | 'DELIVERY'>('TAKEAWAY');
+  const [typeOptions, setTypeOptions] = useState<('DINE_IN' | 'TAKEAWAY')[]>(['DINE_IN', 'TAKEAWAY']);
   const [typeAddressId, setTypeAddressId] = useState('');
   const [typeZoneId, setTypeZoneId] = useState('');
   const [typeReason, setTypeReason] = useState('');
@@ -476,8 +477,11 @@ export function OrdersWorkflowPage() {
   // Completing closes the check, so nothing may be left to pay. Delivery orders, and Snappfood
   // orders our own couriers take, are finished on the delivery screen, where the courier's cash
   // is counted in.
+  // A till's paid counter order completes by itself (O-12); only a kiosk or platform order waits
+  // for someone to hand it over.
   const canComplete = (order: OrderHeader) =>
     !readOnly &&
+    order.channel !== 'POS' &&
     lifecycleOf(order) === 'OPEN' &&
     order.order_type !== 'DELIVERY' &&
     !storeDeliversIt(order) &&
@@ -734,6 +738,14 @@ export function OrdersWorkflowPage() {
     setTypeOrder(order);
     // Offer something other than what it already is, so the dialog opens on a real choice.
     setTypeTarget('TAKEAWAY');
+    orderApi
+      .getOrderTypes(order.branch_id)
+      .then((types) => {
+        const counter = (['DINE_IN', 'TAKEAWAY'] as const).filter((type) => types.includes(type));
+        setTypeOptions(counter);
+        setTypeTarget((current) => ((counter as string[]).includes(current) ? current : counter[0] ?? current));
+      })
+      .catch(() => undefined);
     setTypeAddressId('');
     setTypeZoneId('');
     setTypeReason('');
@@ -2272,7 +2284,7 @@ export function OrdersWorkflowPage() {
               label={t('orders.typeDialog.newType', 'New type')}
               onChange={(e) => setTypeTarget(e.target.value as typeof typeTarget)}
             >
-              {(['DINE_IN', 'TAKEAWAY'] as const)
+              {typeOptions
                 .filter((option) => option !== typeOrder?.order_type)
                 .map((option) => (
                   <MenuItem key={option} value={option}>

@@ -87,7 +87,12 @@ export interface PaymentListRow {
   payment_number: string;
   order_id: string;
   order_number: string;
+  call_number?: number | null;
   branch_id: string;
+  register_name?: string | null;
+  cashier_name?: string | null;
+  /** A card charge the terminal never answered: the cashier settles it from the slip (Y-11). */
+  needs_terminal_check?: boolean | null;
   method_kind: string;
   status: PaymentRecord['status'];
   amount: string;
@@ -355,19 +360,6 @@ export const paymentApi = {
       total_amount: resOrder.data.total_amount || resOrder.data.grand_total || '0',
     } : null;
     return { payment: processed, order: orderData };
-  },
-
-  reversePayment: async (paymentId: string, reason?: string): Promise<PaymentRecord> => {
-    const res = await httpClient.post(`/api/v1/payments/${paymentId}/reverse`, { reason: reason || 'Payment reversal' });
-    return res.data;
-  },
-
-  correctPayment: async (
-    paymentId: string,
-    data: { reason: string; replacementMethodId: string; replacementAmount?: string },
-  ): Promise<{ originalPayment: PaymentRecord; replacementPayment: PaymentRecord; correctionGroupId: string }> => {
-    const res = await httpClient.post(`/api/v1/payments/${paymentId}/correct`, data);
-    return res.data;
   },
 
   getReceipt: async (orderId: string): Promise<ReceiptData> => {
