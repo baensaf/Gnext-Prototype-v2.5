@@ -43,3 +43,37 @@ export function writeDeviceTerminal(terminal: DeviceTerminal | null): void {
   }
   window.dispatchEvent(new Event(DEVICE_TERMINAL_CHANGED));
 }
+
+const OWNER_KEY = 'gnext_device_tenant';
+const parkedKey = (tenantCode: string) => `${STORAGE_KEY}:${tenantCode}`;
+/** A browser set up before tenants were told apart here holds the first demo tenant's register. */
+const FIRST_TENANT_CODE = 'GNEXT';
+
+/**
+ * A browser used for two tenants' demos keeps a register for each, so signing in to the other
+ * does not leave it holding a register that tenant has never heard of.
+ */
+export function switchDeviceTenant(tenant: { code?: string } | null | undefined): void {
+  if (!tenant?.code) return;
+  try {
+    const owner = localStorage.getItem(OWNER_KEY) ?? FIRST_TENANT_CODE;
+    localStorage.setItem(OWNER_KEY, tenant.code);
+    if (owner === tenant.code) return;
+
+    const current = localStorage.getItem(STORAGE_KEY);
+    if (current) {
+      localStorage.setItem(parkedKey(owner), current);
+    } else {
+      localStorage.removeItem(parkedKey(owner));
+    }
+    const parked = localStorage.getItem(parkedKey(tenant.code));
+    if (parked) {
+      localStorage.setItem(STORAGE_KEY, parked);
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {
+    return;
+  }
+  window.dispatchEvent(new Event(DEVICE_TERMINAL_CHANGED));
+}

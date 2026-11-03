@@ -33,6 +33,9 @@ const FIELD_DICTIONARIES: Record<ImportEntityType, Record<string, string[]>> = {
   },
 };
 
+/** A tenant with this setting holds a history that a reset could not bring back. */
+export const DATA_RESET_LOCK_KEY = 'DATA_RESET_LOCK';
+
 @Injectable()
 export class ImportExportService {
   constructor(
@@ -578,7 +581,16 @@ export class ImportExportService {
   /**
    * System Reset: Clear operational data
    */
+  private async refuseIfResetLocked(tenantId: string): Promise<void> {
+    const [lock] = await this.dataSource.query(
+      `SELECT 1 FROM tenant_setting WHERE tenant_id = $1 AND key = $2 AND branch_id IS NULL`,
+      [tenantId, DATA_RESET_LOCK_KEY],
+    );
+    if (lock) throw new BadRequestException('This tenant holds imported history and cannot be reset.');
+  }
+
   async systemReset(tenantId: string, userId: string): Promise<{ resetTables: string[] }> {
+    await this.refuseIfResetLocked(tenantId);
     const resetTables = [
       'order_adjustment',
       'order_note',
@@ -675,6 +687,7 @@ export class ImportExportService {
    * Apply database seed profile
    */
   async applySeedProfile(tenantId: string, userId: string, profileId: string): Promise<{ success: boolean; profile: string }> {
+    await this.refuseIfResetLocked(tenantId);
     if (profileId === 'DEMO_TRADING_DAY') {
       await this.applyDemoTradingDay(tenantId, userId);
       return { success: true, profile: profileId };

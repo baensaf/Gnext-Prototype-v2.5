@@ -53,6 +53,7 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
 
   const pathname = usePathname();
   const role = useAuthStore((state) => state.user?.role);
+  const tenant = useAuthStore((state) => state.tenant);
   const accountIsHeadOffice = useIsHeadOffice();
 
   /**
@@ -112,12 +113,18 @@ export function WorkspacesPopover({ data, sx, ...other }: WorkspacesPopoverProps
       ]}
       {...other}
     >
-      {/* The demo tenant is Iran Burger, so the chain's emblem stands for every scope. */}
-      <Avatar
-        alt="Iran Burger"
-        src={`${CONFIG.assetsDir}/logo/iran-burger.png`}
-        sx={{ width: 26, height: 26, bgcolor: 'transparent' }}
-      />
+      {/* The chain's emblem stands for every scope. Only the first demo tenant has one on file. */}
+      {tenant?.code === 'GNEXT' ? (
+        <Avatar
+          alt={tenant.name}
+          src={`${CONFIG.assetsDir}/logo/iran-burger.png`}
+          sx={{ width: 26, height: 26, bgcolor: 'transparent' }}
+        />
+      ) : (
+        <Avatar alt={tenant?.name} sx={{ width: 26, height: 26, fontSize: 14 }}>
+          {tenant?.name?.charAt(0)}
+        </Avatar>
+      )}
 
       <Box
         component="span"

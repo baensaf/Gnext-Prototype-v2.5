@@ -5,6 +5,7 @@ import { ORDER_ACTION_DEFAULTS } from './modules/order/order-edit-policy';
 import { MoneyUtil } from './common/utils/money.util';
 import { COURIER_ROLE, courierUsername } from './common/utils/user-scope.util';
 import { seedAdminDemo } from './seeds/admin-demo';
+import { seedImportedTenant } from './seeds/imported-tenant';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -792,6 +793,14 @@ export async function runSeed() {
   // 10. What head office and a branch manager work with day to day: a branch price
   // list, a bank account and card terminal, Valiasr's kitchen, closed days and more.
   await seedAdminDemo(AppDataSource, tenant.id, branchByCode, branchManager?.id ?? null);
+
+  // A second demo tenant, only where its data file was copied in. A failed import must not
+  // keep the API from starting for everybody else; it rolls back and tries at the next start.
+  try {
+    await seedImportedTenant(AppDataSource);
+  } catch (err) {
+    console.error('Demo tenant import failed:', err);
+  }
 
   console.log('Database seed execution completed successfully.');
   console.log('');

@@ -857,7 +857,7 @@ export function KioskPage() {
                   </Stack>
                 )}
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
-                  <Typography color="text.secondary">Tax (9%):</Typography>
+                  <Typography color="text.secondary">Tax:</Typography>
                   <Typography>{MoneyUtil.formatCurrency(calculateTax())} {currency}</Typography>
                 </Stack>
                 <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
