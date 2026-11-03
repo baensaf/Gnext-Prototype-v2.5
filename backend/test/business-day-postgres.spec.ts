@@ -254,6 +254,31 @@ describe('the overnight business day (PostgreSQL)', () => {
     expect(stored.business_date).toBe(nightShift.business_date);
   });
 
+  it('refuses a cutoff that would change the current business day of a branch (P-30)', async () => {
+    // 06:00 in Tehran, cutoff 05:00: a later cutoff would put the date back on the 18th.
+    tehranTime('2026-10-19T06:00:00');
+    await expect(settings.updateSetting(tenantId, 'BUSINESS_DAY', { cutoff: '07:00' }, 'bday-back')).rejects.toMatchObject({
+      response: { code: 'CUTOFF_MOVES_BUSINESS_DAY' },
+    });
+    // 03:00 in Tehran, cutoff 05:00: an earlier one would end the 18th's open shifts on the spot.
+    tehranTime('2026-10-19T03:00:00');
+    await expect(settings.updateSetting(tenantId, 'BUSINESS_DAY', { cutoff: '02:00' }, 'bday-forward')).rejects.toMatchObject({
+      response: { code: 'CUTOFF_MOVES_BUSINESS_DAY' },
+    });
+    // 05:15 in Tehran is 05:45 in Dubai: one branch is enough to refuse it.
+    tehranTime('2026-10-19T05:15:00');
+    await expect(settings.updateSetting(tenantId, 'BUSINESS_DAY', { cutoff: '05:30' }, 'bday-one-branch')).rejects.toMatchObject({
+      response: { code: 'CUTOFF_MOVES_BUSINESS_DAY', context: { branch: 'Tehran' } },
+    });
+    const clock = await loadBusinessClock(dataSource.manager, tenantId, tehranBranch);
+    expect(clock.policy.cutoff).toBe('05:00');
+    // Past both cutoffs the same change goes through, and the day stays where it was.
+    tehranTime('2026-10-19T08:00:00');
+    await settings.updateSetting(tenantId, 'BUSINESS_DAY', { cutoff: '07:00' }, 'bday-after');
+    expect((await loadBusinessClock(dataSource.manager, tenantId, tehranBranch)).today()).toBe('2026-10-19');
+    await settings.updateSetting(tenantId, 'BUSINESS_DAY', { cutoff: '05:00' }, 'bday-back-to-five');
+  });
+
   it('closes a day whose forgotten shift is counted weeks later', async () => {
     // Opened on the 20th and forgotten; nobody counts it until the 2nd of next month.
     tehranTime('2026-10-20T20:00:00');

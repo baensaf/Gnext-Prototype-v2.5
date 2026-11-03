@@ -165,7 +165,7 @@ export function BusinessDaySettingsPage() {
             <Alert severity="warning" variant="outlined">
               {t(
                 'settings.businessDay.changeNote',
-                'A change applies from the moment it is saved and nothing already recorded is re-dated. Change it while the shops are closed.'
+                'A change applies from the moment it is saved and nothing already recorded is re-dated. A save that would change the current business day of any branch is refused; any time in the afternoon works.'
               )}
             </Alert>
           </Stack>
