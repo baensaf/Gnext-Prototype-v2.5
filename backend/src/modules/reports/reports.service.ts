@@ -759,7 +759,11 @@ export class ReportsService {
         const orders = await this.orderRepo.find({
           where: { tenant_id: tenantId, ...this.branchWhere(branchId) },
         });
-        const aggOrders = orders.filter((o) => o.order_type === 'SNAPPFOOD' || (o as any).external_id);
+        const aggOrders = orders.filter((o) => {
+          if (o.channel !== 'AGGREGATOR' || o.state !== 'COMPLETED') return false;
+          const date = storedDate(o, o.placed_at);
+          return (!startDate || date >= startDate) && (!endDate || date <= endDate);
+        });
 
         let totalAmt = '0.00';
         const rows = aggOrders.map((o) => {
@@ -873,7 +877,8 @@ export class ReportsService {
             order_number: o.order_number,
             date: storedDate(o, o.placed_at),
             taxable_amount: subStr,
-            tax_rate: '9.0%',
+            // What was actually charged: a chain may charge no VAT, and rates differ by product.
+            tax_rate: `${MoneyUtil.greaterThan(subStr, '0') ? MoneyUtil.multiply(MoneyUtil.divide(taxStr, subStr, 6), '100', 1) : '0.0'}%`,
             tax_amount: taxStr,
           };
         });

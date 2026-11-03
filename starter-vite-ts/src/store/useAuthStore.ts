@@ -2,6 +2,7 @@ import type { ProblemDetails } from 'src/api/httpClient';
 
 import { create } from 'zustand';
 
+import { switchDeviceTenant } from 'src/utils/device-terminal';
 import { isSessionUnknown } from 'src/utils/connection-problem';
 
 import { httpClient, setCsrfToken } from 'src/api/httpClient';
@@ -112,6 +113,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       const response = await httpClient.post('/api/v1/auth/login', { username, password });
       const { csrfToken, user, tenant } = response.data;
 
+      switchDeviceTenant(tenant);
       setCsrfToken(csrfToken);
       set({
         user,
@@ -177,6 +179,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       const response = await httpClient.get('/api/v1/auth/me');
       const { user, tenant, csrfToken } = response.data;
 
+      switchDeviceTenant(tenant);
       if (csrfToken) {
         setCsrfToken(csrfToken);
       }

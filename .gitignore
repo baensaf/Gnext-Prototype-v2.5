@@ -24,6 +24,7 @@ yarn-error.log*
 # Runtime uploads & seed assets
 backend/uploads/*
 !backend/uploads/.gitkeep
+backend/data/
 backend/seed-assets/*
 !backend/seed-assets/.gitkeep
 !backend/seed-assets/iranburger/

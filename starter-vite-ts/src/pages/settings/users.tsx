@@ -132,7 +132,7 @@ export function UsersPage() {
         setSuccess(t('users.updated', 'Account updated.'));
       } else {
         await usersApi.create(payload);
-        setSuccess(t('users.created', 'Account created on the shared demo password.'));
+        setSuccess(t('users.created', 'Account created on your own password.'));
       }
       setDrawerOpen(false);
       await load();
@@ -365,7 +365,7 @@ export function UsersPage() {
               <Alert severity="info">
                 {t(
                   'users.passwordNotice',
-                  'The new account starts on the shared demo password, and gets the demo approver PIN if its role can approve.'
+                  'The new account starts on your own password, and gets the demo approver PIN if its role can approve.'
                 )}
               </Alert>
             )}

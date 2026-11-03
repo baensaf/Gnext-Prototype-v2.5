@@ -15,8 +15,8 @@ import { AuditWriter } from '../audit/audit-writer.service';
 
 /**
  * A prototype affordance, not a product decision: an account created from the users screen
- * starts on the same demo password the seed uses, so the demo never has to invent or hand
- * around a credential. Supplying `password` overrides it.
+ * starts on the password of whoever made it, so the demo never has to invent or hand around a
+ * credential. Supplying `password` overrides it; this is the fallback with no creator on file.
  */
 const DEMO_PASSWORD = process.env.ADMIN_PASSWORD || 'GnextDemo!2026';
 const DEMO_APPROVER_PIN = process.env.APPROVER_PIN || '2468';
@@ -106,17 +106,21 @@ export class UsersService {
     }
     await this.validate(tenantId, data);
 
-    const existing = await this.userRepo.findOne({
-      where: { tenant_id: tenantId, username: data.username },
-    });
+    // Across every tenant: sign-in finds an account by username alone, so a name taken twice
+    // locks one of the two out.
+    const existing = await this.userRepo.findOne({ where: { username: data.username } });
     if (existing) throw new ConflictException(`Username ${data.username} already exists`);
 
+    // On its creator's password, so a tenant with its own never gets one on the public password.
+    const creator = await this.userRepo.findOne({ where: { id: actorId, tenant_id: tenantId } });
     const role = data.role.toUpperCase();
     const user = this.userRepo.create({
       tenant_id: tenantId,
       username: data.username,
       display_name: data.display_name,
-      password_hash: await argon2.hash(data.password || DEMO_PASSWORD),
+      password_hash: data.password
+        ? await argon2.hash(data.password)
+        : creator?.password_hash ?? (await argon2.hash(DEMO_PASSWORD)),
       // An account that may approve needs something to approve with. A register account
       // deliberately gets none: a cashier is who the pin is asked of.
       pin_hash: data.pin
