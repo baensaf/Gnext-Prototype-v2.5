@@ -1218,8 +1218,14 @@ export class DeliveryService {
     const expectedCash = MoneyUtil.sum(collections.map((c) => c.cash));
     const cashShortOver = MoneyUtil.format(settlement.cash_discrepancy_amount || '0', 4);
     const handsOverCash = MoneyUtil.greaterThan(expectedCash, '0') || MoneyUtil.greaterThan(settlement.actual_cash_amount || '0', '0');
-    // The courier's cash goes into the drawer of the register the batch is closed at.
-    const drawer = handsOverCash ? await this.shiftService.requireDrawer(tenantId, settlement.branch_id, null) : null;
+    // The courier's cash goes into the drawer of the register the batch is closed at. A batch
+    // of card money needs no drawer, but still notes the shift it was received in, or that
+    // shift's sales count the orders and its payments do not.
+    const drawer = handsOverCash
+      ? await this.shiftService.requireDrawer(tenantId, settlement.branch_id, null)
+      : collections.length
+        ? await this.shiftService.resolveDrawer(tenantId, settlement.branch_id, null)
+        : null;
     const cashMethod = collections.some((c) => MoneyUtil.greaterThan(c.cash, '0')) ? await this.activeMethod(tenantId, ['CASH']) : null;
     const posMethod = collections.some((c) => MoneyUtil.greaterThan(c.pos, '0')) ? await this.activeMethod(tenantId, ['MOBILE_POS', 'CARD_POS', 'NETWORK_POS', 'CARD']) : null;
     const courier = await this.courierRepo.findOne({ where: { id: settlement.courier_id, tenant_id: tenantId } });

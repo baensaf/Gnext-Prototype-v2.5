@@ -55,6 +55,7 @@ describe('DeliveryService (Courier Settlement)', () => {
     orderRepo = { findOne: jest.fn(), save: jest.fn(), manager: { transaction: jest.fn((cb: any) => cb(em)) } };
     shiftService = {
       requireDrawer: jest.fn().mockResolvedValue({ id: 'shift-1', currency_code: 'IRR' }),
+      resolveDrawer: jest.fn().mockResolvedValue({ id: 'shift-1', currency_code: 'IRR' }),
       recordCashPaymentMovement: jest.fn().mockResolvedValue({}),
     };
     settlementRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn(), create: jest.fn(), save: jest.fn() };
@@ -406,6 +407,35 @@ describe('DeliveryService (Courier Settlement)', () => {
       expect(em.save).toHaveBeenCalledWith(Payment, expect.objectContaining({ method_kind: 'MOBILE_POS', amount: '500000.0000' }));
       expect(em.save).toHaveBeenCalledWith(Payment, expect.objectContaining({ method_kind: 'CASH', amount: '65000.0000' }));
       expect(order.state).toBe('COMPLETED');
+    });
+
+    describe('a batch of card money only', () => {
+      beforeEach(() => {
+        settlementLineRepo.find.mockResolvedValue([
+          { id: 'line-1', delivery_assignment_id: 'asgn-1', order_id: 'ord-cod', delivery_status: 'DELIVERED', expected_cash: '0.00', expected_pos: '565000.00' },
+        ]);
+        settlementRepo.findOne.mockResolvedValue({
+          id: 'settle-1', tenant_id: 't-1', branch_id: 'b-1', courier_id: 'c-1', settlement_number: 'SET-1',
+          status: 'DRAFT', actual_cash_amount: '0.00', cash_discrepancy_amount: '0.00', pos_discrepancy_amount: '0.00',
+        });
+      });
+
+      it('notes the open shift, so its payments add up to its sales', async () => {
+        await service.closeSettlement('t-1', 'settle-1', 'user-1');
+
+        expect(em.save).toHaveBeenCalledWith(Payment, expect.objectContaining({ method_kind: 'MOBILE_POS', amount: '565000.0000', shift_id: 'shift-1' }));
+        expect(shiftService.requireDrawer).not.toHaveBeenCalled();
+        expect(shiftService.recordCashPaymentMovement).not.toHaveBeenCalled();
+      });
+
+      it('still closes with no shift open, since no cash has to go anywhere', async () => {
+        shiftService.resolveDrawer.mockResolvedValue(null);
+
+        const closed = await service.closeSettlement('t-1', 'settle-1', 'user-1');
+
+        expect(closed.status).toBe('CLOSED');
+        expect(em.save).toHaveBeenCalledWith(Payment, expect.objectContaining({ method_kind: 'MOBILE_POS', shift_id: null }));
+      });
     });
 
     it('refuses to close without an open drawer to take the cash', async () => {
