@@ -101,7 +101,7 @@ describe('DeliveryService (R19 Unit & Integration)', () => {
         { provide: getRepositoryToken(AdminUser), useValue: userRepo },
         { provide: AuditWriter, useValue: auditWriter },
         { provide: OrderTransitionRecorder, useValue: transitionRecorder },
-        { provide: ShiftService, useValue: { requireDrawer: jest.fn(), recordCashPaymentMovement: jest.fn() } },
+        { provide: ShiftService, useValue: { requireDrawer: jest.fn(), resolveDrawer: jest.fn(), recordCashPaymentMovement: jest.fn() } },
       ],
     }).compile();
 
