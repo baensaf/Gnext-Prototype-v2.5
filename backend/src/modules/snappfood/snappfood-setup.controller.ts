@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Put, Req } from '@nestjs/common';
 import { Request } from 'express';
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { HeadOfficeOnly, MANAGER_AND_ABOVE, Roles } from '../../common/decorators/roles.decorator';
 import { SNAPPFOOD_MODES, SnappfoodMode } from '../../entities/SnappfoodConnection.entity';
 import { SnappfoodSetupService } from './snappfood-setup.service';
@@ -35,6 +35,10 @@ class SnappfoodBranchDto {
   @IsString()
   @MaxLength(200)
   password?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  readOnly?: boolean;
 }
 
 class SnappfoodHmacDto {

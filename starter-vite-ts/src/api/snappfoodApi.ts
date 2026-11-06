@@ -14,6 +14,10 @@ export interface SnappfoodSetup {
     has_client_secret: boolean;
     has_password: boolean;
     live: boolean;
+    /** Another system answers the branch's orders; Gnext only reads them. */
+    read_only: boolean;
+    last_read_at: string | null;
+    last_read_error: string | null;
   }>;
 }
 
@@ -26,6 +30,7 @@ export interface SnappfoodBranchInput {
   username: string | null;
   /** Left out to keep the one saved. */
   password?: string;
+  readOnly: boolean;
 }
 
 export type SnappfoodTestResult =

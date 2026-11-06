@@ -61,6 +61,21 @@ export class SnappfoodConnection {
   @Column({ type: 'varchar', length: 200, nullable: true })
   password: string | null;
 
+  /**
+   * Another system (HAMI, in the parallel run) holds the webhook and answers the orders. Gnext
+   * only reads them, from Snappfood's list of recent orders, and never acks, picks, accepts or
+   * rejects one. An order is recorded once that system has accepted it.
+   */
+  @Column({ type: 'boolean', default: false })
+  read_only: boolean;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  last_read_at: Date | null;
+
+  /** Why the last read failed; cleared by the next one that works. */
+  @Column({ type: 'text', nullable: true })
+  last_read_error: string | null;
+
   @Column({ type: 'text', nullable: true })
   access_token: string | null;
 

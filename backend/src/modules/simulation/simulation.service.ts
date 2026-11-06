@@ -4,6 +4,7 @@ import { Raw, Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import { IntegrationLog } from '../../entities/IntegrationLog.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
+import { OrderStateEvent } from '../../entities/OrderStateEvent.entity';
 import { OrderItem } from '../../entities/OrderItem.entity';
 import { Product } from '../../entities/Product.entity';
 import { Branch, SELLING_BRANCH_TYPES } from '../../entities/Branch.entity';
@@ -169,6 +170,11 @@ export class SimulationService {
       }
     }
 
+    // At a branch that only reads its orders, another system answers them.
+    if (payload.branch_id && (await this.snappfoodLive?.readsOnly(tenantId, payload.branch_id))) {
+      return this.mirrorSnappfoodOrder(tenantId, payload.branch_id, payload, corrId);
+    }
+
     // An event id seen before is a replay. Without one, the order the store already has decides.
     if (payload.event_id) {
       const existingLog = await this.logRepo.findOne({
@@ -204,33 +210,11 @@ export class SimulationService {
       return { simulated: true, correlationId: corrId, success: true, duplicate: false, order: null, log_id: ignoredLog.id };
     }
 
-    // Process & Map Order deterministically without Math.random()
-    const branchId = await this.resolveWebhookBranch(tenantId, payload);
-
-    const orderNum = `SNP-${orderCode || payload.event_id || '1001'}`;
-    const lines = await this.resolveSnappfoodLines(tenantId, this.snappfoodLines(payload));
-
-    const orderHeader = this.orderRepo.create({
-      tenant_id: tenantId,
-      branch_id: branchId,
-      order_number: orderNum,
-      order_type: 'AGGREGATOR',
-      channel: 'AGGREGATOR',
-      // Not SUBMITTED: the kitchen display fires every submitted order, and this one
-      // must wait until the store accepts it.
-      state: 'PENDING_ACCEPTANCE',
-      status: 'PENDING_ACCEPTANCE',
-      fulfillment_status: 'PENDING',
-      notes: this.describeSnappfoodOrder(payload),
-      ...this.snappfoodTotals(payload, lines).totals,
-      ...this.snappfoodTiming(payload),
-    });
-    await this.linkSnappfoodCustomer(tenantId, orderHeader, payload, corrId);
-
-    let savedHeader = await this.orderRepo.save(orderHeader);
-    await this.writeSnappfoodLines(tenantId, savedHeader.id, lines, 1);
-    await this.applySnappfoodMoney(tenantId, savedHeader, payload, lines);
-    savedHeader = await this.orderRepo.save(savedHeader);
+    // Not SUBMITTED: the kitchen display fires every submitted order, and this one
+    // must wait until the store accepts it.
+    const savedHeader = await this.openSnappfoodOrder(tenantId, payload, await this.resolveWebhookBranch(tenantId, payload), corrId, (order) =>
+      this.markAwaitingAcceptance(order),
+    );
 
     const logEntry = await this.logRepo.save(
       this.logRepo.create({
@@ -274,6 +258,115 @@ export class SimulationService {
       order: accepted ?? savedHeader,
       log_id: logEntry.id,
     };
+  }
+
+  /** A new Snappfood order with its lines, customer and money, left in the state `mark` gives it. */
+  private async openSnappfoodOrder(tenantId: string, payload: any, branchId: string, corrId: string, mark: (order: OrderHeader) => void) {
+    const lines = await this.resolveSnappfoodLines(tenantId, this.snappfoodLines(payload));
+    const orderHeader = this.orderRepo.create({
+      tenant_id: tenantId,
+      branch_id: branchId,
+      order_number: `SNP-${payload.code || payload.order_code || payload.event_id || '1001'}`,
+      order_type: 'AGGREGATOR',
+      channel: 'AGGREGATOR',
+      notes: this.describeSnappfoodOrder(payload),
+      ...this.snappfoodTotals(payload, lines).totals,
+      ...this.snappfoodTiming(payload),
+    });
+    mark(orderHeader);
+    await this.linkSnappfoodCustomer(tenantId, orderHeader, payload, corrId);
+
+    const saved = await this.orderRepo.save(orderHeader);
+    await this.writeSnappfoodLines(tenantId, saved.id, lines, 1);
+    await this.applySnappfoodMoney(tenantId, saved, payload, lines);
+    return this.orderRepo.save(saved);
+  }
+
+  /**
+   * A Snappfood order at a branch that only reads its orders. Another system (HAMI, in the
+   * parallel run) answers it on Snappfood, so nothing goes back to Snappfood from here. The
+   * order is recorded once that system has accepted it (42), straight as completed: its
+   * kitchen, printing and courier run there. Until then Gnext keeps nothing, so no waiting
+   * order holds up a shift or a business day. After that, Snappfood cancelling (54) cancels
+   * it, and support sending it back changed (56, then 42 again) brings the new lines. A read
+   * that brings the status the order already has changes nothing.
+   */
+  async mirrorSnappfoodOrder(tenantId: string, branchId: string, payload: any, correlationId?: string): Promise<SnappfoodWebhookResult> {
+    const corrId = correlationId || `corr-snapp-read-${Date.now()}`;
+    const orderCode = payload.code || payload.order_code;
+    const statusCode = Number(payload.statusCode);
+    const nothing = (message: string, duplicate = false): SnappfoodWebhookResult => ({
+      simulated: true,
+      correlationId: corrId,
+      success: true,
+      duplicate,
+      order: null,
+      message,
+      log_id: '',
+    });
+    if (!orderCode || !Number.isFinite(statusCode)) return nothing('Not a Snappfood order');
+
+    const known = await this.orderRepo.findOne({ where: { tenant_id: tenantId, order_number: `SNP-${orderCode}` } });
+    if (!known) {
+      if (statusCode !== 42) return nothing(`Order ${orderCode} is not accepted yet (status ${statusCode})`);
+      const order = await this.openSnappfoodOrder(tenantId, payload, branchId, corrId, (o) => {
+        const now = new Date();
+        o.notes = `${o.notes}\nAccepted in another system; read from Snappfood`;
+        o.fulfillment_status = 'FULFILLED';
+        o.state = 'COMPLETED';
+        o.status = 'COMPLETED';
+        o.accepted_at = now;
+        o.completed_at = now;
+        o.aggregator_status_code = statusCode;
+      });
+      await this.orderRepo.manager.save(
+        this.orderRepo.manager.create(OrderStateEvent, {
+          tenant_id: tenantId,
+          order_id: order.id,
+          from_state: null,
+          to_state: 'COMPLETED',
+          action: 'READ_FROM_SNAPPFOOD',
+          reason_text: 'Accepted in another system',
+          snapshot: { aggregator_status_code: statusCode },
+        }),
+      );
+      return this.mirrored(tenantId, order, 'ORDER_READ', payload, corrId);
+    }
+
+    if (known.aggregator_status_code === statusCode) return nothing(`Order ${orderCode} already has status ${statusCode}`, true);
+    const before = known.aggregator_status_code;
+    known.aggregator_status_code = statusCode;
+    if (statusCode === 54 && known.state !== 'CANCELLED') {
+      this.markCancelled(known);
+      await this.reverseSnappfoodPayments(tenantId, known);
+    } else if (statusCode === 42 && (before === 56 || before === 51) && known.state !== 'CANCELLED') {
+      await this.refreshSnappfoodOrder(tenantId, known, payload, true);
+    }
+    await this.orderRepo.save(known);
+    return this.mirrored(tenantId, known, `STATUS_${statusCode}_READ`, payload, corrId);
+  }
+
+  private async mirrored(tenantId: string, order: OrderHeader, event: string, payload: any, corrId: string): Promise<SnappfoodWebhookResult> {
+    const log = await this.logRepo.save(
+      this.logRepo.create({
+        tenant_id: tenantId,
+        provider: 'SNAPPFOOD',
+        event_type: event,
+        idempotency_key: `${payload.code || payload.order_code}:${payload.statusCode}`,
+        is_duplicate: false,
+        status: 'SUCCESS',
+        request_payload: payload,
+        response_payload: { order_id: order.id, state: order.state, read_only: true },
+      }),
+    );
+    await this.auditWriter.write({
+      tenantId,
+      actorType: 'SYSTEM',
+      action: `SNAPPFOOD_${event}`,
+      correlationId: corrId,
+      afterData: { order_id: order.id, state: order.state },
+    });
+    return { simulated: true, correlationId: corrId, success: true, duplicate: false, order, log_id: log.id };
   }
 
   /**
@@ -386,19 +479,8 @@ export class SimulationService {
    * now, for the store to accept it with a new time.
    */
   private async resendSnappfoodOrder(tenantId: string, order: OrderHeader, payload: any) {
-    const lines = await this.resolveSnappfoodLines(tenantId, this.snappfoodLines(payload));
-    const unchanged = order.state !== 'REJECTED' && (await this.hasSameLines(tenantId, order.id, lines));
-    if (!unchanged) {
-      const earlier = await this.orderItemRepo.count({ where: { tenant_id: tenantId, order_id: order.id } });
-      await this.orderItemRepo.update({ tenant_id: tenantId, order_id: order.id, state: 'ACTIVE' }, { state: 'VOID' });
-      await this.writeSnappfoodLines(tenantId, order.id, lines, earlier + 1);
-    }
-    await this.applySnappfoodMoney(tenantId, order, payload, lines);
-    await this.linkSnappfoodCustomer(tenantId, order, payload, `resend-${order.id}`);
-
-    order.notes = this.describeSnappfoodOrder(payload);
+    await this.refreshSnappfoodOrder(tenantId, order, payload, order.state !== 'REJECTED');
     order.placed_at = new Date();
-    Object.assign(order, this.snappfoodTiming(payload));
     order.accepted_at = null;
     order.promised_minutes = null;
     order.aggregator_issue_at = null;
@@ -406,6 +488,24 @@ export class SimulationService {
     this.markAwaitingAcceptance(order);
     // Back in the Incoming Orders queue, which announces it like any new arrival.
     await this.orderRepo.save(order);
+  }
+
+  /**
+   * Snappfood's lines, money, customer and notes on an order it sent again. Lines that changed
+   * void the old ones and follow them; with keepSameLines, unchanged lines stay as they are.
+   */
+  private async refreshSnappfoodOrder(tenantId: string, order: OrderHeader, payload: any, keepSameLines: boolean) {
+    const lines = await this.resolveSnappfoodLines(tenantId, this.snappfoodLines(payload));
+    const unchanged = keepSameLines && (await this.hasSameLines(tenantId, order.id, lines));
+    if (!unchanged) {
+      const earlier = await this.orderItemRepo.count({ where: { tenant_id: tenantId, order_id: order.id } });
+      await this.orderItemRepo.update({ tenant_id: tenantId, order_id: order.id, state: 'ACTIVE' }, { state: 'VOID' });
+      await this.writeSnappfoodLines(tenantId, order.id, lines, earlier + 1);
+    }
+    await this.applySnappfoodMoney(tenantId, order, payload, lines);
+    await this.linkSnappfoodCustomer(tenantId, order, payload, `resend-${order.id}`);
+    order.notes = this.describeSnappfoodOrder(payload);
+    Object.assign(order, this.snappfoodTiming(payload));
   }
 
   /** Whether Snappfood's lines are the order's active lines: same dishes, quantities and prices. */

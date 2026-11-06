@@ -19,6 +19,8 @@ export type SnappfoodBranchInput = {
   username?: string | null;
   /** Left out to keep the one saved. */
   password?: string;
+  /** Another system answers this branch's orders and Gnext only reads them. Left out to keep it. */
+  readOnly?: boolean;
 };
 
 const blank = (value: string | null | undefined) => {
@@ -63,6 +65,9 @@ export class SnappfoodSetupService {
           has_client_secret: !!c?.client_secret,
           has_password: !!c?.password,
           live: !!c && isLive(c),
+          read_only: !!c?.read_only,
+          last_read_at: c?.last_read_at ?? null,
+          last_read_error: c?.last_read_error ?? null,
         };
       }),
     };
@@ -120,6 +125,7 @@ export class SnappfoodSetupService {
     conn.username = blank(input.username);
     if (input.clientSecret !== undefined) conn.client_secret = blank(input.clientSecret);
     if (input.password !== undefined) conn.password = blank(input.password);
+    if (input.readOnly !== undefined) conn.read_only = input.readOnly;
     // A token belongs to the account and server it was issued for.
     if (accountChanged) {
       conn.access_token = null;
@@ -132,7 +138,11 @@ export class SnappfoodSetupService {
       });
     }
     await this.connections.save(conn);
-    await this.audit(tenantId, userId, 'SNAPPFOOD_BRANCH_SAVED', branchId, { mode: conn.mode, vendor_code: conn.vendor_code });
+    await this.audit(tenantId, userId, 'SNAPPFOOD_BRANCH_SAVED', branchId, {
+      mode: conn.mode,
+      vendor_code: conn.vendor_code,
+      read_only: conn.read_only,
+    });
     return this.getSetup(tenantId);
   }
 
