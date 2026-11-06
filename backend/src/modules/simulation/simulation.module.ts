@@ -14,6 +14,7 @@ import { ChannelItemMap } from '../../entities/ChannelItemMap.entity';
 import { TenantSetting } from '../../entities/TenantSetting.entity';
 import { SimulationService } from './simulation.service';
 import { SnappfoodCatalogService } from './snappfood-catalog.service';
+import { SnappfoodReaderService } from './snappfood-reader.service';
 import { CatalogModule } from '../catalog/catalog.module';
 import { SimulationController } from './simulation.controller';
 import { SimulatedWebhooksController } from './simulated-webhooks.controller';
@@ -52,7 +53,7 @@ import { CustomerModule } from '../customer/customer.module';
     // For the branch's incoming-order policy; see the matching note in OrderModule.
     forwardRef(() => OrderModule),
   ],
-  providers: [SimulationService, SnappfoodCatalogService],
+  providers: [SimulationService, SnappfoodCatalogService, SnappfoodReaderService],
   controllers: [SimulationController, SimulatedWebhooksController, SnappfoodWebhookController],
   exports: [SimulationService, SnappfoodCatalogService],
 })

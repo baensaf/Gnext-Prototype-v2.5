@@ -200,6 +200,10 @@ export class OrderHeader {
   @Column({ type: 'varchar', length: 20, nullable: true })
   aggregator_rider_status: string | null;
 
+  // The last statusCode Snappfood gave the order, kept for a branch that only reads its orders.
+  @Column({ type: 'integer', nullable: true })
+  aggregator_status_code: number | null;
+
   // Something the till's Online panel must show until a cashier marks it seen:
   // PLATFORM_CANCELLED (after the kitchen had it) or TIMED_OUT (the time limit turned it down).
   @Column({ type: 'varchar', length: 30, nullable: true })

@@ -20,7 +20,7 @@ export type SnappfoodDeclineReason = { id: number; title: string; level: number 
 
 /**
  * The calls a store makes to the real Snappfood for one of its orders: ack, pick, accept,
- * reject and the list of decline reasons. A branch in SIMULATED mode, or one without a full
+ * reject, the list of decline reasons and, for a branch that only reads, its recent orders. A branch in SIMULATED mode, or one without a full
  * account, has no live connection and its calls go to the simulator instead. Every call is
  * written to the integration log, beside the simulator's, so the two read the same way.
  */
@@ -36,6 +36,12 @@ export class SnappfoodLiveService {
     if (!branchId) return null;
     const conn = await this.connections.findOne({ where: { tenant_id: tenantId, branch_id: branchId } });
     return conn && isLive(conn) ? conn : null;
+  }
+
+  /** Whether another system answers this branch's orders while Gnext only reads them. */
+  async readsOnly(tenantId: string, branchId: string): Promise<boolean> {
+    const conn = await this.connections.findOne({ where: { tenant_id: tenantId, branch_id: branchId } });
+    return !!conn?.read_only;
   }
 
   async ack(conn: SnappfoodConnection, orderCode: string) {
@@ -62,6 +68,18 @@ export class SnappfoodLiveService {
     return flat.map((r) => ({ id: Number(r.id), title: String(r.title ?? r.name ?? ''), level: Number(r.level ?? 1) }));
   }
 
+  /**
+   * The vendor's orders placed between two moments (annex 4.3.0, section 4-22), in Tehran's
+   * clock as Snappfood writes dates. A branch that only reads its orders asks for this every
+   * few seconds, so only a failed read is logged.
+   */
+  async latestOrders(conn: SnappfoodConnection, from: Date, to: Date): Promise<any[]> {
+    const body = { vendorCode: conn.vendor_code, from: tehranTime(from), to: tehranTime(to) };
+    const data = await this.call(conn, 'ORDER_LATEST', 'POST', '/va/v1/order/latest', body, { quiet: true });
+    const list = Array.isArray(data) ? data : (data?.data?.orders ?? data?.data ?? data?.orders ?? []);
+    return Array.isArray(list) ? list : [];
+  }
+
   /** The vendor as Snappfood sees it; the settings page uses it to check an account works. */
   async vendorStatus(conn: SnappfoodConnection): Promise<{ status?: string; vendorTitle?: string; vendorCode?: string }> {
     const data = await this.call(conn, 'VENDOR_STATUS', 'GET', '/va/v1/vendor/status');
@@ -73,7 +91,14 @@ export class SnappfoodLiveService {
    * call made again. Snappfood's refusals come back as [{ status, title, detail }] and reach
    * staff as a ChannelRefusal with Snappfood's code.
    */
-  private async call(conn: SnappfoodConnection, event: string, method: 'GET' | 'POST', path: string, body?: unknown): Promise<any> {
+  private async call(
+    conn: SnappfoodConnection,
+    event: string,
+    method: 'GET' | 'POST',
+    path: string,
+    body?: unknown,
+    { quiet = false }: { quiet?: boolean } = {},
+  ): Promise<any> {
     const server = SERVERS[conn.mode as keyof typeof SERVERS];
     const send = async (token: string) =>
       fetch(server.api + path, {
@@ -103,7 +128,7 @@ export class SnappfoodLiveService {
       await this.log(conn, event, { method, path, body }, { status: res.status, body: data }, 'FAILED', message);
       throw new ChannelRefusal(code, message);
     }
-    await this.log(conn, event, { method, path, body }, { status: res.status, body: data }, 'SUCCESS');
+    if (!quiet) await this.log(conn, event, { method, path, body }, { status: res.status, body: data }, 'SUCCESS');
     return data;
   }
 
@@ -158,6 +183,25 @@ export class SnappfoodLiveService {
 /** A branch talks to the real Snappfood once it is switched to a server and has a whole account. */
 export function isLive(conn: Pick<SnappfoodConnection, 'mode' | 'vendor_code' | 'client_id' | 'client_secret' | 'username' | 'password'>): boolean {
   return conn.mode !== 'SIMULATED' && !!(conn.vendor_code && conn.client_id && conn.client_secret && conn.username && conn.password);
+}
+
+/** "2026-11-07 14:05:00" on Tehran's clock, the way the annex writes from and to. */
+export function tehranTime(at: Date): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Tehran',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(at)
+      .map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 }
 
 async function readBody(res: Response): Promise<any> {

@@ -11,6 +11,7 @@ import {
   Alert,
   Stack,
   Button,
+  Switch,
   Select,
   MenuItem,
   TextField,
@@ -19,6 +20,7 @@ import {
   IconButton,
   CardContent,
   CircularProgress,
+  FormControlLabel,
 } from '@mui/material';
 
 import { fDateTime } from 'src/utils/format-time';
@@ -40,6 +42,7 @@ type Draft = {
   clientSecret: string;
   username: string;
   password: string;
+  readOnly: boolean;
 };
 
 const MODES: SnappfoodMode[] = ['SIMULATED', 'STAGING', 'PRODUCTION'];
@@ -74,6 +77,7 @@ export function SnappfoodSettingsPage() {
             clientSecret: '',
             username: b.username ?? '',
             password: '',
+            readOnly: b.read_only,
           },
         ])
       )
@@ -245,6 +249,7 @@ export function SnappfoodSettingsPage() {
                       <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
                         {b.name}
                       </Typography>
+                      {b.read_only && <Chip size="small" color="warning" label={t('settings.snappfood.branches.readOnlyChip')} />}
                       <Chip
                         size="small"
                         color={b.live ? (b.mode === 'PRODUCTION' ? 'success' : 'info') : 'default'}
@@ -315,6 +320,38 @@ export function SnappfoodSettingsPage() {
                           />
                         </Stack>
                       )}
+                      <Box>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={d.readOnly}
+                              disabled={locked}
+                              onChange={(e) => setDraft(b.branch_id, { readOnly: e.target.checked })}
+                            />
+                          }
+                          label={t('settings.snappfood.branches.readOnly')}
+                        />
+                        <Typography variant="caption" color="text.secondary" component="p">
+                          {t('settings.snappfood.branches.readOnlyHelp')}
+                        </Typography>
+                      </Box>
+                      {b.read_only && !b.live && (
+                        <Typography variant="body2" color="text.secondary">
+                          {t('settings.snappfood.branches.readSimulated')}
+                        </Typography>
+                      )}
+                      {b.read_only && b.live && !b.last_read_error && (
+                        <Typography variant="body2" color="text.secondary">
+                          {b.last_read_at
+                            ? t('settings.snappfood.branches.lastRead', { at: fDateTime(b.last_read_at) })
+                            : t('settings.snappfood.branches.neverRead')}
+                        </Typography>
+                      )}
+                      {b.read_only && b.live && b.last_read_error && (
+                        <Alert severity="error">
+                          {t('settings.snappfood.branches.readFailed', { message: b.last_read_error })}
+                        </Alert>
+                      )}
                       {real && (b.has_client_secret || b.has_password) && (
                         <Typography variant="caption" color="text.secondary">
                           {t('settings.snappfood.branches.secretsKept')}
@@ -335,6 +372,7 @@ export function SnappfoodSettingsPage() {
                                   clientSecret: d.clientSecret || undefined,
                                   username: d.username.trim() || null,
                                   password: d.password || undefined,
+                                  readOnly: d.readOnly,
                                 }),
                               t('settings.snappfood.branches.saved', { name: b.name })
                             )
