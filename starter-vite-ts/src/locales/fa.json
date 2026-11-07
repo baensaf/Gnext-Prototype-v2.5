@@ -221,6 +221,7 @@
     "itemsCount": "{{count}} قلم",
     "addToCart": "افزودن به سبد",
     "placeOrder": "ثبت سفارش",
+    "courierCollects": "دریافت توسط پیک",
     "checkout": "تسویه و پرداخت سفارش",
     "postPayment": "ثبت پرداخت",
     "payNow": "پرداخت سریع",

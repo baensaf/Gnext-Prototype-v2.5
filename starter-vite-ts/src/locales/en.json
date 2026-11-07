@@ -221,6 +221,7 @@
     "itemsCount": "{{count}} items",
     "addToCart": "Add to Cart",
     "placeOrder": "Place Order",
+    "courierCollects": "Courier collects",
     "checkout": "Order Settlement & Checkout",
     "postPayment": "Post Payment Tender",
     "payNow": "Pay Now",

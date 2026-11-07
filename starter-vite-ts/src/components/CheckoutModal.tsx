@@ -846,8 +846,9 @@ export function CheckoutModal({ open, orderId, onClose, onPaymentComplete }: Che
             {t('pos.printReceipt', 'Print Receipt')}
           </Button>
         )}
+        {/* A delivery left owing goes out as it is: closing hands the rest to the courier. */}
         <Button color="inherit" onClick={close}>
-          {t('common.close', 'Close')}
+          {order?.order_type === 'DELIVERY' && !isFullyPaid ? t('pos.courierCollects') : t('common.close', 'Close')}
         </Button>
         {!isFullyPaid && (
           <Button

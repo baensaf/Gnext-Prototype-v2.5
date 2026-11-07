@@ -1344,8 +1344,11 @@ export function PosOrderPage() {
     t,
   ]);
 
-  // Order Placement (Pay Later / Open Checkout).
-  const handlePlaceOrder = useCallback(async () => {
+  // Order Placement: Place order always opens the pay dialog, delivery included; Courier collects
+  // sends a delivery unpaid, as most are (O-16).
+  const [placing, setPlacing] = useState(false);
+  const handlePlaceOrder = useCallback(async (courierCollects = false) => {
+    if (placing) return;
     if (cart.length === 0) {
       setError(t('pos.cartEmpty'));
       return;
@@ -1361,6 +1364,7 @@ export function PosOrderPage() {
       return;
     }
 
+    setPlacing(true);
     try {
       const orderPayload: any = {
         branch_id: selectedBranchId,
@@ -1400,13 +1404,19 @@ export function PosOrderPage() {
       const submitted = await orderApi.submitOrder(draftId, buildSubmitPayload(), { idempotencyKey });
 
       setPlacedOrder(submitted);
-      // A delivery is paid when the courier's settlement closes (O-16); an order with nothing to
-      // pay is done as it is sent (O-26). Only a counter order still owing opens the pay dialog.
-      if (!awaitingPayment(submitted)) {
-        toast.success(t('pos.orderSubmitted', { number: submitted.call_number || submitted.order_number || '' }));
-      } else {
+      // A counter order still owing waits for its payment (O-19). A delivery is already out: what
+      // is not paid here, the courier collects and brings back to the settlement (O-16). An order
+      // with nothing to pay is done as it is sent (O-26).
+      const deliveryOwing =
+        submitted.order_type === 'DELIVERY' &&
+        MoneyUtil.greaterThan(submitted.due_amount || submitted.outstanding_total || '0', '0');
+      if (awaitingPayment(submitted)) {
         sentCartRef.current = counterCart;
         setCheckoutModalOpen(true);
+      } else if (deliveryOwing && !courierCollects) {
+        setCheckoutModalOpen(true);
+      } else {
+        toast.success(t('pos.orderSubmitted', { number: submitted.call_number || submitted.order_number || '' }));
       }
       handleClearCart();
       setError(null);
@@ -1414,8 +1424,11 @@ export function PosOrderPage() {
       const msg = err.detail || err.message || 'Failed to place order';
       setError(msg);
       showErrorToast(err, msg);
+    } finally {
+      setPlacing(false);
     }
   }, [
+    placing,
     cart,
     selectedBranchId,
     approvalRequired,
@@ -1498,8 +1511,9 @@ export function PosOrderPage() {
         e.preventDefault();
         if (placedOrder) {
           setCheckoutModalOpen(true);
-        } else if (cart.length > 0 && orderType !== 'DELIVERY') {
-          handleDirectTerminalPay();
+        } else if (cart.length > 0) {
+          if (orderType === 'DELIVERY') handlePlaceOrder(true);
+          else handleDirectTerminalPay();
         }
         return;
       }
@@ -1514,6 +1528,7 @@ export function PosOrderPage() {
     };
   }, [
     cart.length,
+    orderType,
     placedOrder,
     handlePlaceOrder,
     handleDirectTerminalPay,
@@ -1535,8 +1550,9 @@ export function PosOrderPage() {
     if (!key || cart.length === 0 || addsInFlight.current > 0) return;
     queuedKey.current = null;
     if (key === 'F8') handlePlaceOrder();
+    else if (orderType === 'DELIVERY') handlePlaceOrder(true);
     else handleDirectTerminalPay();
-  }, [cart, addLanded, handlePlaceOrder, handleDirectTerminalPay]);
+  }, [cart, addLanded, orderType, handlePlaceOrder, handleDirectTerminalPay]);
 
   // Product Filtering (Search + Category)
   const filteredProducts = products.filter((p) => {
@@ -2484,22 +2500,31 @@ export function PosOrderPage() {
                 <Button
                   variant="outlined"
                   color="inherit"
-                  disabled={cart.length === 0}
+                  disabled={cart.length === 0 || placing}
                   onClick={() => handlePlaceOrder()}
                   aria-keyshortcuts="F8"
                   sx={{ fontWeight: 'bold', flexShrink: 0, px: 1.25, whiteSpace: 'nowrap' }}
                 >
                   {t('pos.placeOrder')}
                 </Button>
-                {/* 1-Click Direct Terminal Pay (90% Standard in Iran) */}
+                {/* The usual way this order is paid, in one click: the card terminal at the counter
+                    (90% Standard in Iran), the courier for a delivery. */}
                 <Button
                   variant="contained"
                   color="primary"
                   size="large"
-                  disabled={cart.length === 0 || terminalPayLoading || orderType === 'DELIVERY'}
-                  onClick={handleDirectTerminalPay}
+                  disabled={cart.length === 0 || terminalPayLoading || placing}
+                  onClick={orderType === 'DELIVERY' ? () => handlePlaceOrder(true) : handleDirectTerminalPay}
                   aria-keyshortcuts="F9"
-                  startIcon={terminalPayLoading ? <CircularProgress size={20} color="inherit" /> : <PointOfSaleIcon sx={{ fontSize: 22 }} />}
+                  startIcon={
+                    terminalPayLoading || placing ? (
+                      <CircularProgress size={20} color="inherit" />
+                    ) : orderType === 'DELIVERY' ? (
+                      <DeliveryDiningIcon sx={{ fontSize: 22 }} />
+                    ) : (
+                      <PointOfSaleIcon sx={{ fontSize: 22 }} />
+                    )
+                  }
                   sx={{
                     flexGrow: 1,
                     minWidth: 0,
@@ -2511,7 +2536,7 @@ export function PosOrderPage() {
                   }}
                 >
                   {/* The spinner says it is being sent; the label stays short (PM, 2026-10-05). */}
-                  PC-POS
+                  {orderType === 'DELIVERY' ? t('pos.courierCollects') : 'PC-POS'}
                 </Button>
               </Stack>
             </CardContent>
