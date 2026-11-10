@@ -66,8 +66,12 @@ const positive = (a: string) => (MoneyUtil.greaterThan(a, '0') ? a : '0');
 
 /** What a customer can still buy on credit: limit plus balance, never below zero; no cap when unlimited. */
 const UNLIMITED_CREDIT = '999999999999';
-/** The cashback in the customer's wallet: offered by default, the rest is typed. */
-const walletOf = (customer?: Customer | null) => positive(wholeRials(customer?.wallet_account?.current_balance));
+/**
+ * The cashback the customer's wallet can pay with today: offered by default, the rest is typed.
+ * Cashback earned today starts tomorrow, and expired cashback is gone.
+ */
+const walletOf = (customer?: Customer | null) =>
+  positive(wholeRials(customer?.wallet_account?.spendable ?? customer?.wallet_account?.current_balance));
 const availableCreditOf = (customer?: Customer | null) => {
   const account = customer?.credit_account;
   if (!account) return '0';

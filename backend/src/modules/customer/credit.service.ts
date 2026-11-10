@@ -6,13 +6,17 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, EntityManager, In } from 'typeorm';
+import { Repository, DataSource, EntityManager, In, MoreThan } from 'typeorm';
 import { AccountKind, CustomerCreditAccount } from '../../entities/CustomerCreditAccount.entity';
 import { CreditEntry } from '../../entities/CreditEntry.entity';
 import { Customer } from '../../entities/Customer.entity';
 import { AuditWriter } from '../audit/audit-writer.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { loadBusinessClock } from '../../common/utils/business-clock';
+import { addDays } from '../../common/utils/business-day';
+import { pickSettingValue } from '../../common/utils/setting-scope.util';
+import { CUSTOMER_CLUB_SETTING_KEY, CustomerClubRules, readCustomerClub } from '../../common/utils/customer-club';
+import { TenantSetting } from '../../entities/TenantSetting.entity';
 import {
   CreditAccountCreateDto,
   CreditAccountUpdateDto,
@@ -31,8 +35,230 @@ export class CreditService {
     private readonly dataSource: DataSource,
   ) {}
 
+  /** The club's rules, read through the caller's transaction when there is one. */
+  async clubRules(em: EntityManager | undefined, tenantId: string): Promise<CustomerClubRules> {
+    const reader: any = em ?? (this.dataSource as any)?.manager;
+    if (typeof reader?.find !== 'function') return readCustomerClub(null);
+    const rows = await reader.find(TenantSetting, { where: { tenant_id: tenantId, key: CUSTOMER_CLUB_SETTING_KEY } });
+    return readCustomerClub(pickSettingValue(Array.isArray(rows) ? rows : []));
+  }
+
+  /** The wallets' credits with something left on them, the one ending soonest first (no last day: last). */
+  private async openCredits(em: EntityManager | undefined, accountIds: string[]): Promise<CreditEntry[]> {
+    if (!accountIds.length || typeof (em as any)?.find !== 'function') return [];
+    const rows = await em!.find(CreditEntry, {
+      where: { account_id: In(accountIds), remaining: MoreThan('0') as any },
+      order: { expires_on: 'ASC', posted_at: 'ASC' },
+    });
+    return Array.isArray(rows) ? rows : [];
+  }
+
+  private static usableOn(credit: CreditEntry, today: string): boolean {
+    return (!credit.available_from || credit.available_from <= today) && (!credit.expires_on || credit.expires_on >= today);
+  }
+
+  /**
+   * What the wallet can pay with today: its balance less the credit that has not started yet or
+   * is past its last day. Money in the wallet from before credits had dates counts in full.
+   */
+  private spendableOn(acc: CustomerCreditAccount, credits: CreditEntry[], today: string): string {
+    let blocked = '0.0000';
+    for (const credit of credits) {
+      if (!CreditService.usableOn(credit, today)) blocked = MoneyUtil.add(blocked, credit.remaining || '0');
+    }
+    const spendable = MoneyUtil.subtract(acc.current_balance, blocked);
+    return MoneyUtil.greaterThan(spendable, '0') ? MoneyUtil.format(spendable) : '0.0000';
+  }
+
+  /**
+   * Takes out what is left of each credit past its last day, one EXPIRY entry per credit, and
+   * returns the credits still open. The caller holds the wallet's row lock.
+   */
+  private async expireCredits(em: EntityManager, acc: CustomerCreditAccount, credits: CreditEntry[], today: string) {
+    const open: CreditEntry[] = [];
+    let expired = false;
+    for (const credit of credits) {
+      if (!credit.expires_on || credit.expires_on >= today) {
+        open.push(credit);
+        continue;
+      }
+      let left = MoneyUtil.format(credit.remaining || '0');
+      if (MoneyUtil.greaterThan(left, acc.current_balance)) {
+        left = MoneyUtil.greaterThan(acc.current_balance, '0') ? MoneyUtil.format(acc.current_balance) : '0.0000';
+      }
+      credit.remaining = '0.0000';
+      await em.save(CreditEntry, credit);
+      expired = true;
+      if (!MoneyUtil.greaterThan(left, '0')) continue;
+      acc.current_balance = MoneyUtil.subtract(acc.current_balance, left);
+      await em.save(
+        CreditEntry,
+        em.create(CreditEntry, {
+          tenant_id: acc.tenant_id,
+          account_id: acc.id,
+          entry_type: 'EXPIRY',
+          amount: MoneyUtil.negate(left),
+          currency_code: acc.currency_code,
+          related_entry_id: credit.id,
+          reason_text: `Unspent after its last day, ${credit.expires_on}`,
+          reference: `EXPIRY_${credit.id}`,
+          business_date: today,
+          balance_after: acc.current_balance,
+        }),
+      );
+    }
+    if (expired) await em.save(CustomerCreditAccount, acc);
+    return open;
+  }
+
+  /** Takes a wallet payment from the credits usable today, the one ending soonest first. */
+  private async spendCredits(em: EntityManager, credits: CreditEntry[], amount: string, today: string) {
+    let left = MoneyUtil.format(amount);
+    for (const credit of credits) {
+      if (!MoneyUtil.greaterThan(left, '0')) break;
+      if (!CreditService.usableOn(credit, today)) continue;
+      const take = MoneyUtil.lessThan(credit.remaining || '0', left) ? MoneyUtil.format(credit.remaining || '0') : left;
+      credit.remaining = MoneyUtil.subtract(credit.remaining || '0', take);
+      left = MoneyUtil.subtract(left, take);
+      await em.save(CreditEntry, credit);
+    }
+  }
+
+  /**
+   * Each wallet's day: what it can pay with today, what starts on a later day, and the next
+   * credit to end. Read only; a credit past its last day counts as gone before the sweep posts it.
+   */
+  async walletPositions(tenantId: string, accounts: CustomerCreditAccount[], em?: EntityManager) {
+    const wallets = accounts.filter((a) => a?.kind === 'WALLET');
+    const out = new Map<string, { spendable: string; notYetUsable: string; nextExpiresOn: string | null; nextExpiresAmount: string }>();
+    if (!wallets.length) return out;
+    const reader: any = em ?? (this.dataSource as any)?.manager;
+    const today = (await loadBusinessClock(reader, tenantId)).today();
+    const credits = await this.openCredits(reader, wallets.map((w) => w.id));
+    for (const acc of wallets) {
+      const own = credits.filter((c) => c.account_id === acc.id);
+      let notYet = '0.0000';
+      let nextOn: string | null = null;
+      for (const c of own) {
+        if (c.available_from && c.available_from > today) notYet = MoneyUtil.add(notYet, c.remaining || '0');
+        if (c.expires_on && c.expires_on >= today && (!nextOn || c.expires_on < nextOn)) nextOn = c.expires_on;
+      }
+      const nextAmount = own
+        .filter((c) => nextOn && c.expires_on === nextOn)
+        .reduce((sum, c) => MoneyUtil.add(sum, c.remaining || '0'), '0.0000');
+      out.set(acc.id, {
+        spendable: this.spendableOn(acc, own, today),
+        notYetUsable: notYet,
+        nextExpiresOn: nextOn,
+        nextExpiresAmount: nextAmount,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Posts the expiry of every wallet credit past its last day, each tenant on its own business
+   * day. Spending does the same for its own wallet; this keeps idle wallets' balances true.
+   */
+  async expireDueCredits(now: Date = new Date()): Promise<number> {
+    const tenants: { tenant_id: string }[] = await this.dataSource.query(
+      `SELECT DISTINCT tenant_id FROM credit_entry WHERE remaining > 0 AND expires_on IS NOT NULL`,
+    );
+    let wallets = 0;
+    for (const { tenant_id } of tenants) {
+      const today = (await loadBusinessClock(this.dataSource.manager, tenant_id)).today(now);
+      const due: { account_id: string }[] = await this.dataSource.query(
+        `SELECT DISTINCT account_id FROM credit_entry WHERE tenant_id = $1 AND remaining > 0 AND expires_on < $2`,
+        [tenant_id, today],
+      );
+      for (const { account_id } of due) {
+        await this.dataSource.transaction(async (em) => {
+          const acc = await em.findOne(CustomerCreditAccount, {
+            where: { id: account_id, tenant_id },
+            lock: { mode: 'pessimistic_write' },
+          });
+          if (acc) await this.expireCredits(em, acc, await this.openCredits(em, [acc.id]), today);
+        });
+        wallets++;
+      }
+    }
+    return wallets;
+  }
+
+  /**
+   * Wallet credit carried over from the customer's old club, usable at once until the old
+   * club's own last day. `reference` names it (one per wallet and last day), so carrying the
+   * same file over twice adds nothing the second time.
+   */
+  async postOpeningCredit(
+    em: EntityManager,
+    tenantId: string,
+    customerId: string,
+    input: { amount: string; expiresOn: string | null; reference: string; note: string },
+    userId?: string,
+  ): Promise<'POSTED' | 'ALREADY_CARRIED'> {
+    let acc = await em.findOne(CustomerCreditAccount, {
+      where: { tenant_id: tenantId, customer_id: customerId, currency_code: 'IRR', kind: 'WALLET' },
+      lock: { mode: 'pessimistic_write' },
+    });
+    if (acc) {
+      const already = await em.findOne(CreditEntry, {
+        where: { tenant_id: tenantId, account_id: acc.id, entry_type: 'OPENING_BALANCE' as any, reference: input.reference },
+      });
+      if (already) return 'ALREADY_CARRIED';
+    } else {
+      acc = await em.save(
+        CustomerCreditAccount,
+        em.create(CustomerCreditAccount, {
+          tenant_id: tenantId,
+          customer_id: customerId,
+          currency_code: 'IRR',
+          kind: 'WALLET',
+          mode: 'FINITE',
+          credit_limit: null as any,
+          current_balance: '0.0000',
+        }),
+      );
+    }
+
+    const today = (await loadBusinessClock(em, tenantId)).today();
+    const amount = MoneyUtil.format(input.amount);
+    acc.current_balance = MoneyUtil.add(acc.current_balance, amount);
+    await em.save(CustomerCreditAccount, acc);
+    const entry = await em.save(
+      CreditEntry,
+      em.create(CreditEntry, {
+        tenant_id: tenantId,
+        account_id: acc.id,
+        entry_type: 'OPENING_BALANCE',
+        amount,
+        currency_code: 'IRR',
+        reason_text: input.note,
+        reference: input.reference,
+        business_date: today,
+        posted_by: userId || null,
+        balance_after: acc.current_balance,
+        remaining: amount,
+        available_from: today,
+        expires_on: input.expiresOn,
+      }),
+    );
+
+    await this.auditWriter.write({
+      tenantId,
+      actorType: userId ? 'ADMIN' : 'SYSTEM',
+      actorId: userId,
+      action: 'WALLET_OPENING_CREDIT_POSTED',
+      entityType: 'CreditEntry',
+      entityId: entry.id,
+      correlationId: 'system',
+      afterData: entry,
+    });
+    return 'POSTED';
+  }
+
   // What can be spent from the account now: the wallet's balance, or what is left of the
-  // credit limit.
+  // credit limit. Dated wallet credit narrows it further (walletPositions).
   calculateAvailableCredit(account: CustomerCreditAccount): string {
     if (account.kind === 'WALLET') {
       return MoneyUtil.greaterThan(account.current_balance, '0.0000') ? account.current_balance : '0.0000';
@@ -68,11 +294,14 @@ export class CreditService {
       ? await this.customerRepo.find({ where: { tenant_id: tenantId, id: In(customerIds) } })
       : [];
     const customerMap = new Map(customers.map((c) => [c.id, c]));
+    const positions = await this.walletPositions(tenantId, accounts);
 
     const data = accounts.map((acc) => {
       const cust = customerMap.get(acc.customer_id);
+      const position = positions.get(acc.id);
       return {
         ...acc,
+        ...(position || {}),
         customer: cust
           ? {
               id: cust.id,
@@ -84,7 +313,7 @@ export class CreditService {
               email: cust.email,
             }
           : null,
-        availableCredit: this.calculateAvailableCredit(acc),
+        availableCredit: position ? position.spendable : this.calculateAvailableCredit(acc),
       };
     });
 
@@ -119,9 +348,11 @@ export class CreditService {
     const customer = await this.customerRepo.findOne({
       where: { id: acc.customer_id, tenant_id: tenantId },
     });
+    const position = (await this.walletPositions(tenantId, [acc])).get(acc.id);
 
     return {
       ...acc,
+      ...(position || {}),
       customer: customer
         ? {
             id: customer.id,
@@ -133,7 +364,7 @@ export class CreditService {
             email: customer.email,
           }
         : null,
-      availableCredit: this.calculateAvailableCredit(acc),
+      availableCredit: position ? position.spendable : this.calculateAvailableCredit(acc),
     };
   }
 
@@ -149,9 +380,10 @@ export class CreditService {
       where: { tenant_id: tenantId, customer_id: customerId, currency_code: currencyCode, kind },
     });
     if (!acc) return null;
+    const position = (await this.walletPositions(tenantId, [acc], entityManager)).get(acc.id);
     return {
       ...acc,
-      availableCredit: this.calculateAvailableCredit(acc),
+      availableCredit: position ? position.spendable : this.calculateAvailableCredit(acc),
     };
   }
 
@@ -247,19 +479,24 @@ export class CreditService {
   // amount that fits inside the available credit. Throws rather than returning a verdict so
   // both callers fail the same way; it reads no state of its own, which is what lets the
   // payment layer run it as a precheck.
-  assertPurchaseAllowed(acc: CustomerCreditAccount, amount: string) {
+  //
+  // A wallet's amount usable today comes from the caller, which has read its dated credits.
+  assertPurchaseAllowed(acc: CustomerCreditAccount, amount: string, walletSpendable?: string) {
     const purchaseAmount = MoneyUtil.format(amount);
     if (MoneyUtil.lessThanOrEqual(purchaseAmount, '0.0000')) {
       throw new BadRequestException('Purchase amount must be greater than zero');
     }
 
-    const available = this.calculateAvailableCredit(acc);
+    const available = acc.kind === 'WALLET' && walletSpendable !== undefined ? walletSpendable : this.calculateAvailableCredit(acc);
     if (acc.kind === 'WALLET' && MoneyUtil.greaterThan(purchaseAmount, available)) {
+      const later = MoneyUtil.subtract(this.calculateAvailableCredit(acc), available);
       throw new ForbiddenException({
         statusCode: 403,
         error: 'WALLET_BALANCE_SHORT',
         code: 'WALLET_BALANCE_SHORT',
-        message: `Payment (${purchaseAmount}) is more than the wallet holds (${available})`,
+        message: MoneyUtil.greaterThan(later, '0')
+          ? `Payment (${purchaseAmount}) is more than the wallet can pay today (${available}); ${later} more starts on a later day`
+          : `Payment (${purchaseAmount}) is more than the wallet holds (${available})`,
       });
     }
     if (acc.kind !== 'WALLET' && acc.mode !== 'UNLIMITED' && MoneyUtil.greaterThan(purchaseAmount, available)) {
@@ -295,7 +532,13 @@ export class CreditService {
       );
     }
 
-    this.assertPurchaseAllowed(acc, amount);
+    let spendable: string | undefined;
+    if (acc.kind === 'WALLET') {
+      const reader: any = entityManager ?? (this.dataSource as any)?.manager;
+      const today = (await loadBusinessClock(reader, tenantId)).today();
+      spendable = this.spendableOn(acc, await this.openCredits(reader, [acc.id]), today);
+    }
+    this.assertPurchaseAllowed(acc, amount, spendable);
     return acc;
   }
 
@@ -307,15 +550,23 @@ export class CreditService {
       });
       if (!acc) throw new NotFoundException(`Credit account ${accountId} not found`);
 
+      const dateStr = dto.businessDate || (await loadBusinessClock(em, tenantId)).today();
+
+      // A wallet first loses what has expired, then pays from the credits usable today.
+      let credits: CreditEntry[] = [];
+      let spendable: string | undefined;
+      if (acc.kind === 'WALLET') {
+        credits = await this.expireCredits(em, acc, await this.openCredits(em, [acc.id]), dateStr);
+        spendable = this.spendableOn(acc, credits, dateStr);
+      }
+
       // Re-checked under the row lock: the precheck at intent time is advisory, and the
       // balance can move between the two.
-      this.assertPurchaseAllowed(acc, dto.amount);
+      this.assertPurchaseAllowed(acc, dto.amount, spendable);
       const purchaseAmount = MoneyUtil.format(dto.amount);
 
       const signedAmount = `-${purchaseAmount}`;
       const newBalance = MoneyUtil.add(acc.current_balance, signedAmount);
-
-      const dateStr = dto.businessDate || (await loadBusinessClock(em, tenantId)).today();
 
       const entry = em.create(CreditEntry, {
         tenant_id: tenantId,
@@ -330,6 +581,7 @@ export class CreditService {
         balance_after: newBalance,
       });
       const savedEntry = await em.save(CreditEntry, entry);
+      if (acc.kind === 'WALLET') await this.spendCredits(em, credits, purchaseAmount, dateStr);
 
       acc.current_balance = newBalance;
       await em.save(CustomerCreditAccount, acc);
@@ -384,6 +636,9 @@ export class CreditService {
       // The PURCHASE was stored negative, so the reversal is its positive counterpart.
       const reversalAmount = MoneyUtil.abs(originalEntry.amount);
       const newBalance = MoneyUtil.add(acc.current_balance, reversalAmount);
+      const today = (await loadBusinessClock(em, tenantId)).today();
+      // Wallet money given back is a new credit, usable at once, for the club's usual days.
+      const validDays = acc.kind === 'WALLET' ? (await this.clubRules(em, tenantId)).creditValidDays : 0;
 
       const entry = em.create(CreditEntry, {
         tenant_id: tenantId,
@@ -396,9 +651,12 @@ export class CreditService {
         related_entry_id: originalEntry.id,
         reason_text: reason || 'Customer credit payment reversed',
         reference: `REVERSAL_${paymentId}`,
-        business_date: (await loadBusinessClock(em, tenantId)).today(),
+        business_date: today,
         posted_by: userId || null,
         balance_after: newBalance,
+        ...(acc.kind === 'WALLET'
+          ? { remaining: reversalAmount, available_from: today, expires_on: validDays > 0 ? addDays(today, validDays) : null }
+          : {}),
       });
       const savedEntry = await em.save(CreditEntry, entry);
 
@@ -500,7 +758,9 @@ export class CreditService {
   }
 
   // Cashback goes to the customer's wallet, opened on the first award. Never to the credit
-  // account: earning cashback must not pay off a debt or open a credit line.
+  // account: earning cashback must not pay off a debt or open a credit line. It is a credit of
+  // its own, usable from the club's start day for its valid days (read from the club's rules
+  // when the caller does not pass them).
   async awardLoyaltyCashback(
     tenantId: string,
     customerId: string,
@@ -509,6 +769,7 @@ export class CreditService {
     cashbackPct: string,
     currencyCode: string = 'IRR',
     entityManager?: EntityManager,
+    rules?: Pick<CustomerClubRules, 'creditStartsAfterDays' | 'creditValidDays'>,
   ) {
     const runner = async (em: EntityManager) => {
       // Check idempotency: ensure LOYALTY_CASHBACK entry for this order does not already exist
@@ -539,11 +800,15 @@ export class CreditService {
         acc = await em.save(CustomerCreditAccount, acc);
       }
 
+      const todayStr = (await loadBusinessClock(em, tenantId)).today();
+      if (acc.id) await this.expireCredits(em, acc, await this.openCredits(em, [acc.id]), todayStr);
+      const { creditStartsAfterDays, creditValidDays } = rules ?? (await this.clubRules(em, tenantId));
+      const availableFrom = addDays(todayStr, creditStartsAfterDays);
+
       const newBalance = MoneyUtil.add(acc.current_balance, cashbackAmt);
       acc.current_balance = newBalance;
       await em.save(CustomerCreditAccount, acc);
 
-      const todayStr = (await loadBusinessClock(em, tenantId)).today();
       const entry = em.create(CreditEntry, {
         tenant_id: tenantId,
         account_id: acc.id,
@@ -555,6 +820,9 @@ export class CreditService {
         reference: `CASHBACK_${orderId}`,
         business_date: todayStr,
         balance_after: newBalance,
+        remaining: cashbackAmt,
+        available_from: availableFrom,
+        expires_on: creditValidDays > 0 ? addDays(availableFrom, creditValidDays) : null,
       });
 
       const savedEntry = await em.save(CreditEntry, entry);
@@ -629,17 +897,32 @@ export class CreditService {
       });
       if (!acc) return null;
 
-      // Cashback already spent stays spent: the wallet never goes below zero.
+      const todayStr = (await loadBusinessClock(em, tenantId)).today();
+
+      // Cashback already spent, or expired, stays gone: only what is left of this order's own
+      // credit comes back out, and the wallet never goes below zero.
+      let credit: CreditEntry | null = null;
+      if (acc.kind === 'WALLET') {
+        await this.expireCredits(em, acc, await this.openCredits(em, [acc.id]), todayStr);
+        credit = await em.findOne(CreditEntry, { where: { id: originalEntry.id, tenant_id: tenantId } });
+        if (credit && credit.remaining !== null && credit.remaining !== undefined && MoneyUtil.greaterThan(reversalAmt, credit.remaining)) {
+          reversalAmt = MoneyUtil.format(credit.remaining);
+        }
+      }
       if (acc.kind === 'WALLET' && MoneyUtil.greaterThan(reversalAmt, acc.current_balance)) {
         reversalAmt = MoneyUtil.greaterThan(acc.current_balance, '0.0000') ? acc.current_balance : '0.0000';
       }
       if (MoneyUtil.lessThanOrEqual(reversalAmt, '0.0000')) return null;
 
+      if (credit && credit.remaining !== null && credit.remaining !== undefined) {
+        credit.remaining = MoneyUtil.subtract(credit.remaining, reversalAmt);
+        await em.save(CreditEntry, credit);
+      }
+
       const newBalance = MoneyUtil.subtract(acc.current_balance, reversalAmt);
       acc.current_balance = newBalance;
       await em.save(CustomerCreditAccount, acc);
 
-      const todayStr = (await loadBusinessClock(em, tenantId)).today();
       const entry = em.create(CreditEntry, {
         tenant_id: tenantId,
         account_id: acc.id,

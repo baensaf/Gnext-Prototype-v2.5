@@ -384,6 +384,8 @@ export async function runSeed() {
     { code: 'STAFF_DISCOUNT', name: 'تخفیف کارکنان', type: 'DISCOUNT', applies_to: ['DISCOUNT'] },
     { code: 'DAMAGED_ITEM', name: 'ایراد جزئی / مشکل بسته‌بندی', type: 'DISCOUNT', applies_to: ['DISCOUNT'] },
     { code: 'VIP_COURTESY', name: 'عضو ویژه باشگاه', type: 'DISCOUNT', applies_to: ['DISCOUNT'] },
+    // A HamiClub code the customer still holds, given by hand at a branch that has left HAMI.
+    { code: 'HAMI_CLUB', name: 'کد باشگاه حامی', type: 'DISCOUNT', applies_to: ['DISCOUNT'] },
   ];
   for (const r of tillReasons) {
     if (await reasonRepo.findOne({ where: { tenant_id: tenant.id, code: r.code } })) continue;
