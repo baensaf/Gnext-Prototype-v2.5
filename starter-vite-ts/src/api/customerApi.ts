@@ -87,6 +87,11 @@ export interface CustomerCreditAccount {
   credit_limit: string;
   current_balance: string;
   mode?: 'FINITE' | 'UNLIMITED' | 'POLICY';
+  /** A wallet's: what it can pay with today; cashback starts after its day and expires. */
+  spendable?: string;
+  notYetUsable?: string;
+  nextExpiresOn?: string | null;
+  nextExpiresAmount?: string;
 }
 
 export interface CustomerPage {

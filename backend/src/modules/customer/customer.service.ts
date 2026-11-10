@@ -8,6 +8,7 @@ import { CustomerCreditAccount } from '../../entities/CustomerCreditAccount.enti
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { AuditWriter } from '../audit/audit-writer.service';
+import { CreditService } from './credit.service';
 import { PaginationQueryDto, createPagedResponse, PagedResponse } from '../../common/dto/pagination.dto';
 
 /** Persian (۰-۹) and Arabic (٠-٩) digits as 0-9. */
@@ -119,7 +120,15 @@ export class CustomerService {
     @InjectRepository(CustomerCreditAccount) private readonly accountRepo: Repository<CustomerCreditAccount>,
     @InjectRepository(OrderHeader) private readonly orderRepo: Repository<OrderHeader>,
     private readonly auditWriter: AuditWriter,
+    @Optional() private readonly creditService?: CreditService,
   ) {}
+
+  /** Wallets with what they can pay today and their next credit to end, for the till and lists. */
+  private async withWalletPositions(tenantId: string, accounts: CustomerCreditAccount[]): Promise<CustomerCreditAccount[]> {
+    if (!this.creditService || !accounts.some((a) => a.kind === 'WALLET')) return accounts;
+    const positions = await this.creditService.walletPositions(tenantId, accounts);
+    return accounts.map((a) => (positions.has(a.id) ? ({ ...a, ...positions.get(a.id) } as CustomerCreditAccount) : a));
+  }
 
   /**
    * Each customer with their two balances, kept apart: the wallet (cashback, theirs to spend)
@@ -128,10 +137,11 @@ export class CustomerService {
   private async enrichCustomersWithCredit(tenantId: string, customers: Customer[]): Promise<any[]> {
     if (!customers || customers.length === 0) return [];
     const customerIds = customers.map((c) => c.id);
-    const [accounts, groups] = await Promise.all([
+    const [found, groups] = await Promise.all([
       this.accountRepo.find({ where: { tenant_id: tenantId, customer_id: In(customerIds) } }),
       this.groupsOf(tenantId, customerIds),
     ]);
+    const accounts = await this.withWalletPositions(tenantId, found);
     return customers.map((c) => this.withAccounts(c, accounts.filter((a) => a.customer_id === c.id), groups.get(c.id) || []));
   }
 
@@ -288,7 +298,10 @@ export class CustomerService {
     if (!customer) throw new NotFoundException('Customer not found');
     const phones = await this.phoneRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
     const addresses = await this.addressRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
-    const accounts = await this.accountRepo.find({ where: { tenant_id: tenantId, customer_id: id } });
+    const accounts = await this.withWalletPositions(
+      tenantId,
+      await this.accountRepo.find({ where: { tenant_id: tenantId, customer_id: id } }),
+    );
     const groups = (await this.groupsOf(tenantId, [id])).get(id) || [];
     return {
       ...this.withAccounts(customer, accounts, groups),

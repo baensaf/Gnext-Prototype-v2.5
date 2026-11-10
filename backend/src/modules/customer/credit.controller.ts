@@ -1,6 +1,8 @@
-import { Controller, Get, Post, Patch, Param, Body, Query, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, Query, Req, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
 import { CreditService } from './credit.service';
+import { HamiClubCreditImportService } from './hamiclub-credit-import.service';
 import { HeadOfficeOnly } from '../../common/decorators/roles.decorator';
 import {
   CreditAccountCreateDto,
@@ -20,7 +22,21 @@ import {
 @Controller('api/v1')
 @HeadOfficeOnly()
 export class CreditController {
-  constructor(private readonly creditService: CreditService) {}
+  constructor(
+    private readonly creditService: CreditService,
+    private readonly hamiClubImport: HamiClubCreditImportService,
+  ) {}
+
+  /**
+   * A branch's live HamiClub credit, carried into wallets on its switch day from the file
+   * exported from HamiClub. `apply` other than "true" only previews.
+   */
+  @Post('credit-accounts/wallet/import-hamiclub')
+  @UseInterceptors(FileInterceptor('file'))
+  async importHamiClubCredit(@UploadedFile() file: any, @Body('apply') apply: string, @Req() req: Request) {
+    const userId = (req as any).user?.id || (req as any).userId;
+    return await this.hamiClubImport.importFile((req as any).tenantId, file, apply === 'true', userId, (req as any).correlationId);
+  }
 
   /** The chain's credit in one line: what is owed, by how many, the limits and what is left. */
   @Get('credit-accounts/summary')

@@ -8,6 +8,7 @@ import { OutboxWriter } from '../outbox/outbox-writer.service';
 import { CreditService } from '../customer/credit.service';
 import { MoneyUtil } from '../../common/utils/money.util';
 import { pickSettingValue } from '../../common/utils/setting-scope.util';
+import { CUSTOMER_CLUB_SETTING_KEY, readCustomerClub } from '../../common/utils/customer-club';
 
 export interface OrderTransitionRecord {
   tenantId: string;
@@ -94,16 +95,20 @@ export class OrderTransitionRecorder {
 
     // Loyalty economics stay chain-wide: CUSTOMER_CLUB is not branch-overridable,
     // so this deliberately reads the organization row.
-    const settingRows = await em.getRepository(TenantSetting).find({ where: { tenant_id: tenantId, key: 'CUSTOMER_CLUB' } });
-    const cashbackPct = (pickSettingValue(settingRows) as any)?.cashback_percentage ?? '5.00';
+    const settingRows = await em.getRepository(TenantSetting).find({ where: { tenant_id: tenantId, key: CUSTOMER_CLUB_SETTING_KEY } });
+    const club = readCustomerClub(pickSettingValue(settingRows));
+    if (!club.enabled) return;
+    // As in HamiClub, the bill before discounts decides whether it earns; the cashback is on what was paid.
+    if (MoneyUtil.lessThan(order.subtotal || '0', club.minBillToEarn)) return;
     await this.creditService.awardLoyaltyCashback(
       tenantId,
       order.customer_id,
       order.id,
       eligiblePaidSubtotal,
-      cashbackPct,
+      club.cashbackPercentage,
       order.currency_code || 'IRR',
       em,
+      club,
     );
   }
 }

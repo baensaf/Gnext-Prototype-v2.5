@@ -10,6 +10,8 @@ import { CustomerCustomValue } from '../../entities/CustomerCustomValue.entity';
 import { OrderHeader } from '../../entities/OrderHeader.entity';
 import { CustomerService } from './customer.service';
 import { CreditService } from './credit.service';
+import { HamiClubCreditImportService } from './hamiclub-credit-import.service';
+import { WalletExpiryService } from './wallet-expiry.service';
 import { CustomerController } from './customer.controller';
 import { CreditController } from './credit.controller';
 import { AuditModule } from '../audit/audit.module';
@@ -29,7 +31,7 @@ import { CustomFieldsService } from './custom-fields.service';
     ]),
     AuditModule,
   ],
-  providers: [CustomerService, CreditService, CustomFieldsService],
+  providers: [CustomerService, CreditService, CustomFieldsService, HamiClubCreditImportService, WalletExpiryService],
   controllers: [CustomerController, CreditController],
   exports: [CustomerService, CreditService, CustomFieldsService],
 })
