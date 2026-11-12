@@ -892,7 +892,7 @@ export class OrderService {
             message: couponApplied?.rejectionReason || 'The coupon was not applied',
           });
         }
-        await this.coupons.redeem(em, tenantId, dto.couponCode, order.id, order.branch_id || null);
+        await this.coupons.redeem(em, tenantId, dto.couponCode, order.id, order.branch_id || null, order.customer_id || null);
       }
 
       // A discount the cashier typed is given or the order is not sent. Charging full price

@@ -91,6 +91,7 @@ import { CustomerGroupMember } from './entities/CustomerGroupMember.entity';
 import { GroupDiscount } from './entities/GroupDiscount.entity';
 import { Coupon } from './entities/Coupon.entity';
 import { CouponBatch } from './entities/CouponBatch.entity';
+import { CouponUse } from './entities/CouponUse.entity';
 import { ItemDiscount } from './entities/ItemDiscount.entity';
 import { CustomerPhone } from './entities/CustomerPhone.entity';
 import { CustomerAddress } from './entities/CustomerAddress.entity';
@@ -152,7 +153,7 @@ import { SnappfoodModule } from './modules/snappfood/snappfood.module';
           PriceEntry, PriceGroupBranch, PriceBulkJob,
           ProductAvailability,
           ApprovalRule, ApprovalRequest, ApprovalDecision, PinAttemptLog,
-          CustomerGroup, CustomerGroupMember, GroupDiscount, ItemDiscount, Coupon, CouponBatch,
+          CustomerGroup, CustomerGroupMember, GroupDiscount, ItemDiscount, Coupon, CouponBatch, CouponUse,
           Customer, CustomerPhone, CustomerAddress, CustomerCreditAccount, CreditEntry,
           CustomFieldDefinition, CustomerCustomValue,
           OrderHeader, OrderItem, OrderItemOption, OrderAdjustment, OrderNote, OrderLink, OrderStateEvent, OrderSequence,

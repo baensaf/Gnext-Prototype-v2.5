@@ -258,6 +258,9 @@ export class DiscountEvaluationService {
         branchId: orderDraft.branchId,
         subtotal,
         productIds: requestedItems.map((item) => item.productId),
+        // A shared code is counted per customer; this order's own use is not counted against it.
+        customerId: orderDraft.customerId || null,
+        orderId: orderDraft.orderId || null,
       });
       if (checked.ok === false) {
         const refused = checked as { ok: false; reason: CouponRefusal; batch?: { reward_type: string } };

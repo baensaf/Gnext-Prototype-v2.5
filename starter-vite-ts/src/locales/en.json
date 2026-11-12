@@ -444,7 +444,11 @@
         "NOT_YET": "not valid yet",
         "EXPIRED": "expired",
         "BELOW_MINIMUM": "order below the minimum",
-        "ITEM_MISSING": "add the free item to the order"
+        "ITEM_MISSING": "add the free item to the order",
+        "NEEDS_CUSTOMER": "pick the customer first",
+        "USED_UP": "all its uses are taken",
+        "CUSTOMER_LIMIT": "this customer has used it up",
+        "CUSTOMER_TODAY": "this customer already used it today"
       }
     },
     "categories": "Categories",
@@ -4241,7 +4245,7 @@
   },
   "coupons": {
     "title": "Coupons",
-    "subtitle": "Batches of one-time codes for a campaign. Each code works once at the till.",
+    "subtitle": "One-time codes for a campaign, or one shared code many customers type at the till.",
     "newBatch": "New batch",
     "batch": "Batch",
     "reward": "Gives",
@@ -4275,10 +4279,29 @@
     "code": "Code",
     "usedOn": "Used on",
     "notUsed": "Not used",
+    "kindOneTime": "One-time codes",
+    "kindShared": "One shared code",
+    "kindOneTimeHelp": "Many codes, each used once: for an SMS to the club.",
+    "kindSharedHelp": "One code you choose, typed by many customers at the till, like HamiClub's 10%, 15% and 20% codes. The order needs a customer, so each customer's uses are counted.",
+    "sharedCode": "Code",
+    "sharedCodeHelp": "3 to 16 Latin letters and digits, e.g. IB20.",
+    "usesPerCustomerPerDay": "Uses per customer a day",
+    "usesPerCustomer": "Uses per customer",
+    "maxUses": "Uses in all",
+    "noLimitWhenEmpty": "Empty: no limit",
+    "makeShared": "Make the code",
+    "sharedChip": "Shared code",
+    "perDayLimit": "{{count}} a day per customer",
+    "perCustomerLimit": "{{count}} per customer",
+    "noLimits": "No limits",
+    "copyCode": "Copy the code",
+    "customer": "Customer",
+    "noUsesYet": "Not used yet.",
     "errors": {
       "loadFailed": "The coupon batches could not be loaded",
       "saveFailed": "The coupon batch could not be saved",
-      "copyFailed": "The codes could not be copied"
+      "copyFailed": "The codes could not be copied",
+      "codeTaken": "The code {{code}} is already in use. Choose another."
     }
   },
   "customerGroups": {
