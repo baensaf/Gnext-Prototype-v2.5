@@ -3,8 +3,22 @@ import { httpClient } from './httpClient';
 /** What a code gives: a percent off the order, or one of a product free. */
 export type CouponReward = 'PERCENT' | 'FREE_ITEM';
 
+/** One-time codes, one per customer; or one shared code many customers type (2026-11-12). */
+export type CouponKind = 'ONE_TIME' | 'SHARED';
+
 /** Why a code does not work on an order (the till says it in words). */
-export type CouponRefusal = 'UNKNOWN' | 'USED' | 'OFF' | 'NOT_YET' | 'EXPIRED' | 'BELOW_MINIMUM' | 'ITEM_MISSING';
+export type CouponRefusal =
+  | 'UNKNOWN'
+  | 'USED'
+  | 'OFF'
+  | 'NOT_YET'
+  | 'EXPIRED'
+  | 'BELOW_MINIMUM'
+  | 'ITEM_MISSING'
+  | 'NEEDS_CUSTOMER'
+  | 'USED_UP'
+  | 'CUSTOMER_LIMIT'
+  | 'CUSTOMER_TODAY';
 
 /** A batch of one-time codes made for one campaign (V2). Amounts are rials. */
 export interface CouponBatch {
@@ -22,6 +36,12 @@ export interface CouponBatch {
   code_count: number;
   used_count: number;
   created_at: string;
+  kind: CouponKind;
+  /** SHARED: the code, and its limits per customer, per customer a day and in all (null: none). */
+  shared_code?: string | null;
+  uses_per_customer: number | null;
+  uses_per_customer_per_day: number | null;
+  max_uses: number | null;
 }
 
 export interface CouponCode {
@@ -29,6 +49,9 @@ export interface CouponCode {
   used_at: string | null;
   used_order_number: string | null;
   used_branch_name: string | null;
+  /** SHARED codes: who used it on that order. */
+  used_customer_name?: string | null;
+  used_customer_mobile?: string | null;
 }
 
 export type CouponBatchInput = {
@@ -40,7 +63,12 @@ export type CouponBatchInput = {
   min_subtotal?: string | null;
   valid_from?: string | null;
   valid_to?: string | null;
-  count: number;
+  count?: number;
+  kind?: CouponKind;
+  code?: string | null;
+  uses_per_customer?: number | null;
+  uses_per_customer_per_day?: number | null;
+  max_uses?: number | null;
 };
 
 export const couponsApi = {

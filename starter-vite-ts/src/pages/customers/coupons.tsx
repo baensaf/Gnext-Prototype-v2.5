@@ -1,5 +1,5 @@
 import type { Product } from 'src/api/catalogApi';
-import type { CouponCode, CouponBatch, CouponReward } from 'src/api/couponsApi';
+import type { CouponKind, CouponCode, CouponBatch, CouponReward } from 'src/api/couponsApi';
 
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
@@ -46,6 +46,7 @@ import { toast } from 'src/components/snackbar';
 import { CalendarDateField } from 'src/components/calendar-date-field';
 
 const EMPTY = {
+  kind: 'ONE_TIME' as CouponKind,
   name: '',
   reward_type: 'PERCENT' as CouponReward,
   percent: '20',
@@ -55,12 +56,22 @@ const EMPTY = {
   valid_from: '',
   valid_to: '',
   count: '100',
+  code: '',
+  uses_per_customer: '',
+  uses_per_customer_per_day: '1',
+  max_uses: '',
 };
 
+/** A shared code as head office types it: Latin letters and digits, 3 to 16. */
+const SHARED_CODE = /^[A-Z0-9]{3,16}$/;
+const sharedCodeOf = (text: string) => text.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 16);
+const limitOf = (text: string) => (Number(text) > 0 ? Number(text) : null);
+
 /**
- * One-time coupons (V2): head office makes a batch of codes for a campaign (an SMS to the
- * club, say). Each code works once at the till, for a percent off the order or one free
- * item, and is the order's one order discount. A cancelled order gives its code back.
+ * Coupons (V2): head office makes a batch of one-time codes for a campaign (an SMS to the
+ * club, say), or one shared code many customers type, like HamiClub's 10/15/20% codes, with
+ * limits per customer and in all. A code gives a percent off the order or one free item, and
+ * is the order's one order discount. A cancelled order gives its code, or its use, back.
  */
 export function CouponsPage() {
   const { t } = useTranslation();
@@ -103,6 +114,17 @@ export function CouponsPage() {
           .join(' · ')
       : t('coupons.freeItem', { item: productName(b.reward_product_id) });
 
+  const usedText = (b: CouponBatch) =>
+    b.kind === 'SHARED' ? (b.max_uses ? `${b.used_count} / ${b.max_uses}` : String(b.used_count)) : `${b.used_count} / ${b.code_count}`;
+
+  const limitsText = (b: CouponBatch) =>
+    [
+      b.uses_per_customer_per_day ? t('coupons.perDayLimit', { count: b.uses_per_customer_per_day }) : null,
+      b.uses_per_customer ? t('coupons.perCustomerLimit', { count: b.uses_per_customer }) : null,
+    ]
+      .filter(Boolean)
+      .join(' · ') || t('coupons.noLimits');
+
   const daysText = (b: CouponBatch) =>
     b.valid_from || b.valid_to
       ? `${b.valid_from ? fDate(b.valid_from) : '…'} – ${b.valid_to ? fDate(b.valid_to) : '…'}`
@@ -111,7 +133,13 @@ export function CouponsPage() {
   const create = async () => {
     setSaving(true);
     try {
+      const shared = form.kind === 'SHARED';
       const batch = await couponsApi.createBatch({
+        kind: form.kind,
+        code: shared ? form.code : null,
+        uses_per_customer: shared ? limitOf(form.uses_per_customer) : null,
+        uses_per_customer_per_day: shared ? limitOf(form.uses_per_customer_per_day) : null,
+        max_uses: shared ? limitOf(form.max_uses) : null,
         name: form.name.trim(),
         reward_type: form.reward_type,
         percent: form.reward_type === 'PERCENT' ? form.percent : null,
@@ -120,14 +148,14 @@ export function CouponsPage() {
         min_subtotal: form.min_subtotal ? fromToman(form.min_subtotal) : null,
         valid_from: form.valid_from || null,
         valid_to: form.valid_to || null,
-        count: Number(form.count),
+        count: shared ? 1 : Number(form.count),
       });
       setCreating(false);
       setForm(EMPTY);
       await load();
       setViewing(await couponsApi.getCodes(batch.id));
     } catch (err: any) {
-      setError(err.detail || t('coupons.errors.saveFailed'));
+      setError(err.code === 'COUPON_CODE_TAKEN' ? t('coupons.errors.codeTaken', { code: form.code }) : err.detail || t('coupons.errors.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -142,8 +170,12 @@ export function CouponsPage() {
     }
   };
 
-  // The unused codes, one per line: what goes into the SMS tool.
-  const unused = (viewing?.codes || []).filter((c) => !c.used_at).map((c) => c.code);
+  // The unused codes, one per line: what goes into the SMS tool. A shared code is just the one.
+  const viewingShared = viewing?.batch.kind === 'SHARED';
+  const unused = viewingShared
+    ? [viewing?.codes[0]?.code].filter((c): c is string => !!c)
+    : (viewing?.codes || []).filter((c) => !c.used_at).map((c) => c.code);
+  const uses = viewingShared ? (viewing?.codes || []).filter((c) => !!c.used_at) : viewing?.codes || [];
   const copyUnused = async () => {
     try {
       await navigator.clipboard.writeText(unused.join('\n'));
@@ -165,8 +197,7 @@ export function CouponsPage() {
 
   const canSave =
     !!form.name.trim() &&
-    Number(form.count) >= 1 &&
-    Number(form.count) <= 5000 &&
+    (form.kind === 'SHARED' ? SHARED_CODE.test(form.code) : Number(form.count) >= 1 && Number(form.count) <= 5000) &&
     (form.reward_type === 'PERCENT' ? Number(form.percent) > 0 && Number(form.percent) <= 100 : !!form.reward_product_id);
 
   return (
@@ -219,12 +250,27 @@ export function CouponsPage() {
                     <Typography variant="caption" color="text.secondary">
                       {fDate(b.created_at)}
                     </Typography>
+                    {b.kind === 'SHARED' && (
+                      <Stack direction="row" spacing={1} sx={{ mt: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <Chip size="small" color="primary" variant="outlined" label={t('coupons.sharedChip')} />
+                        <Typography variant="caption" sx={{ fontFamily: 'monospace', fontWeight: 700, letterSpacing: 1 }} dir="ltr">
+                          {b.shared_code}
+                        </Typography>
+                      </Stack>
+                    )}
                   </TableCell>
-                  <TableCell>{rewardText(b)}</TableCell>
+                  <TableCell>
+                    {rewardText(b)}
+                    {b.kind === 'SHARED' && (
+                      <Typography variant="caption" color="text.secondary" component="div">
+                        {limitsText(b)}
+                      </Typography>
+                    )}
+                  </TableCell>
                   <TableCell>{b.min_subtotal ? money(b.min_subtotal) : '—'}</TableCell>
                   <TableCell>{daysText(b)}</TableCell>
                   <TableCell align="center">
-                    <Chip size="small" label={`${b.used_count} / ${b.code_count}`} color={b.used_count > 0 ? 'secondary' : 'default'} variant="outlined" />
+                    <Chip size="small" label={usedText(b)} color={b.used_count > 0 ? 'secondary' : 'default'} variant="outlined" />
                   </TableCell>
                   <TableCell align="center" onClick={(e) => e.stopPropagation()}>
                     <Switch checked={b.is_active} onChange={() => toggle(b)} />
@@ -241,6 +287,19 @@ export function CouponsPage() {
         <DialogTitle sx={{ fontWeight: 'bold' }}>{t('coupons.newBatch')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ pt: 1 }}>
+            <ToggleButtonGroup
+              exclusive
+              fullWidth
+              size="small"
+              value={form.kind}
+              onChange={(_e, value) => value && setForm({ ...form, kind: value })}
+            >
+              <ToggleButton value="ONE_TIME">{t('coupons.kindOneTime')}</ToggleButton>
+              <ToggleButton value="SHARED">{t('coupons.kindShared')}</ToggleButton>
+            </ToggleButtonGroup>
+            <Typography variant="body2" color="text.secondary">
+              {form.kind === 'SHARED' ? t('coupons.kindSharedHelp') : t('coupons.kindOneTimeHelp')}
+            </Typography>
             <TextField
               label={t('coupons.batchName')}
               placeholder={t('coupons.batchNamePlaceholder')}
@@ -313,18 +372,59 @@ export function CouponsPage() {
                 />
               </Grid>
             </Grid>
-            <TextField
-              label={t('coupons.count')}
-              helperText={t('coupons.countHelp')}
-              value={form.count}
-              onChange={(e) => setForm({ ...form, count: e.target.value.replace(/\D/g, '') })}
-            />
+            {form.kind === 'SHARED' ? (
+              <>
+                <TextField
+                  label={t('coupons.sharedCode')}
+                  helperText={t('coupons.sharedCodeHelp')}
+                  value={form.code}
+                  onChange={(e) => setForm({ ...form, code: sharedCodeOf(e.target.value) })}
+                  slotProps={{ htmlInput: { dir: 'ltr', style: { fontFamily: 'monospace', letterSpacing: 1 } } }}
+                />
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      fullWidth
+                      label={t('coupons.usesPerCustomerPerDay')}
+                      helperText={t('coupons.noLimitWhenEmpty')}
+                      value={form.uses_per_customer_per_day}
+                      onChange={(e) => setForm({ ...form, uses_per_customer_per_day: e.target.value.replace(/\D/g, '') })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      fullWidth
+                      label={t('coupons.usesPerCustomer')}
+                      helperText={t('coupons.noLimitWhenEmpty')}
+                      value={form.uses_per_customer}
+                      onChange={(e) => setForm({ ...form, uses_per_customer: e.target.value.replace(/\D/g, '') })}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 4 }}>
+                    <TextField
+                      fullWidth
+                      label={t('coupons.maxUses')}
+                      helperText={t('coupons.noLimitWhenEmpty')}
+                      value={form.max_uses}
+                      onChange={(e) => setForm({ ...form, max_uses: e.target.value.replace(/\D/g, '') })}
+                    />
+                  </Grid>
+                </Grid>
+              </>
+            ) : (
+              <TextField
+                label={t('coupons.count')}
+                helperText={t('coupons.countHelp')}
+                value={form.count}
+                onChange={(e) => setForm({ ...form, count: e.target.value.replace(/\D/g, '') })}
+              />
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreating(false)}>{t('common.cancel')}</Button>
           <Button variant="contained" disabled={!canSave || saving} onClick={create}>
-            {t('coupons.make', { count: Number(form.count) || 0 })}
+            {form.kind === 'SHARED' ? t('coupons.makeShared') : t('coupons.make', { count: Number(form.count) || 0 })}
           </Button>
         </DialogActions>
       </Dialog>
@@ -335,12 +435,13 @@ export function CouponsPage() {
           {viewing?.batch.name}
           <Typography variant="body2" color="text.secondary">
             {viewing && rewardText(viewing.batch)} · {viewing && daysText(viewing.batch)}
+            {viewing && viewingShared ? ` · ${limitsText(viewing.batch)}` : ''}
           </Typography>
         </DialogTitle>
         <DialogContent dividers>
           <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
             <Button size="small" variant="outlined" startIcon={<ContentCopyIcon />} disabled={unused.length === 0} onClick={copyUnused}>
-              {t('coupons.copyUnused', { count: unused.length })}
+              {viewingShared ? t('coupons.copyCode') : t('coupons.copyUnused', { count: unused.length })}
             </Button>
             <Button size="small" variant="outlined" startIcon={<DownloadIcon />} onClick={downloadCsv}>
               {t('coupons.downloadCsv')}
@@ -350,12 +451,36 @@ export function CouponsPage() {
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
-                  <TableCell>{t('coupons.code')}</TableCell>
+                  <TableCell>{viewingShared ? t('coupons.customer') : t('coupons.code')}</TableCell>
                   <TableCell>{t('coupons.usedOn')}</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {(viewing?.codes || []).map((c) => (
+                {viewingShared && uses.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={2} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                      {t('coupons.noUsesYet')}
+                    </TableCell>
+                  </TableRow>
+                )}
+                {viewingShared &&
+                  uses.map((c) => (
+                    <TableRow key={`${c.used_at}-${c.used_order_number}`}>
+                      <TableCell>
+                        <Typography variant="body2">{c.used_customer_name || '—'}</Typography>
+                        <Typography variant="caption" color="text.secondary" dir="ltr" component="div">
+                          {c.used_customer_mobile}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">
+                          {fDateTime(c.used_at!)} · #{c.used_order_number}
+                          {c.used_branch_name ? ` · ${c.used_branch_name}` : ''}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                {!viewingShared && uses.map((c) => (
                   <TableRow key={c.code}>
                     <TableCell sx={{ fontFamily: 'monospace', fontWeight: 600, letterSpacing: 1 }} dir="ltr">
                       {c.code}

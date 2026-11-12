@@ -1,11 +1,15 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 /**
- * A batch of one-time coupon codes, made by head office for one campaign (an SMS to the
- * club, say): what each code gives, when it can be used, and how many codes were made.
- * The reward is a percent off the order or one free item. Till orders only.
+ * A batch of coupon codes, made by head office for one campaign (an SMS to the club, say):
+ * what each code gives, when it can be used, and how many codes were made. The reward is a
+ * percent off the order or one free item. Till orders only.
+ *
+ * A SHARED batch is one code head office chooses, typed by many customers (HamiClub's 10%,
+ * 15% and 20% codes, 2026-11-12), within limits per customer and in all.
  */
 export type CouponReward = 'PERCENT' | 'FREE_ITEM';
+export type CouponKind = 'ONE_TIME' | 'SHARED';
 
 @Entity('coupon_batch')
 @Index(['tenant_id', 'created_at'])
@@ -51,6 +55,21 @@ export class CouponBatch {
 
   @Column({ type: 'int' })
   code_count: number;
+
+  @Column({ type: 'varchar', length: 12, default: 'ONE_TIME' })
+  kind: CouponKind;
+
+  /** SHARED: how many orders one customer may use the code on; no limit when empty. */
+  @Column({ type: 'int', nullable: true })
+  uses_per_customer: number | null;
+
+  /** SHARED: how many of those on one business day. */
+  @Column({ type: 'int', nullable: true })
+  uses_per_customer_per_day: number | null;
+
+  /** SHARED: how many orders in all, every customer together. */
+  @Column({ type: 'int', nullable: true })
+  max_uses: number | null;
 
   @CreateDateColumn({ type: 'timestamptz' })
   created_at: Date;

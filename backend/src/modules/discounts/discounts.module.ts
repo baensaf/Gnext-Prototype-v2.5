@@ -11,6 +11,7 @@ import { ItemDiscount } from '../../entities/ItemDiscount.entity';
 import { PriceGroup } from '../../entities/PriceGroup.entity';
 import { Coupon } from '../../entities/Coupon.entity';
 import { CouponBatch } from '../../entities/CouponBatch.entity';
+import { CouponUse } from '../../entities/CouponUse.entity';
 import { DiscountsService } from './discounts.service';
 import { DiscountEvaluationService } from './discount-evaluation.service';
 import { ItemDiscountsService } from './item-discounts.service';
@@ -33,6 +34,7 @@ import { AuditModule } from '../audit/audit.module';
       PriceGroup,
       Coupon,
       CouponBatch,
+      CouponUse,
     ]),
     AuditModule,
   ],
